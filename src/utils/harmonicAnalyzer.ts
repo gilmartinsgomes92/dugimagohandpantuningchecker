@@ -84,3 +84,48 @@ export function calcCents(detectedFreq: number | null, referenceFreq: number): n
   if (detectedFreq === null || detectedFreq <= 0 || referenceFreq <= 0) return null;
   return 1200 * Math.log2(detectedFreq / referenceFreq);
 }
+
+/**
+ * Calculates a harmonic clarity score (0–1) based on the prominence of the peak
+ * above the local spectral floor.  A sharp, isolated peak scores near 1; a broad
+ * or buried peak scores near 0.
+ *
+ * @param freqData - Float32Array of dB values (from AnalyserNode.getFloatFrequencyData)
+ * @param targetFreq - Expected harmonic frequency in Hz
+ * @param sampleRate - Audio sample rate in Hz
+ * @param fftSize - FFT window size
+ * @returns Clarity score in [0, 1], or 0 if harmonic is not found
+ */
+export function calcHarmonicClarity(
+  freqData: Float32Array,
+  targetFreq: number,
+  sampleRate: number,
+  fftSize: number
+): number {
+  const binHz = sampleRate / fftSize;
+  const numBins = freqData.length;
+
+  const lowFreq = targetFreq / centsToFrequencyRatio(SEARCH_CENTS);
+  const highFreq = targetFreq * centsToFrequencyRatio(SEARCH_CENTS);
+
+  const lowBin = Math.max(1, Math.floor(lowFreq / binHz));
+  const highBin = Math.min(numBins - 2, Math.ceil(highFreq / binHz));
+
+  if (lowBin >= highBin) return 0;
+
+  // Find peak magnitude
+  let peakMag = freqData[lowBin];
+  for (let k = lowBin + 1; k <= highBin; k++) {
+    if (freqData[k] > peakMag) peakMag = freqData[k];
+  }
+
+  if (peakMag < -65) return 0;
+
+  // Estimate local noise floor as the average of the search-window edges
+  const floorMag = (freqData[lowBin] + freqData[highBin]) / 2;
+
+  // Prominence in dB: how far the peak rises above the floor
+  const prominence = peakMag - floorMag; // dB
+  // Map 0–20 dB prominence to 0–1 clarity score
+  return Math.max(0, Math.min(1, prominence / 20));
+}
