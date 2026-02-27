@@ -10,6 +10,7 @@
  * Each harmonic has its own independent strobe disk and cents gauge.
  */
 
+import { useState, useEffect, useRef } from 'react';
 import { useAudioProcessor } from './hooks/useAudioProcessor';
 import { StrobeDisk } from './components/StrobeDisk';
 import { CentsGauge } from './components/CentsGauge';
@@ -18,6 +19,22 @@ import './App.css';
 
 function App() {
   const { tunerData, isRunning, error, start, stop } = useAudioProcessor();
+  const [isFading, setIsFading] = useState(false);
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+    if (!isRunning) {
+      setIsFading(true);
+      const timer = setTimeout(() => setIsFading(false), 1200);
+      return () => clearTimeout(timer);
+    } else {
+      setIsFading(false);
+    }
+  }, [isRunning]);
 
   const fd = tunerData?.fundamental;
   const oct = tunerData?.octave;
@@ -40,7 +57,7 @@ function App() {
       </header>
 
       {/* Note display */}
-      <div className="note-display">
+      <div className={"note-display" + (isFading ? " fading" : "")}>
         {isRunning && tunerData?.hasSignal && fd?.noteName ? (
           <>
             <span className="note-name">{fd.noteName}</span>
@@ -58,7 +75,7 @@ function App() {
       {/* Strobe disks row */}
       <div className="strobe-row">
         {/* Fundamental */}
-        <div className="strobe-panel">
+        <div className={"strobe-panel" + (isFading ? " fading" : "")}>
           <StrobeDisk
             label="Fundamental"
             detectedFreq={fd?.frequency ?? null}
@@ -68,7 +85,7 @@ function App() {
             numSegments={12}
             size={190}
           />
-          <div className="harmonic-info">
+          <div className={"harmonic-info" + (isFading ? " fading" : "")}>
             <span
               className="cents-value"
               style={{ color: fd?.cents != null ? centsToColor(fd.cents) : '#555' }}
@@ -81,7 +98,7 @@ function App() {
         </div>
 
         {/* Octave */}
-        <div className="strobe-panel">
+        <div className={"strobe-panel" + (isFading ? " fading" : "")}>
           <StrobeDisk
             label="Octave (2x)"
             detectedFreq={oct?.frequency ?? null}
@@ -91,7 +108,7 @@ function App() {
             numSegments={12}
             size={190}
           />
-          <div className="harmonic-info">
+          <div className={"harmonic-info" + (isFading ? " fading" : "")}>
             <span
               className="cents-value"
               style={{ color: oct?.cents != null ? centsToColor(oct.cents) : '#555' }}
@@ -104,7 +121,7 @@ function App() {
         </div>
 
         {/* Compound Fifth */}
-        <div className="strobe-panel">
+        <div className={"strobe-panel" + (isFading ? " fading" : "")}>
           <StrobeDisk
             label="Comp. Fifth (3x)"
             detectedFreq={cf?.frequency ?? null}
@@ -114,7 +131,7 @@ function App() {
             numSegments={12}
             size={190}
           />
-          <div className="harmonic-info">
+          <div className={"harmonic-info" + (isFading ? " fading" : "")}>
             <span
               className="cents-value"
               style={{ color: cf?.cents != null ? centsToColor(cf.cents) : '#555' }}

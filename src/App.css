@@ -42,6 +42,17 @@
   margin: 0;
 }
 
+/* ---- Fade animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
 /* ---- Note display ---- */
 .note-display {
   display: flex;
@@ -55,6 +66,11 @@
   min-height: 72px;
   justify-content: center;
   box-shadow: inset 0 1px 0 #1e1e1e;
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+.note-display.fading {
+  animation: fadeOut 1.2s ease-out forwards;
 }
 
 .note-name {
@@ -101,10 +117,15 @@
   gap: 8px;
   min-width: 210px;
   transition: border-color 0.3s;
+  animation: fadeIn 0.4s ease-in-out;
 }
 
 .strobe-panel:hover {
   border-color: #333;
+}
+
+.strobe-panel.fading {
+  animation: fadeOut 1.2s ease-out forwards;
 }
 
 /* ---- Strobe disk ---- */
@@ -133,6 +154,11 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+.harmonic-info.fading {
+  animation: fadeOut 1.2s ease-out forwards;
 }
 
 .cents-value {
