@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
@@ -9,22 +9,18 @@ const ContactFormPage: React.FC = () => {
   const { tuningResults, selectedScale, contactInfo } = state;
 
   const [submitted, setSubmitted] = useState(false);
-  const [formData, setFormData] = useState({
-    name: contactInfo.name,
-    email: contactInfo.email,
-    phone: contactInfo.phone,
-    message: contactInfo.message,
+  const [formData, setFormData] = useState(() => {
+    const message = `Scale: ${selectedScale || 'Unknown'}\n` +
+      tuningResults.map(r =>
+        `${r.noteName}: ${r.status === 'skipped' ? 'Skipped' : r.cents !== null ? formatCents(r.cents) : 'No data'}`
+      ).join('\n');
+    return {
+      name: contactInfo.name,
+      email: contactInfo.email,
+      phone: contactInfo.phone,
+      message: contactInfo.message || message,
+    };
   });
-
-  useEffect(() => {
-    if (!formData.message) {
-      const summary = `Scale: ${selectedScale || 'Unknown'}\n` +
-        tuningResults.map(r =>
-          `${r.noteName}: ${r.status === 'skipped' ? 'Skipped' : r.cents !== null ? formatCents(r.cents) : 'No data'}`
-        ).join('\n');
-      setFormData(prev => ({ ...prev, message: summary }));
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
