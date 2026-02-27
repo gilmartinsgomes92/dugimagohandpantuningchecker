@@ -1,1 +1,23 @@
-export type HandpanNote = { note: string; };\nexport type HandpanTuning = { tuningName: string; notes: HandpanNote[]; };\nexport type HandpanInstrument = { name: string; tunings: HandpanTuning[]; };\nexport type TunerData = { frequency: number; note: HandpanNote; };\n\nexport const exampleTuning: HandpanTuning = { tuningName: 'Example Tuning', notes: [ { note: 'C' }, { note: 'D' }, { note: 'E' } ], };
+export type HandpanNote = {
+  note: string;
+};
+
+export type HandpanTuning = {
+  tuningName: string;
+  notes: HandpanNote[];
+};
+
+export type HandpanInstrument = {
+  name: string;
+  tunings: HandpanTuning[];
+};
+
+export type TunerData = {
+  frequency: number;
+  note: HandpanNote;
+};
+
+export const exampleTuning: HandpanTuning = {
+  tuningName: 'Example Tuning',
+  notes: [{ note: 'C' }, { note: 'D' }, { note: 'E' }]
+};
