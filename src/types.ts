@@ -1,32 +1,30 @@
-// TypeScript type definitions for handpan tuning checker app
+// Type Definitions for Handpan Tuning Checker
 
-// Represents a tuning note for a handpan
-interface TuningNote {
-    note: string; // The musical note (e.g., "C", "D#")
-    frequency: number; // Frequency of the note in Hz
-    duration?: number; // Duration in seconds, optional
-}
+type HandpanNote = {
+    name: string; // name of the note (e.g. "C4")
+    frequency: number; // frequency of the note in Hz
+};
 
-// Represents a handpan instrument
-interface Handpan {
-    id: number; // Unique identifier for the handpan
-    model: string; // The model name of the handpan
-    scale: string; // The scale of the handpan (e.g., "C minor")
-    notes: TuningNote[]; // Array of notes in the handpan
-}
+type HandpanTuning = {
+    notes: HandpanNote[]; // array of notes in the tuning
+    scale: string; // scale name (e.g. "D minor")
+    centerNote?: HandpanNote; // optional center note
+    temperament?: string; // optional temperament (e.g. "Equal Temperament")
+};
 
-// Represents a tuning result
-interface TuningResult {
-    handpan: Handpan; // The handpan being tuned
-    matchedNotes: TuningNote[]; // Notes that match the expected tuning
-    missingNotes: TuningNote[]; // Notes that are missing in the current tuning
-    isTuned: boolean; // Whether the handpan is correctly tuned
-}
+type HandpanInstrument = {
+    id: number; // unique identifier for the instrument
+    name: string; // name of the instrument
+    manufacturer: string; // manufacturer name
+    tunings: HandpanTuning[]; // array of tunings available
+};
 
-// Represents a user
-interface User {
-    id: number; // Unique identifier for the user
-    name: string; // Full name of the user
-    email: string; // Email address of the user
-    ownedHandpans: Handpan[]; // Array of handpans owned by the user
-}
+// Example usage
+const exampleTuning: HandpanTuning = {
+    notes: [
+        { name: "C4", frequency: 261.63 },
+        { name: "D4", frequency: 293.66 },
+        { name: "E4", frequency: 329.63 }
+    ],
+    scale: "C Major"
+};
