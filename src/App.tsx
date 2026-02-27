@@ -1,8 +1,8 @@
-import React from 'react';
-import WelcomePage from './WelcomePage';
+import WelcomePage from './pages/WelcomePage';
+import './App.css';
 
-const App = () => {
-  return <WelcomePage />;
-};
+function App() {
+    return <WelcomePage />;
+}
 
 export default App;
