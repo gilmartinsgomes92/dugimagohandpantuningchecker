@@ -1,37 +1,55 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-
-// Define the shape of your state and actions
-interface State {
-    // ... your state properties
-}
+import { createContext, useContext, useReducer, type ReactNode } from 'react';
 
 interface Action {
-    // ... your action properties
+    type: string;
+    payload?: any;
 }
 
-const initialState: State = {
-    // ... your initial state
+interface AppState {
+    user: any;
+    isSubscribed: boolean;
+    tuningSession: any;
+    navigation: string;
+}
+
+const initialState: AppState = {
+    user: null,
+    isSubscribed: false,
+    tuningSession: null,
+    navigation: '',
 };
 
-const AppContext = createContext<[State, React.Dispatch<Action>] | undefined>(undefined);
-
-const appReducer = (state: State, action: Action): State => {
+const appReducer = (state: AppState, action: Action): AppState => {
     switch (action.type) {
-        // ... your cases
+        case 'SET_USER':
+            return { ...state, user: action.payload };
+        case 'SET_SUBSCRIPTION':
+            return { ...state, isSubscribed: action.payload };
+        case 'SET_TUNING_SESSION':
+            return { ...state, tuningSession: action.payload };
+        case 'SET_NAVIGATION':
+            return { ...state, navigation: action.payload };
         default:
             return state;
     }
 };
 
+interface AppContextType {
+    state: AppState;
+    dispatch: React.Dispatch<Action>;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
 interface AppProviderProps {
     children: ReactNode;
 }
 
-export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
+export const AppProvider = ({ children }: AppProviderProps) => {
     const [state, dispatch] = useReducer(appReducer, initialState);
 
     return (
-        <AppContext.Provider value={[state, dispatch]}>
+        <AppContext.Provider value={{ state, dispatch }}>
             {children}
         </AppContext.Provider>
     );
@@ -44,3 +62,5 @@ export const useAppContext = () => {
     }
     return context;
 };
+
+export default AppContext;
