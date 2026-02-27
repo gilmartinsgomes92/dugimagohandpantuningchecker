@@ -1,32 +1,32 @@
-/**
- * Types shared across the handpan tuner application.
- */
+// TypeScript type definitions for handpan tuning checker app
 
-export interface HarmonicInfo {
-  /** Detected frequency in Hz (null = not detected) */
-  frequency: number | null;
-  /** Cents deviation from the ideal reference (null = not available) */
-  cents: number | null;
+// Represents a tuning note for a handpan
+interface TuningNote {
+    note: string; // The musical note (e.g., "C", "D#")
+    frequency: number; // Frequency of the note in Hz
+    duration?: number; // Duration in seconds, optional
 }
 
-export interface TunerData {
-  /** Fundamental pitch detection result */
-  fundamental: HarmonicInfo & {
-    /** Detected note name (e.g. "D4") */
-    noteName: string | null;
-    /** Expected frequency of the nearest semitone (target for 0¢) */
-    targetFrequency: number | null;
-  };
-  /** Octave: should be exactly 2× the fundamental */
-  octave: HarmonicInfo;
-  /** Compound fifth: should be exactly 3× the fundamental (just intonation P12) */
-  compoundFifth: HarmonicInfo;
-  /** Whether signal energy is sufficient for detection */
-  hasSignal: boolean;
+// Represents a handpan instrument
+interface Handpan {
+    id: number; // Unique identifier for the handpan
+    model: string; // The model name of the handpan
+    scale: string; // The scale of the handpan (e.g., "C minor")
+    notes: TuningNote[]; // Array of notes in the handpan
 }
 
-export interface AudioConfig {
-  sampleRate: number;
-  fftSize: number;
-  bufferSize: number;
+// Represents a tuning result
+interface TuningResult {
+    handpan: Handpan; // The handpan being tuned
+    matchedNotes: TuningNote[]; // Notes that match the expected tuning
+    missingNotes: TuningNote[]; // Notes that are missing in the current tuning
+    isTuned: boolean; // Whether the handpan is correctly tuned
+}
+
+// Represents a user
+interface User {
+    id: number; // Unique identifier for the user
+    name: string; // Full name of the user
+    email: string; // Email address of the user
+    ownedHandpans: Handpan[]; // Array of handpans owned by the user
 }
