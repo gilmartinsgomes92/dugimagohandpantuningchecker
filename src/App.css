@@ -1,0 +1,288 @@
+/* ============================================================
+   Handpan Pro Strobe Tuner — App Styles
+   Dark professional theme inspired by LinoTune / Peterson
+   ============================================================ */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0f0f0f 0%, #141414 100%);
+  color: #ddd;
+  padding: 16px 8px 32px;
+  gap: 16px;
+}
+
+/* ---- Header ---- */
+.app-header {
+  text-align: center;
+  padding: 8px 0 0;
+}
+
+.app-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fff;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.title-icon {
+  color: #00d4ff;
+  margin-right: 8px;
+}
+
+.app-subtitle {
+  font-size: 0.75rem;
+  color: #666;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* ---- Note display ---- */
+.note-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 12px 40px;
+  min-width: 200px;
+  min-height: 72px;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 #1e1e1e;
+}
+
+.note-name {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.note-frequency {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-placeholder {
+  font-size: 2.5rem;
+  color: #333;
+  line-height: 1;
+}
+
+/* ---- Strobe row ---- */
+.strobe-row {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 700px;
+}
+
+/* ---- Strobe panel ---- */
+.strobe-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #131313;
+  border: 1px solid #1f1f1f;
+  border-radius: 16px;
+  padding: 16px 12px 12px;
+  gap: 8px;
+  min-width: 210px;
+  transition: border-color 0.3s;
+}
+
+.strobe-panel:hover {
+  border-color: #333;
+}
+
+/* ---- Strobe disk ---- */
+.strobe-disk-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.strobe-disk-canvas {
+  display: block;
+}
+
+.strobe-disk-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #555;
+  font-weight: 600;
+}
+
+/* ---- Harmonic info ---- */
+.harmonic-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.cents-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.harmonic-subtitle {
+  font-size: 0.65rem;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---- Cents gauge ---- */
+.cents-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.cents-gauge-label {
+  font-size: 0.65rem;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---- Status bar ---- */
+.status-bar {
+  display: flex;
+  gap: 24px;
+  font-size: 0.78rem;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+  min-height: 20px;
+}
+
+.status-item strong {
+  color: #888;
+}
+
+/* ---- Tuning legend ---- */
+.tune-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.legend-item { color: #555; }
+.legend-perfect { color: #00ff88; }
+.legend-good    { color: #88ff44; }
+.legend-ok      { color: #ffdd00; }
+.legend-bad     { color: #ff8800; }
+
+/* ---- Error ---- */
+.error-banner {
+  background: #200000;
+  border: 1px solid #440000;
+  color: #ff6666;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 0.85rem;
+  max-width: 460px;
+  text-align: center;
+}
+
+/* ---- Controls ---- */
+.controls {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.start-btn {
+  background: linear-gradient(135deg, #00a8cc, #0077aa);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 14px 44px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 2px 16px rgba(0, 168, 204, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.start-btn:hover {
+  background: linear-gradient(135deg, #00c2ee, #0099cc);
+  box-shadow: 0 4px 24px rgba(0, 168, 204, 0.5);
+}
+
+.start-btn:active {
+  transform: scale(0.97);
+}
+
+.start-btn.running {
+  background: linear-gradient(135deg, #cc3300, #aa1100);
+  box-shadow: 0 2px 16px rgba(200, 50, 0, 0.35);
+}
+
+.start-btn.running:hover {
+  background: linear-gradient(135deg, #ee4400, #cc2200);
+}
+
+.btn-icon {
+  font-size: 0.9rem;
+}
+
+/* ---- Footer ---- */
+.app-footer {
+  text-align: center;
+  color: #3a3a3a;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+}
+
+.app-footer p { margin: 2px 0; }
+
+.accuracy-note {
+  color: #2a2a2a;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 680px) {
+  .strobe-row {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .strobe-panel {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .app-title {
+    font-size: 1.4rem;
+  }
+}
