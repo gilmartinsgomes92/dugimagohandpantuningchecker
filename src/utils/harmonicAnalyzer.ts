@@ -59,7 +59,7 @@ export function findHarmonicFrequency(
   }
 
   // Reject if the peak is below noise floor (-60 dB is typical silence)
-  if (peakMag < -55) return null;
+  if (peakMag < -65) return null;
 
   // Parabolic interpolation for sub-bin accuracy
   const prevMag = freqData[peakBin - 1];
