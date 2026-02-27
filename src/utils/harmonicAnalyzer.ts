@@ -77,6 +77,53 @@ export function findHarmonicFrequency(
 }
 
 /**
+ * Validates whether a YIN-detected frequency is the true fundamental or a harmonic alias.
+ *
+ * Checks if a sub-octave (f/2) has a comparable FFT peak. If so, the lower
+ * frequency is likely the true fundamental (YIN locked onto the 2nd harmonic).
+ *
+ * @param detectedFreq - Frequency detected by YIN (Hz)
+ * @param freqData - Float32Array of dB values from AnalyserNode.getFloatFrequencyData()
+ * @param sampleRate - Audio sample rate (Hz)
+ * @param fftSize - FFT size used by the AnalyserNode
+ * @returns Corrected fundamental frequency in Hz
+ */
+export function validateFundamental(
+  detectedFreq: number,
+  freqData: Float32Array,
+  sampleRate: number,
+  fftSize: number
+): number {
+  const binHz = sampleRate / fftSize;
+
+  function getMagnitudeAt(freq: number): number {
+    const bin = freq / binHz;
+    const lo = Math.floor(bin);
+    const hi = lo + 1;
+    if (lo < 0 || hi >= freqData.length) return -Infinity;
+    // Linear interpolation between adjacent bins
+    return freqData[lo] + (freqData[hi] - freqData[lo]) * (bin - lo);
+  }
+
+  const currentMag = getMagnitudeAt(detectedFreq);
+
+  // Check sub-octave (f/2) — the most common harmonic confusion
+  const subOctave = detectedFreq / 2;
+  if (subOctave >= 55) {
+    const subOctavePeak = findHarmonicFrequency(freqData, subOctave, sampleRate, fftSize);
+    if (subOctavePeak !== null) {
+      const subMag = getMagnitudeAt(subOctavePeak);
+      // If sub-octave is within 6 dB of detected frequency, prefer the lower fundamental
+      if (subMag >= currentMag - 6) {
+        return subOctavePeak;
+      }
+    }
+  }
+
+  return detectedFreq;
+}
+
+/**
  * Calculates cents deviation of a detected frequency from a reference frequency.
  * Returns null if detectedFreq is null.
  */

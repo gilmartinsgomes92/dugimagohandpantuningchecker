@@ -11,14 +11,15 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { detectPitch, computeRMS } from '../utils/yin';
-import { findHarmonicFrequency, calcCents } from '../utils/harmonicAnalyzer';
+import { findHarmonicFrequency, validateFundamental, calcCents } from '../utils/harmonicAnalyzer';
 import { frequencyToNote, midiToFrequency } from '../utils/musicUtils';
 import type { TunerData } from '../types';
 
 const FFT_SIZE = 32768;      // Large FFT for good harmonic resolution (~1.35 Hz/bin @ 44100)
-const BUFFER_SIZE = 8192;    // YIN buffer (~186ms @ 44100)
+const BUFFER_SIZE = 16384;   // YIN buffer (~371ms @ 44100, ~54 cycles at 145 Hz)
 const UPDATE_INTERVAL = 50;  // ms between tuner updates
 const RMS_THRESHOLD = 0.003; // Minimum signal level to attempt detection
+const MAX_FREQUENCY_RATIO = 2.0; // Maximum allowed ratio between consecutive detections
 
 export function useAudioProcessor() {
   const [tunerData, setTunerData] = useState<TunerData | null>(null);
@@ -33,6 +34,9 @@ export function useAudioProcessor() {
 
   const freqDataRef = useRef<Float32Array<ArrayBuffer> | null>(null);
   const timeDataRef = useRef<Float32Array<ArrayBuffer> | null>(null);
+  const prevFundamentalRef = useRef<number | null>(null);
+  const pendingFundamentalRef = useRef<number | null>(null);
+  const pendingCountRef = useRef<number>(0);
 
   const processAudio = useCallback(() => {
     const analyser = analyserRef.current;
@@ -52,6 +56,9 @@ export function useAudioProcessor() {
     // RMS check - gate on silence
     const rms = computeRMS(timeData);
     if (rms < RMS_THRESHOLD) {
+      prevFundamentalRef.current = null;
+      pendingFundamentalRef.current = null;
+      pendingCountRef.current = 0;
       setTunerData({
         fundamental: { frequency: null, cents: null, noteName: null, targetFrequency: null },
         octave: { frequency: null, cents: null },
@@ -62,7 +69,58 @@ export function useAudioProcessor() {
     }
 
     // --- Fundamental detection via YIN ---
-    const fundamental = detectPitch(timeData, sampleRate);
+    let fundamental = detectPitch(timeData, sampleRate);
+
+    // --- FFT cross-validation: verify YIN result against frequency domain ---
+    if (fundamental !== null) {
+      const fftConfirmed = findHarmonicFrequency(freqData, fundamental, sampleRate, FFT_SIZE);
+      if (fftConfirmed !== null) {
+        // Harmonic validation: check if a sub-octave might be the true fundamental
+        fundamental = validateFundamental(fftConfirmed, freqData, sampleRate, FFT_SIZE);
+      } else {
+        // FFT doesn't confirm YIN result — try octave-up correction (subharmonic fix)
+        const octaveUp = fundamental * 2;
+        if (octaveUp <= 4200) { // 4200 Hz is the upper limit of the musical range (see yin.ts)
+          const octaveConfirmed = findHarmonicFrequency(freqData, octaveUp, sampleRate, FFT_SIZE);
+          fundamental = octaveConfirmed !== null ? octaveConfirmed : null;
+        } else {
+          fundamental = null;
+        }
+      }
+    }
+
+    // --- Signal continuity: require 2 consecutive detections to accept a large frequency jump ---
+    // (prevents spurious single-frame octave errors while allowing genuine note changes)
+    if (fundamental !== null && prevFundamentalRef.current !== null) {
+      const ratio = fundamental / prevFundamentalRef.current;
+      if (ratio > MAX_FREQUENCY_RATIO || ratio < 1 / MAX_FREQUENCY_RATIO) {
+        // Large jump: check if this is the same "pending" candidate as last frame
+        if (pendingFundamentalRef.current !== null) {
+          const pendingRatio = fundamental / pendingFundamentalRef.current;
+          if (pendingRatio <= MAX_FREQUENCY_RATIO && pendingRatio >= 1 / MAX_FREQUENCY_RATIO) {
+            pendingCountRef.current += 1;
+          } else {
+            pendingFundamentalRef.current = fundamental;
+            pendingCountRef.current = 1;
+          }
+        } else {
+          pendingFundamentalRef.current = fundamental;
+          pendingCountRef.current = 1;
+        }
+        // Accept the new frequency only after 2 consecutive confirmations
+        if (pendingCountRef.current < 2) {
+          fundamental = prevFundamentalRef.current;
+        } else {
+          pendingFundamentalRef.current = null;
+          pendingCountRef.current = 0;
+        }
+      } else {
+        // Normal continuity — no jump
+        pendingFundamentalRef.current = null;
+        pendingCountRef.current = 0;
+      }
+    }
+    prevFundamentalRef.current = fundamental;
 
     let noteName: string | null = null;
     let targetFrequency: number | null = null;
@@ -173,6 +231,9 @@ export function useAudioProcessor() {
     analyserRef.current = null;
     sourceRef.current = null;
     streamRef.current = null;
+    prevFundamentalRef.current = null;
+    pendingFundamentalRef.current = null;
+    pendingCountRef.current = 0;
 
     setIsRunning(false);
     setTunerData(null);
