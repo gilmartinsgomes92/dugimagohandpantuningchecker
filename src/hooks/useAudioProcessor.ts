@@ -11,7 +11,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { detectPitch, computeRMS } from '../utils/yin';
-import { findHarmonicFrequency, validateFundamental, calcCents } from '../utils/harmonicAnalyzer';
+import { findHarmonicFrequency, validateFundamental, calcHzDeviation } from '../utils/harmonicAnalyzer';
 import { frequencyToNote, midiToFrequency } from '../utils/musicUtils';
 import type { TunerData } from '../types';
 
@@ -60,9 +60,9 @@ export function useAudioProcessor() {
       pendingFundamentalRef.current = null;
       pendingCountRef.current = 0;
       setTunerData({
-        fundamental: { frequency: null, cents: null, noteName: null, targetFrequency: null },
-        octave: { frequency: null, cents: null },
-        compoundFifth: { frequency: null, cents: null },
+        fundamental: { frequency: null, hzDeviation: null, noteName: null, targetFrequency: null },
+        octave: { frequency: null, hzDeviation: null },
+        compoundFifth: { frequency: null, hzDeviation: null },
         hasSignal: false,
       });
       return;
@@ -124,52 +124,52 @@ export function useAudioProcessor() {
 
     let noteName: string | null = null;
     let targetFrequency: number | null = null;
-    let fundamentalCents: number | null = null;
+    let fundamentalHzDeviation: number | null = null;
 
     if (fundamental !== null) {
       const noteInfo = frequencyToNote(fundamental);
       noteName = noteInfo.fullName;
       targetFrequency = midiToFrequency(noteInfo.midiNote);
-      fundamentalCents = noteInfo.cents; // cents from nearest semitone
+      fundamentalHzDeviation = fundamental - targetFrequency; // Hz deviation from nearest semitone
     }
 
     // --- Octave detection via FFT peak search (2× fundamental) ---
     let octaveFreq: number | null = null;
-    let octaveCents: number | null = null;
+    let octaveHzDeviation: number | null = null;
 
     if (fundamental !== null) {
       const expectedOctave = fundamental * 2;
       octaveFreq = findHarmonicFrequency(freqData, expectedOctave, sampleRate, FFT_SIZE);
-      // Cents deviation from ideal 2:1 ratio
-      octaveCents = calcCents(octaveFreq, expectedOctave);
+      // Hz deviation from ideal 2:1 ratio
+      octaveHzDeviation = calcHzDeviation(octaveFreq, expectedOctave);
     }
 
     // --- Compound fifth detection via FFT peak search (3× fundamental) ---
     // The compound fifth (P12) is the 3rd harmonic, frequency ratio 3:1
     let compoundFifthFreq: number | null = null;
-    let compoundFifthCents: number | null = null;
+    let compoundFifthHzDeviation: number | null = null;
 
     if (fundamental !== null) {
       const expectedCompoundFifth = fundamental * 3;
       compoundFifthFreq = findHarmonicFrequency(freqData, expectedCompoundFifth, sampleRate, FFT_SIZE);
-      // Cents deviation from ideal 3:1 ratio
-      compoundFifthCents = calcCents(compoundFifthFreq, expectedCompoundFifth);
+      // Hz deviation from ideal 3:1 ratio
+      compoundFifthHzDeviation = calcHzDeviation(compoundFifthFreq, expectedCompoundFifth);
     }
 
     setTunerData({
       fundamental: {
         frequency: fundamental,
-        cents: fundamentalCents,
+        hzDeviation: fundamentalHzDeviation,
         noteName,
         targetFrequency,
       },
       octave: {
         frequency: octaveFreq,
-        cents: octaveCents,
+        hzDeviation: octaveHzDeviation,
       },
       compoundFifth: {
         frequency: compoundFifthFreq,
-        cents: compoundFifthCents,
+        hzDeviation: compoundFifthHzDeviation,
       },
       hasSignal: true,
     });

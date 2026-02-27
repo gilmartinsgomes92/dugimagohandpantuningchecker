@@ -124,10 +124,10 @@ export function validateFundamental(
 }
 
 /**
- * Calculates cents deviation of a detected frequency from a reference frequency.
+ * Calculates Hz deviation of a detected frequency from a reference frequency.
  * Returns null if detectedFreq is null.
  */
-export function calcCents(detectedFreq: number | null, referenceFreq: number): number | null {
+export function calcHzDeviation(detectedFreq: number | null, referenceFreq: number): number | null {
   if (detectedFreq === null || detectedFreq <= 0 || referenceFreq <= 0) return null;
-  return 1200 * Math.log2(detectedFreq / referenceFreq);
+  return detectedFreq - referenceFreq;
 }

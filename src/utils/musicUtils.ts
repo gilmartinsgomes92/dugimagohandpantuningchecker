@@ -49,31 +49,38 @@ export function midiToFrequency(midiNote: number): number {
   return A4_FREQUENCY * Math.pow(2, (midiNote - A4_MIDI) / 12);
 }
 
+/** Hz deviation thresholds for tuning quality classification */
+export const HZ_THRESHOLD_PERFECT = 0.5;    // ≤0.5 Hz: Perfect (green)
+export const HZ_THRESHOLD_VERY_GOOD = 1;    // ≤1 Hz: Very good (yellow-green)
+export const HZ_THRESHOLD_ACCEPTABLE = 2;   // ≤2 Hz: Acceptable (yellow)
+export const HZ_THRESHOLD_MARGINAL = 3;     // ≤3 Hz: Marginal (orange)
+// >3 Hz: Out of tune (red)
+
 /**
- * Calculates the cents deviation between a detected frequency and a reference frequency.
+ * Calculates the Hz difference between a detected frequency and a reference frequency.
  * Positive = sharp, Negative = flat
  */
-export function centsDeviation(detectedFreq: number, referenceFreq: number): number {
-  return 1200 * Math.log2(detectedFreq / referenceFreq);
+export function hzDeviation(detectedFreq: number, referenceFreq: number): number {
+  return detectedFreq - referenceFreq;
 }
 
 /**
- * Formats a cents value for display with sign and one decimal place.
+ * Formats a Hz deviation value for display with sign and two decimal places.
  */
-export function formatCents(cents: number): string {
-  const sign = cents >= 0 ? '+' : '';
-  return `${sign}${cents.toFixed(1)}¢`;
+export function formatHz(hz: number): string {
+  const sign = hz >= 0 ? '+' : '';
+  return `${sign}${hz.toFixed(2)} Hz`;
 }
 
 /**
- * Returns a color for a given cents deviation value.
+ * Returns a color for a given Hz deviation value.
  * Green = in tune, Yellow/Red = out of tune
  */
-export function centsToColor(cents: number): string {
-  const absCents = Math.abs(cents);
-  if (absCents <= 2) return '#00ff88';   // Perfect (green)
-  if (absCents <= 5) return '#88ff00';   // Very good (yellow-green)
-  if (absCents <= 10) return '#ffcc00';  // Acceptable (yellow)
-  if (absCents <= 20) return '#ff8800';  // Marginal (orange)
-  return '#ff2200';                       // Out of tune (red)
+export function hzToColor(hz: number): string {
+  const absHz = Math.abs(hz);
+  if (absHz <= HZ_THRESHOLD_PERFECT) return '#00ff88';   // Perfect (green)
+  if (absHz <= HZ_THRESHOLD_VERY_GOOD) return '#88ff00'; // Very good (yellow-green)
+  if (absHz <= HZ_THRESHOLD_ACCEPTABLE) return '#ffcc00'; // Acceptable (yellow)
+  if (absHz <= HZ_THRESHOLD_MARGINAL) return '#ff8800';  // Marginal (orange)
+  return '#ff2200';                                        // Out of tune (red)
 }

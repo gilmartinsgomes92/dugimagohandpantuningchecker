@@ -5,8 +5,8 @@
 export interface HarmonicInfo {
   /** Detected frequency in Hz (null = not detected) */
   frequency: number | null;
-  /** Cents deviation from the ideal reference (null = not available) */
-  cents: number | null;
+  /** Hz deviation from the ideal reference (null = not available) */
+  hzDeviation: number | null;
 }
 
 export interface TunerData {
@@ -14,7 +14,7 @@ export interface TunerData {
   fundamental: HarmonicInfo & {
     /** Detected note name (e.g. "D4") */
     noteName: string | null;
-    /** Expected frequency of the nearest semitone (target for 0¢) */
+    /** Expected frequency of the nearest semitone (target for 0 Hz deviation) */
     targetFrequency: number | null;
   };
   /** Octave: should be exactly 2× the fundamental */

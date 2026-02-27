@@ -9,6 +9,7 @@
  */
 
 import { useRef, useEffect } from 'react';
+import { HZ_THRESHOLD_PERFECT, HZ_THRESHOLD_VERY_GOOD, HZ_THRESHOLD_ACCEPTABLE, HZ_THRESHOLD_MARGINAL } from '../utils/musicUtils';
 
 interface StrobeDiskProps {
   detectedFreq: number | null;
@@ -97,14 +98,14 @@ export function StrobeDisk({
         drawCenter(ctx, cx, cy, innerRadius);
         drawRing(ctx, cx, cy, radius, '#333');
       } else {
-        const cents = 1200 * Math.log2(a.detectedFreq / a.referenceFreq);
-        const abs = Math.abs(cents);
+        const hzDiff = a.detectedFreq - a.referenceFreq;
+        const absHz = Math.abs(hzDiff);
         const segColor =
-          abs <= 2  ? '#00ff88' :
-          abs <= 5  ? '#88ff44' :
-          abs <= 10 ? '#ffdd00' :
-          abs <= 20 ? '#ff8800' :
-                      '#ff2200';
+          absHz <= HZ_THRESHOLD_PERFECT   ? '#00ff88' :
+          absHz <= HZ_THRESHOLD_VERY_GOOD ? '#88ff44' :
+          absHz <= HZ_THRESHOLD_ACCEPTABLE ? '#ffdd00' :
+          absHz <= HZ_THRESHOLD_MARGINAL   ? '#ff8800' :
+                                             '#ff2200';
         drawSegments(ctx, cx, cy, radius, innerRadius, totalSeg, a.angle, segColor, '#111');
         drawCenter(ctx, cx, cy, innerRadius);
         drawRing(ctx, cx, cy, radius, a.color);
