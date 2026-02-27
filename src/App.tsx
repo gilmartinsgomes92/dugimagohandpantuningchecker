@@ -3,17 +3,17 @@
  *
  * A professional-grade strobe tuner for handpan instruments.
  * Provides real-time detection of:
- *   - Fundamental frequency (with nearest note name and cents deviation)
- *   - Octave (2x fundamental, should be exactly 0 cents from 2:1 ratio)
- *   - Compound fifth (3x fundamental / P12, should be exactly 0 cents from 3:1 ratio)
+ *   - Fundamental frequency (with nearest note name and Hz deviation)
+ *   - Octave (2x fundamental, should be exactly 0 Hz from 2:1 ratio)
+ *   - Compound fifth (3x fundamental / P12, should be exactly 0 Hz from 3:1 ratio)
  *
- * Each harmonic has its own independent strobe disk and cents gauge.
+ * Each harmonic has its own independent strobe disk and Hz gauge.
  */
 
 import { useAudioProcessor } from './hooks/useAudioProcessor';
 import { StrobeDisk } from './components/StrobeDisk';
 import { CentsGauge } from './components/CentsGauge';
-import { formatCents, centsToColor } from './utils/musicUtils';
+import { formatHz, hzToColor } from './utils/musicUtils';
 import './App.css';
 
 function App() {
@@ -71,13 +71,13 @@ function App() {
           <div className="harmonic-info">
             <span
               className="cents-value"
-              style={{ color: fd?.cents != null ? centsToColor(fd.cents) : '#555' }}
+              style={{ color: fd?.hzDeviation != null ? hzToColor(fd.hzDeviation) : '#555' }}
             >
-              {fd?.cents != null ? formatCents(fd.cents) : '\u2014'}
+              {fd?.hzDeviation != null ? formatHz(fd.hzDeviation) : '\u2014'}
             </span>
             <span className="harmonic-subtitle">from {fd?.noteName ?? '\u2014'}</span>
           </div>
-          <CentsGauge cents={fd?.cents ?? null} maxCents={50} />
+          <CentsGauge hz={fd?.hzDeviation ?? null} maxHz={5} />
         </div>
 
         {/* Octave */}
@@ -94,13 +94,13 @@ function App() {
           <div className="harmonic-info">
             <span
               className="cents-value"
-              style={{ color: oct?.cents != null ? centsToColor(oct.cents) : '#555' }}
+              style={{ color: oct?.hzDeviation != null ? hzToColor(oct.hzDeviation) : '#555' }}
             >
-              {oct?.cents != null ? formatCents(oct.cents) : '\u2014'}
+              {oct?.hzDeviation != null ? formatHz(oct.hzDeviation) : '\u2014'}
             </span>
             <span className="harmonic-subtitle">from ideal 2:1 ratio</span>
           </div>
-          <CentsGauge cents={oct?.cents ?? null} maxCents={50} />
+          <CentsGauge hz={oct?.hzDeviation ?? null} maxHz={5} />
         </div>
 
         {/* Compound Fifth */}
@@ -117,13 +117,13 @@ function App() {
           <div className="harmonic-info">
             <span
               className="cents-value"
-              style={{ color: cf?.cents != null ? centsToColor(cf.cents) : '#555' }}
+              style={{ color: cf?.hzDeviation != null ? hzToColor(cf.hzDeviation) : '#555' }}
             >
-              {cf?.cents != null ? formatCents(cf.cents) : '\u2014'}
+              {cf?.hzDeviation != null ? formatHz(cf.hzDeviation) : '\u2014'}
             </span>
             <span className="harmonic-subtitle">from ideal 3:1 ratio</span>
           </div>
-          <CentsGauge cents={cf?.cents ?? null} maxCents={50} />
+          <CentsGauge hz={cf?.hzDeviation ?? null} maxHz={5} />
         </div>
       </div>
 
@@ -148,10 +148,10 @@ function App() {
       {/* Tuning legend */}
       {isRunning && tunerData?.hasSignal && (
         <div className="tune-legend">
-          <span className="legend-item legend-perfect">&#9679; &#177;0&ndash;2&#162; Perfect</span>
-          <span className="legend-item legend-good">&#9679; &#177;2&ndash;5&#162; Very Good</span>
-          <span className="legend-item legend-ok">&#9679; &#177;5&ndash;10&#162; Acceptable</span>
-          <span className="legend-item legend-bad">&#9679; &gt;10&#162; Needs Tuning</span>
+          <span className="legend-item legend-perfect">&#9679; &#177;0&ndash;0.5 Hz Perfect</span>
+          <span className="legend-item legend-good">&#9679; &#177;0.5&ndash;1 Hz Very Good</span>
+          <span className="legend-item legend-ok">&#9679; &#177;1&ndash;2 Hz Acceptable</span>
+          <span className="legend-item legend-bad">&#9679; &gt;2 Hz Needs Tuning</span>
         </div>
       )}
 
