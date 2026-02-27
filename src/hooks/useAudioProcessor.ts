@@ -19,27 +19,6 @@ export const useAudioProcessor = () => {
   const rafRef = useRef<number | null>(null);
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
 
-  const processFrame = useCallback(() => {
-    if (!analyserRef.current || !audioCtxRef.current) return;
-    const analyser = analyserRef.current;
-    const buffer = bufferRef.current;
-    analyser.getFloatTimeDomainData(buffer);
-
-    const rms = computeRMS(buffer);
-    if (rms < 0.005) {
-      rafRef.current = requestAnimationFrame(processFrame);
-      return;
-    }
-
-    const freq = detectPitch(buffer, audioCtxRef.current.sampleRate);
-    if (freq !== null) {
-      const noteInfo = frequencyToNote(freq);
-      setResult({ frequency: freq, noteName: noteInfo.fullName, cents: noteInfo.cents });
-    }
-
-    rafRef.current = requestAnimationFrame(processFrame);
-  }, []);
-
   const startListening = useCallback(async () => {
     try {
       setError(null);
@@ -58,11 +37,29 @@ export const useAudioProcessor = () => {
       source.connect(analyser);
 
       setIsListening(true);
-      rafRef.current = requestAnimationFrame(processFrame);
+
+      const tick = () => {
+        if (!analyserRef.current || !audioCtxRef.current) return;
+        const buf = bufferRef.current;
+        analyserRef.current.getFloatTimeDomainData(buf);
+
+        const rms = computeRMS(buf);
+        if (rms >= 0.005) {
+          const freq = detectPitch(buf, audioCtxRef.current.sampleRate);
+          if (freq !== null) {
+            const noteInfo = frequencyToNote(freq);
+            setResult({ frequency: freq, noteName: noteInfo.fullName, cents: noteInfo.cents });
+          }
+        }
+
+        rafRef.current = requestAnimationFrame(tick);
+      };
+
+      rafRef.current = requestAnimationFrame(tick);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Microphone access denied');
     }
-  }, [processFrame]);
+  }, []);
 
   const stopListening = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
