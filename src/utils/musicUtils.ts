@@ -25,8 +25,8 @@ export function frequencyToNote(freq: number): {
   const midiFloat = 12 * Math.log2(freq / A4_FREQUENCY) + A4_MIDI;
   const midiNote = Math.round(midiFloat);
 
-  // Cents deviation from the nearest semitone
-  const cents = (midiFloat - midiNote) * 100;
+  // Cents deviation from the nearest semitone (logarithmic formula for accuracy)
+  const cents = 1200 * Math.log2(freq / midiToFrequency(midiNote));
 
   // Note name and octave
   const noteIndex = ((midiNote % 12) + 12) % 12;
