@@ -14,13 +14,13 @@ const DEFAULT_THRESHOLD = 0.10;
  * @param buffer - Float32Array of time-domain audio samples
  * @param sampleRate - Audio sample rate in Hz
  * @param threshold - YIN threshold (lower = more accurate but more octave errors, default 0.10)
- * @returns Fundamental frequency in Hz, or null if not detected
+ * @returns Object containing the fundamental frequency in Hz (or null) and a confidence score (0–1)
  */
 export function detectPitch(
   buffer: Float32Array,
   sampleRate: number,
   threshold: number = DEFAULT_THRESHOLD
-): number | null {
+): { frequency: number | null; confidence: number } {
   const bufferSize = buffer.length;
   const halfSize = Math.floor(bufferSize / 2);
 
@@ -54,16 +54,20 @@ export function detectPitch(
     }
   }
 
-  if (tauEstimate === -1) return null;
+  if (tauEstimate === -1) return { frequency: null, confidence: 0 };
+
+  // Confidence: how deeply the CMNDF dipped below the threshold (0 = barely, 1 = perfect)
+  const minCMNDFValue = yinBuffer[tauEstimate];
+  const confidence = Math.max(0, Math.min(1, 1 - minCMNDFValue / threshold));
 
   // Step 4: Parabolic interpolation for sub-sample accuracy
   const betterTau = parabolicInterpolation(yinBuffer, tauEstimate, halfSize);
 
   // Sanity check: frequency should be in a reasonable musical range
   const frequency = sampleRate / betterTau;
-  if (frequency < 55 || frequency > 4200) return null;
+  if (frequency < 55 || frequency > 4200) return { frequency: null, confidence: 0 };
 
-  return frequency;
+  return { frequency, confidence };
 }
 
 /**
