@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react';
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 // Define the ContextAction interface for dispatch actions
 interface ContextAction {
