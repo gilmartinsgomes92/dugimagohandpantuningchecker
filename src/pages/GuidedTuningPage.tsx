@@ -26,9 +26,9 @@ const GuidedTuningPage: React.FC = () => {
   const getTuningStatus = useCallback((cents: number | null) => {
     if (cents === null) return null;
     const abs = Math.abs(cents);
-    if (abs <= 5) return { label: '✅ In Tune', className: 'status-in-tune' };
-    if (cents < -5) return { label: `⚠️ Flat (${formatCents(cents)})`, className: 'status-flat' };
-    return { label: `⚠️ Sharp (${formatCents(cents)})`, className: 'status-sharp' };
+    if (abs <= 7) return { label: '✅ In Tune', className: 'status-in-tune' };
+    if (abs <= 15) return { label: `⚠️ Slightly Out of Tune (${formatCents(cents)})`, className: 'status-slightly-out' };
+    return { label: `❌ Out of Tune (${formatCents(cents)})`, className: 'status-out-of-tune' };
   }, []);
 
   const confirmNote = useCallback(() => {
@@ -37,7 +37,7 @@ const GuidedTuningPage: React.FC = () => {
     const detectedFreq = result.frequency;
     const targetFreq = midiToFrequency(currentNote.midi);
     const abs = cents !== null ? Math.abs(cents) : Infinity;
-    const status = cents === null ? 'pending' : abs <= 5 ? 'in-tune' : cents < 0 ? 'flat' : 'sharp';
+    const status = cents === null ? 'pending' : abs <= 7 ? 'in-tune' : abs <= 15 ? 'slightly-out-of-tune' : 'out-of-tune';
 
     dispatch({
       type: 'ADD_TUNING_RESULT',

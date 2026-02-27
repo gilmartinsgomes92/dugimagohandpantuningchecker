@@ -20,12 +20,22 @@ const WelcomePage: React.FC = () => {
           <li>✓ Detailed results with cents deviation analysis</li>
         </ul>
 
-        <button
-          className="btn btn-primary btn-large"
-          onClick={() => navigate('/scale-selection')}
-        >
-          Start Free Evaluation
-        </button>
+        <div className="welcome-cta-group">
+          <button
+            className="btn btn-primary btn-large"
+            onClick={() => navigate('/notes-count-selection')}
+          >
+            🎵 Quick Tuning Check
+          </button>
+
+          <button
+            className="btn btn-secondary btn-large"
+            disabled
+          >
+            🔒 Comprehensive Tuning Check
+            <span className="btn-coming-soon">Coming Soon</span>
+          </button>
+        </div>
 
         <p className="welcome-login-link">
           Already a subscriber? <a href="#login" onClick={e => e.preventDefault()}>Log In</a>

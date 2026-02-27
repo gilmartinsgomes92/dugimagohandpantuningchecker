@@ -11,17 +11,23 @@ const ResultsDashboardPage: React.FC = () => {
   const stats = useMemo(() => {
     const scored = tuningResults.filter(r => r.status !== 'pending' && r.status !== 'skipped');
     const inTune = scored.filter(r => r.status === 'in-tune').length;
-    const needsWork = scored.filter(r => r.status === 'flat' || r.status === 'sharp').length;
+    const slightlyOut = scored.filter(r => r.status === 'slightly-out-of-tune').length;
+    const outOfTune = scored.filter(r => r.status === 'out-of-tune').length;
+    const needsWork = slightlyOut + outOfTune;
     const total = tuningResults.length;
     const healthScore = total > 0 ? Math.round((inTune / total) * 100) : 0;
     const avgDeviation = scored.length > 0
       ? scored.reduce((sum, r) => sum + Math.abs(r.cents ?? 0), 0) / scored.length
       : 0;
-    const difficulty = avgDeviation <= 5 ? 'Simple' : avgDeviation <= 15 ? 'Moderate' : 'Complex';
-    return { inTune, needsWork, total, healthScore, difficulty };
+    const difficulty = avgDeviation <= 7 ? 'Simple' : avgDeviation <= 15 ? 'Moderate' : 'Complex';
+    return { inTune, slightlyOut, outOfTune, needsWork, total, healthScore, difficulty };
   }, [tuningResults]);
 
-  const isGood = stats.healthScore >= 80;
+  const verdict = stats.outOfTune > 0
+    ? { label: 'The handpan is out of tune', badge: '❌', className: 'verdict-bad' }
+    : stats.slightlyOut > 0
+    ? { label: 'The handpan could use an adjustment', badge: '⚠️', className: 'verdict-warn' }
+    : { label: 'The handpan is in tune', badge: '✅', className: 'verdict-good' };
 
   const handleStartOver = () => {
     dispatch({ type: 'RESET_EVALUATION' });
@@ -31,18 +37,18 @@ const ResultsDashboardPage: React.FC = () => {
   return (
     <div className="page results-page">
       <div className="results-verdict">
-        <div className={`verdict-badge ${isGood ? 'verdict-good' : 'verdict-warn'}`}>
-          {isGood ? '✅' : '⚠️'}
+        <div className={`verdict-badge ${verdict.className}`}>
+          {verdict.badge}
         </div>
         <h2 className="verdict-title">
-          {isGood ? 'Your handpan is in tune!' : 'Retuning work recommended'}
+          {verdict.label}
         </h2>
         {selectedScale && <p className="verdict-scale">Scale: {selectedScale}</p>}
       </div>
 
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value" style={{ color: isGood ? '#00ff88' : '#ff8800' }}>
+          <div className="stat-value" style={{ color: verdict.className === 'verdict-good' ? '#00ff88' : '#ff8800' }}>
             {stats.healthScore}%
           </div>
           <div className="stat-label">Overall Health Score</div>
@@ -73,8 +79,8 @@ const ResultsDashboardPage: React.FC = () => {
               const color = r.cents !== null ? centsToColor(r.cents) : '#555';
               const statusLabel =
                 r.status === 'in-tune' ? 'In Tune' :
-                r.status === 'flat' ? 'Flat' :
-                r.status === 'sharp' ? 'Sharp' :
+                r.status === 'slightly-out-of-tune' ? 'Slightly Out of Tune' :
+                r.status === 'out-of-tune' ? 'Out of Tune' :
                 r.status === 'skipped' ? 'Skipped' : 'Pending';
               return (
                 <tr key={i}>

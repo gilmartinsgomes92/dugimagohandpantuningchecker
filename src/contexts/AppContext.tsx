@@ -7,7 +7,9 @@ export interface TuningResult {
   targetFrequency: number;
   detectedFrequency: number | null;
   cents: number | null;
-  status: 'in-tune' | 'flat' | 'sharp' | 'skipped' | 'pending';
+  status: 'in-tune' | 'slightly-out-of-tune' | 'out-of-tune' | 'skipped' | 'pending';
+  compoundFifthFreq?: number;
+  compoundFifthCents?: number;
 }
 
 export interface ContactInfo {
@@ -22,10 +24,12 @@ interface AppState {
   tuningResults: TuningResult[];
   contactInfo: ContactInfo;
   currentNoteIndex: number;
+  notesCount: number | null;
 }
 
 type AppAction =
   | { type: 'SET_SCALE'; payload: string }
+  | { type: 'SET_NOTES_COUNT'; payload: number }
   | { type: 'ADD_TUNING_RESULT'; payload: TuningResult }
   | { type: 'SET_CONTACT_INFO'; payload: Partial<ContactInfo> }
   | { type: 'SET_CURRENT_NOTE_INDEX'; payload: number }
@@ -36,6 +40,7 @@ const initialState: AppState = {
   tuningResults: [],
   contactInfo: { name: '', email: '', phone: '', message: '' },
   currentNoteIndex: 0,
+  notesCount: null,
 };
 
 const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<AppAction> } | undefined>(undefined);
@@ -44,6 +49,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case 'SET_SCALE':
       return { ...state, selectedScale: action.payload, tuningResults: [], currentNoteIndex: 0 };
+    case 'SET_NOTES_COUNT':
+      return { ...state, notesCount: action.payload };
     case 'ADD_TUNING_RESULT': {
       const results = [...state.tuningResults];
       results[state.currentNoteIndex] = action.payload;
