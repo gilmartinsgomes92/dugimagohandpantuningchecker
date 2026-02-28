@@ -58,6 +58,14 @@ export const useAudioProcessorForScaleIdentification = () => {
   // Stability filter state: track consecutive frames with the same pitch class
   const stabilityCountRef = useRef(0);
   const stablePitchClassRef = useRef<string | null>(null);
+  /**
+   * Full note name (with octave) from the very first frame of the current
+   * stable run. Using the onset frame's name (rather than the current frame)
+   * means the reported octave reflects when the fundamental is loudest —
+   * harmonics like F5 become relatively louder only as the note decays, so
+   * the onset frame is much more likely to read F4 correctly.
+   */
+  const stableOnsetFullNameRef = useRef<string | null>(null);
 
   const startListening = useCallback(async () => {
     try {
@@ -75,6 +83,7 @@ export const useAudioProcessorForScaleIdentification = () => {
       // Reset stability state at the start of each session
       stabilityCountRef.current = 0;
       stablePitchClassRef.current = null;
+      stableOnsetFullNameRef.current = null;
 
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -92,6 +101,7 @@ export const useAudioProcessorForScaleIdentification = () => {
           // Silent frame: reset stability so transient noise never accumulates
           stabilityCountRef.current = 0;
           stablePitchClassRef.current = null;
+          stableOnsetFullNameRef.current = null;
           setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
           rafRef.current = requestAnimationFrame(tick);
           return;
@@ -101,6 +111,7 @@ export const useAudioProcessorForScaleIdentification = () => {
         if (rawFreq === null) {
           stabilityCountRef.current = 0;
           stablePitchClassRef.current = null;
+          stableOnsetFullNameRef.current = null;
           setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
           rafRef.current = requestAnimationFrame(tick);
           return;
@@ -110,19 +121,21 @@ export const useAudioProcessorForScaleIdentification = () => {
 
         // Accumulate consecutive frames with the same pitch class.
         // D3 and D4 share pitch class "D" so octave ambiguity is tolerated;
-        // once stable the current frame's fullName (usually the fundamental)
-        // is what gets reported.
+        // the fullName from the FIRST frame of the run is used as the reported
+        // note name — at note onset the fundamental is loudest, so the first
+        // frame is least likely to be a harmonic alias (e.g. F5 instead of F4).
         if (noteInfo.name === stablePitchClassRef.current) {
           stabilityCountRef.current++;
         } else {
           stablePitchClassRef.current = noteInfo.name;
           stabilityCountRef.current = 1;
+          stableOnsetFullNameRef.current = noteInfo.fullName;
         }
 
         if (stabilityCountRef.current >= STABILITY_FRAMES) {
           setResult({
             pitchClass: noteInfo.name,
-            noteFullName: noteInfo.fullName,
+            noteFullName: stableOnsetFullNameRef.current!,
             frequency: rawFreq,
             rms,
           });

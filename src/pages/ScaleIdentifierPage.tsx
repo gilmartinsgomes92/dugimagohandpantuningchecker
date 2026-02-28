@@ -6,21 +6,6 @@ import type { ScaleMatch } from '../utils/scaleIdentifier';
 
 /** Minimum ms a note must be continuously detected before it is registered */
 const NOTE_HOLD_MS = 350;
-/**
- * After a note registers, ignore low-amplitude audio for this long.
- * Handpans can ring for several seconds; 1500 ms covers the loudest harmonic
- * content while still feeling responsive. The cooldown is cancelled early
- * whenever a new note strike is detected (see NEW_STRIKE_RMS below).
- */
-const POST_REGISTER_COOLDOWN_MS = 1500;
-/**
- * RMS level above which an incoming audio frame is treated as a fresh note
- * strike (not residual resonance). Cancels the post-registration cooldown
- * immediately so the next note can be detected right away.
- * Typical new strike: 0.03–0.3 — typical 1 s old resonance: 0.003–0.010
- * Set low enough to catch softer playing styles (gentle tap ≈ 0.015–0.03).
- */
-const NEW_STRIKE_RMS = 0.015;
 
 interface IdentifierState {
   /** Pitch class numbers detected so far (unique, for scale matching) */
@@ -80,10 +65,14 @@ const ScaleIdentifierPage: React.FC = () => {
   /** Full note name (with octave) captured when the current candidate was first seen. */
   const candidateFullNameRef = useRef<string | null>(null);
   /**
-   * Timestamp until which post-registration audio is suppressed.
-   * Cancelled early by a new-strike amplitude spike (rms ≥ NEW_STRIKE_RMS).
+   * Pitch class of the most recently registered note (e.g. "D").
+   * Subsequent frames reporting this same pitch class are suppressed until a
+   * genuinely different pitch class appears. This prevents the decaying ring
+   * of a just-played note from (a) re-registering the same pitch and starting
+   * an endless suppress/register cycle, and (b) registering a wrong-octave
+   * alias (e.g. F5 after F4) since both share pitch class "F".
    */
-  const cooldownUntilRef = useRef<number>(0);
+  const suppressedClassRef = useRef<string | null>(null);
 
   const reset = useCallback(() => {
     stopListening();
@@ -91,19 +80,19 @@ const ScaleIdentifierPage: React.FC = () => {
     lastNoteRef.current = null;
     noteStartRef.current = null;
     candidateFullNameRef.current = null;
-    cooldownUntilRef.current = 0;
+    suppressedClassRef.current = null;
   }, [stopListening]);
 
   /**
    * Clears only the detection-tracking refs, without resetting detected notes.
-   * Called before each new mic session so stale cooldowns or candidate windows
+   * Called before each new mic session so stale suppression or candidate windows
    * from a previous session cannot block the fresh start.
    */
   const clearDetectionRefs = useCallback(() => {
     lastNoteRef.current = null;
     noteStartRef.current = null;
     candidateFullNameRef.current = null;
-    cooldownUntilRef.current = 0;
+    suppressedClassRef.current = null;
   }, []);
 
   const handleStartListening = useCallback(() => {
@@ -115,21 +104,24 @@ const ScaleIdentifierPage: React.FC = () => {
   // Depends on `result` (a new object every audio frame) so the elapsed-time
   // check runs every frame — not just when the pitch class string changes.
   useEffect(() => {
-    const { pitchClass, noteFullName, rms } = result;
+    const { pitchClass, noteFullName } = result;
     const now = Date.now();
 
-    // Post-registration cooldown suppresses the decaying resonance of the
-    // last-struck note.  A new-strike amplitude spike (the player hits the
-    // next tone field) cancels it immediately so there is no mandatory wait.
-    if (now < cooldownUntilRef.current) {
-      if (rms >= NEW_STRIKE_RMS) {
-        cooldownUntilRef.current = 0;
-        lastNoteRef.current = null;
-        noteStartRef.current = null;
-        candidateFullNameRef.current = null;
-      } else {
+    // Suppress the pitch class that was just registered until a genuinely
+    // different one appears. This prevents the note's decaying ring from:
+    //  (a) re-registering the same note (causing infinite suppress cycles), and
+    //  (b) registering a wrong-octave alias (e.g. F5 after F4 shares class "F").
+    if (suppressedClassRef.current !== null) {
+      if (!pitchClass) {
+        // Silent frames during suppression: keep suppression active.
         return;
       }
+      if (pitchClass === suppressedClassRef.current) {
+        // Still hearing the registered note's ring — ignore.
+        return;
+      }
+      // A genuinely different pitch class has appeared — lift suppression.
+      suppressedClassRef.current = null;
     }
 
     if (!pitchClass || !noteFullName) {
@@ -156,8 +148,8 @@ const ScaleIdentifierPage: React.FC = () => {
 
     const registeredName = candidateFullNameRef.current ?? noteFullName;
 
-    // Start cooldown and clear tracking so the next note begins completely fresh.
-    cooldownUntilRef.current = now + POST_REGISTER_COOLDOWN_MS;
+    // Suppress this pitch class until a different one appears.
+    suppressedClassRef.current = pitchClass;
     lastNoteRef.current = null;
     noteStartRef.current = null;
     candidateFullNameRef.current = null;
