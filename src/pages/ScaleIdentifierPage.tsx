@@ -6,9 +6,20 @@ import type { ScaleMatch } from '../utils/scaleIdentifier';
 
 /** Minimum ms a note must be continuously detected before it is registered */
 const NOTE_HOLD_MS = 350;
-/** After a note registers, ignore all input for this long so the handpan
- *  resonance harmonics don't immediately interrupt the next note's window. */
-const POST_REGISTER_COOLDOWN_MS = 600;
+/**
+ * After a note registers, ignore low-amplitude audio for this long.
+ * Handpans can ring for several seconds; 1500 ms covers the loudest harmonic
+ * content while still feeling responsive. The cooldown is cancelled early
+ * whenever a new note strike is detected (see NEW_STRIKE_RMS below).
+ */
+const POST_REGISTER_COOLDOWN_MS = 1500;
+/**
+ * RMS level above which an incoming audio frame is treated as a fresh note
+ * strike (not residual resonance). Cancels the post-registration cooldown
+ * immediately so the next note can be detected right away.
+ * Typical new strike: 0.05–0.3 · Typical 1 s old resonance: 0.003–0.015
+ */
+const NEW_STRIKE_RMS = 0.025;
 
 interface IdentifierState {
   /** Pitch class numbers detected so far (unique, for scale matching) */
@@ -65,9 +76,12 @@ const ScaleIdentifierPage: React.FC = () => {
   // continuously detected for NOTE_HOLD_MS to avoid transient spikes.
   const lastNoteRef = useRef<string | null>(null);
   const noteStartRef = useRef<number | null>(null);
-  /** Timestamp until which all audio frames are ignored after a registration.
-   *  Prevents the decaying resonance / harmonics of the last-struck note from
-   *  interrupting the 350 ms window for the next note. */
+  /** Full note name (with octave) captured when the current candidate was first seen. */
+  const candidateFullNameRef = useRef<string | null>(null);
+  /**
+   * Timestamp until which post-registration audio is suppressed.
+   * Cancelled early by a new-strike amplitude spike (rms ≥ NEW_STRIKE_RMS).
+   */
   const cooldownUntilRef = useRef<number>(0);
 
   const reset = useCallback(() => {
@@ -75,6 +89,7 @@ const ScaleIdentifierPage: React.FC = () => {
     dispatch({ type: 'RESET' });
     lastNoteRef.current = null;
     noteStartRef.current = null;
+    candidateFullNameRef.current = null;
     cooldownUntilRef.current = 0;
   }, [stopListening]);
 
@@ -82,36 +97,54 @@ const ScaleIdentifierPage: React.FC = () => {
   // Depends on `result` (a new object every audio frame) so the elapsed-time
   // check runs every frame — not just when the pitch class string changes.
   useEffect(() => {
-    const { pitchClass, noteFullName } = result;
+    const { pitchClass, noteFullName, rms } = result;
+    const now = Date.now();
+
+    // Post-registration cooldown suppresses the decaying resonance of the
+    // last-struck note.  A new-strike amplitude spike (the player hits the
+    // next tone field) cancels it immediately so there is no mandatory wait.
+    if (now < cooldownUntilRef.current) {
+      if (rms >= NEW_STRIKE_RMS) {
+        cooldownUntilRef.current = 0;
+        lastNoteRef.current = null;
+        noteStartRef.current = null;
+        candidateFullNameRef.current = null;
+      } else {
+        return;
+      }
+    }
 
     if (!pitchClass || !noteFullName) {
-      lastNoteRef.current = null;
-      noteStartRef.current = null;
+      // Silence: pause the timer but keep the candidate note.
+      // Brief silent frames in the decaying resonance must not restart the
+      // 350 ms window for the NEXT note the player is sustaining.
       return;
     }
-
-    // Post-registration cooldown: ignore audio until the just-struck note's
-    // resonance and harmonics have had time to decay.
-    if (Date.now() < cooldownUntilRef.current) return;
 
     if (pitchClass !== lastNoteRef.current) {
+      // New pitch detected — start a fresh candidate window.
       lastNoteRef.current = pitchClass;
-      noteStartRef.current = Date.now();
+      noteStartRef.current = now;
+      candidateFullNameRef.current = noteFullName;
       return;
     }
 
-    const elapsed = Date.now() - (noteStartRef.current ?? Date.now());
+    // Same pitch continuing — check hold time.
+    const elapsed = now - (noteStartRef.current ?? now);
     if (elapsed < NOTE_HOLD_MS) return;
 
     const pcNum = noteToPitchClass(pitchClass);
     if (pcNum === null) return;
 
-    // Start cooldown and reset tracking so the next note begins completely fresh.
-    cooldownUntilRef.current = Date.now() + POST_REGISTER_COOLDOWN_MS;
+    const registeredName = candidateFullNameRef.current ?? noteFullName;
+
+    // Start cooldown and clear tracking so the next note begins completely fresh.
+    cooldownUntilRef.current = now + POST_REGISTER_COOLDOWN_MS;
     lastNoteRef.current = null;
     noteStartRef.current = null;
+    candidateFullNameRef.current = null;
 
-    dispatch({ type: 'ADD_NOTE', noteFullName, pcNum });
+    dispatch({ type: 'ADD_NOTE', noteFullName: registeredName, pcNum });
   }, [result]);
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
