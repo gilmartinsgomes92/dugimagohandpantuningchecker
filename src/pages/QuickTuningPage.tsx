@@ -51,6 +51,12 @@ const QuickTuningPage: React.FC = () => {
   const stableFrames = useRef(0);
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
+  // Independently collected octave and compound-fifth partial frequencies for each
+  // sustain-phase frame. Measuring partials directly from the FFT rather than deriving
+  // them as exact multiples of the fundamental accounts for the inharmonicity present
+  // in real handpan metal — giving each partial its own accurate measurement.
+  const stableOctaveFreqs = useRef<number[]>([]);
+  const stableCFifthFreqs = useRef<number[]>([]);
   const justRegistered = useRef(false);
   // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
@@ -61,6 +67,8 @@ const QuickTuningPage: React.FC = () => {
     stableFrames.current = 0;
     lastPitchClass.current = null;
     stableFrequencies.current = [];
+    stableOctaveFreqs.current = [];
+    stableCFifthFreqs.current = [];
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -89,31 +97,23 @@ const QuickTuningPage: React.FC = () => {
   const registerNote = useCallback(() => {
     if (justRegistered.current) return;
 
-    // Trimmed mean of the central 50%: sort the collected frequencies, discard the outer
-    // 25% on each side (removing occasional octave-error outliers), then average the rest.
-    // Compared to taking a single median element this reduces random YIN noise by
-    // √(n/2) — e.g. √15 ≈ 3.9× for 30 sustain frames — bringing the measurement much
-    // closer to the true frequency of the sustained note.
-    const sorted = [...stableFrequencies.current].sort((a, b) => a - b);
-    let midpointFreq: number | null = null;
-    if (sorted.length > 0) {
+    // Compute the trimmed mean of a sorted frequency list: discard the outer 25% on
+    // each side (removing outliers) and average the central 50%. Falls back to the
+    // single middle element when trimming would leave an empty array.
+    const trimmedMean = (freqs: number[]): number | null => {
+      if (freqs.length === 0) return null;
+      const sorted = [...freqs].sort((a, b) => a - b);
       const trimCount = Math.floor(sorted.length * 0.25);
       const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
-      midpointFreq = trimmed.length > 0
+      return trimmed.length > 0
         ? trimmed.reduce((sum, f) => sum + f, 0) / trimmed.length
         : sorted[Math.floor((sorted.length - 1) / 2)];
-    }
+    };
 
-    const detectedFreq = midpointFreq ?? result.frequency;
-
+    // Derive the fundamental from the trimmed mean of collected sustain-phase frames.
+    const detectedFreq = trimmedMean(stableFrequencies.current) ?? result.frequency;
     if (detectedFreq === null) return;
 
-    // Derive note name and cents consistently from the median frequency.
-    // Taking result.cents / result.noteName from the current frame at registration time
-    // introduces noise because that frame may be an attack or ring-out outlier. Using
-    // frequencyToNote(detectedFreq) ensures the logged cents and note name always match
-    // the frequency that was actually stored — eliminating multi-cent errors like +12¢
-    // that appear when the last frame in the window is noisy.
     const noteData = frequencyToNote(detectedFreq);
     const cents = noteData.cents;
     const noteName = noteData.fullName;
@@ -139,19 +139,28 @@ const QuickTuningPage: React.FC = () => {
     justRegistered.current = true;
     registeredNoteNames.current.add(noteName);
 
-    // Compute compound fifth partial (3× fundamental, i.e. one octave + perfect fifth)
-    // 19 semitones = 12 (octave) + 7 (perfect fifth)
-    const compoundFifthFreq = detectedFreq * 3;
     const midiFloat = 12 * Math.log2(detectedFreq / 440) + 69;
     const midiNote = Math.round(midiFloat);
-    // ET target for the compound fifth note (19 semitones above the fundamental)
-    const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
-    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
-    // Compute octave partial (2× fundamental, 12 semitones above)
-    const octaveFreq = detectedFreq * 2;
+    // Independently measure the octave and compound-fifth partials from the FFT data
+    // collected during the sustain window. Real handpan partials deviate from exact 2:1
+    // and 3:1 ratios due to the physical geometry of the metal (inharmonicity), so
+    // computing them as detectedFreq × 2 / × 3 would inherit the fundamental's bias and
+    // assume perfect harmonicity. Using independently measured trimmed means gives each
+    // partial its own accurate reading — matching how professional strobe tuners like
+    // Linotune measure the fundamental, octave, and compound fifth independently.
+    // Independently measured octave and compound-fifth trimmed means; fall back to
+    // exact multiples only when no FFT measurements were collected (e.g. the partial
+    // was inaudible throughout the sustain window, so no independent measurement is
+    // available — the fallback is the best estimate we can offer in that case).
+    const octaveFreq = trimmedMean(stableOctaveFreqs.current) ?? detectedFreq * 2;
     const targetOctaveFreq = midiToFrequency(midiNote + 12);
     const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
+
+    // 19 semitones = 12 (octave) + 7 (perfect fifth) — ET target for the compound fifth
+    const compoundFifthFreq = trimmedMean(stableCFifthFreqs.current) ?? detectedFreq * 3;
+    const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
+    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
@@ -218,6 +227,14 @@ const QuickTuningPage: React.FC = () => {
       // from frames after ATTACK_SKIP_FRAMES gives a cleaner median measurement.
       if (stableFrames.current > ATTACK_SKIP_FRAMES) {
         stableFrequencies.current.push(result.frequency);
+        // Also collect independently-measured octave and compound-fifth frequencies
+        // from the current frame. null values (partial not detectable) are skipped.
+        if (result.octaveFrequency !== null) {
+          stableOctaveFreqs.current.push(result.octaveFrequency);
+        }
+        if (result.compoundFifthFrequency !== null) {
+          stableCFifthFreqs.current.push(result.compoundFifthFrequency);
+        }
       }
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
@@ -226,6 +243,8 @@ const QuickTuningPage: React.FC = () => {
       lastPitchClass.current = pitchClass;
       stableFrames.current = 1;
       stableFrequencies.current = [];
+      stableOctaveFreqs.current = [];
+      stableCFifthFreqs.current = [];
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 
