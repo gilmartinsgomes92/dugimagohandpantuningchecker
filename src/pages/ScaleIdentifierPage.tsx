@@ -17,7 +17,7 @@ interface IdentifierState {
 }
 
 type IdentifierAction =
-  | { type: 'ADD_NOTE'; pitchClass: string; pcNum: number }
+  | { type: 'ADD_NOTE'; noteFullName: string; pcNum: number }
   | { type: 'RESET' };
 
 const initialState: IdentifierState = {
@@ -33,7 +33,7 @@ function identifierReducer(state: IdentifierState, action: IdentifierAction): Id
       const nextPcs = [...state.detectedPcs, action.pcNum];
       return {
         detectedPcs: nextPcs,
-        detectedNoteNames: [...state.detectedNoteNames, action.pitchClass],
+        detectedNoteNames: [...state.detectedNoteNames, action.noteFullName],
         matches: identifyScales(nextPcs),
       };
     }
@@ -61,11 +61,13 @@ const ScaleIdentifierPage: React.FC = () => {
     noteStartRef.current = null;
   }, [stopListening]);
 
-  // Register a pitch class when the hook reports a new note
+  // Register a pitch class when the hook reports a new note.
+  // Depends on `result` (a new object every audio frame) so the elapsed-time
+  // check runs every frame — not just when the pitch class string changes.
   useEffect(() => {
-    const pitchClass = result.pitchClass;
+    const { pitchClass, noteFullName } = result;
 
-    if (!pitchClass) {
+    if (!pitchClass || !noteFullName) {
       lastNoteRef.current = null;
       noteStartRef.current = null;
       return;
@@ -86,8 +88,8 @@ const ScaleIdentifierPage: React.FC = () => {
     // Prevent re-firing for the same hold event
     noteStartRef.current = Date.now() + NOTE_HOLD_MS * 100;
 
-    dispatch({ type: 'ADD_NOTE', pitchClass, pcNum });
-  }, [result.pitchClass]);
+    dispatch({ type: 'ADD_NOTE', noteFullName, pcNum });
+  }, [result]);
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
 
@@ -124,8 +126,8 @@ const ScaleIdentifierPage: React.FC = () => {
         {/* Live detection indicator */}
         {isListening && (
           <div className="identifier-live">
-            {result.pitchClass ? (
-              <span className="identifier-note-flash">{result.pitchClass}</span>
+            {result.noteFullName ? (
+              <span className="identifier-note-flash">{result.noteFullName}</span>
             ) : (
               <span className="listening-anim">🎵 Listening…</span>
             )}

@@ -18,6 +18,8 @@ import { frequencyToNote } from '../utils/musicUtils';
 interface ScaleIdentificationResult {
   /** Detected pitch-class name, e.g. "C#", or null when silent */
   pitchClass: string | null;
+  /** Full note name including octave, e.g. "C#4", or null when silent */
+  noteFullName: string | null;
   /** Raw frequency in Hz, or null */
   frequency: number | null;
 }
@@ -26,6 +28,7 @@ export const useAudioProcessorForScaleIdentification = () => {
   const [isListening, setIsListening] = useState(false);
   const [result, setResult] = useState<ScaleIdentificationResult>({
     pitchClass: null,
+    noteFullName: null,
     frequency: null,
   });
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +68,10 @@ export const useAudioProcessorForScaleIdentification = () => {
           const freq = detectPitch(buf, audioCtxRef.current.sampleRate);
           if (freq !== null) {
             const noteInfo = frequencyToNote(freq);
-            setResult({ pitchClass: noteInfo.name, frequency: freq });
+            setResult({ pitchClass: noteInfo.name, noteFullName: noteInfo.fullName, frequency: freq });
           }
         } else {
-          setResult({ pitchClass: null, frequency: null });
+          setResult({ pitchClass: null, noteFullName: null, frequency: null });
         }
 
         rafRef.current = requestAnimationFrame(tick);
@@ -88,7 +91,7 @@ export const useAudioProcessorForScaleIdentification = () => {
     audioCtxRef.current = null;
     analyserRef.current = null;
     setIsListening(false);
-    setResult({ pitchClass: null, frequency: null });
+    setResult({ pitchClass: null, noteFullName: null, frequency: null });
   }, []);
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
