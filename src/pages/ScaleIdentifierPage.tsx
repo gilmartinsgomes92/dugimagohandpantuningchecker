@@ -17,9 +17,10 @@ const POST_REGISTER_COOLDOWN_MS = 1500;
  * RMS level above which an incoming audio frame is treated as a fresh note
  * strike (not residual resonance). Cancels the post-registration cooldown
  * immediately so the next note can be detected right away.
- * Typical new strike: 0.05–0.3 · Typical 1 s old resonance: 0.003–0.015
+ * Typical new strike: 0.03–0.3 — typical 1 s old resonance: 0.003–0.010
+ * Set low enough to catch softer playing styles (gentle tap ≈ 0.015–0.03).
  */
-const NEW_STRIKE_RMS = 0.025;
+const NEW_STRIKE_RMS = 0.015;
 
 interface IdentifierState {
   /** Pitch class numbers detected so far (unique, for scale matching) */
@@ -92,6 +93,23 @@ const ScaleIdentifierPage: React.FC = () => {
     candidateFullNameRef.current = null;
     cooldownUntilRef.current = 0;
   }, [stopListening]);
+
+  /**
+   * Clears only the detection-tracking refs, without resetting detected notes.
+   * Called before each new mic session so stale cooldowns or candidate windows
+   * from a previous session cannot block the fresh start.
+   */
+  const clearDetectionRefs = useCallback(() => {
+    lastNoteRef.current = null;
+    noteStartRef.current = null;
+    candidateFullNameRef.current = null;
+    cooldownUntilRef.current = 0;
+  }, []);
+
+  const handleStartListening = useCallback(() => {
+    clearDetectionRefs();
+    startListening();
+  }, [clearDetectionRefs, startListening]);
 
   // Register a pitch class when the hook reports a new note.
   // Depends on `result` (a new object every audio frame) so the elapsed-time
@@ -171,7 +189,7 @@ const ScaleIdentifierPage: React.FC = () => {
         <div className="mic-controls">
           <button
             className={`btn ${isListening ? 'btn-danger' : 'btn-primary'}`}
-            onClick={isListening ? stopListening : startListening}
+            onClick={isListening ? stopListening : handleStartListening}
           >
             {isListening ? '⏹ Stop Microphone' : '🎤 Start Microphone'}
           </button>

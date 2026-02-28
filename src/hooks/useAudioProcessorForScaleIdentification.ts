@@ -10,12 +10,19 @@
  *  - Lower RMS gate (0.003) so softer strikes are caught
  *  - Uses validateFundamental from harmonicAnalyzer to reject frames where
  *    YIN locks onto the 2nd harmonic (e.g. D4 instead of D3)
+ *  - Minimum frequency floor of 80 Hz to prevent false sub-octave corrections:
+ *    the validateFundamental sub-octave check can redirect D3 (147 Hz) to D2
+ *    (73 Hz) when room/HVAC noise at 73 Hz is within 6 dB of D3; handpan
+ *    fundamentals are always above 120 Hz so 80 Hz safely excludes D2.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { detectPitch, computeRMS } from '../utils/yin';
 import { frequencyToNote } from '../utils/musicUtils';
 import { validateFundamental } from '../utils/harmonicAnalyzer';
+
+/** Lowest frequency (Hz) that can be a handpan note. D2 = 73.4 Hz; D3 = 146.8 Hz. */
+const MIN_HANDPAN_FREQ = 80;
 
 interface ScaleIdentificationResult {
   /** Detected pitch-class name, e.g. "C#", or null when silent */
@@ -85,7 +92,7 @@ export const useAudioProcessorForScaleIdentification = () => {
               audioCtxRef.current.sampleRate,
               analyserRef.current.fftSize,
             );
-            if (freq !== null) {
+            if (freq !== null && freq >= MIN_HANDPAN_FREQ) {
               const noteInfo = frequencyToNote(freq);
               setResult({ pitchClass: noteInfo.name, noteFullName: noteInfo.fullName, frequency: freq, rms });
             } else {
