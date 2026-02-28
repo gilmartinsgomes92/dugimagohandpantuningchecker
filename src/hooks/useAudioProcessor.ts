@@ -65,26 +65,32 @@ export const useAudioProcessor = () => {
               audioCtxRef.current.sampleRate,
               analyserRef.current.fftSize,
             );
-            const noteInfo = frequencyToNote(freq);
-            // Independently measure the 2nd and 3rd physical partials using the FFT.
-            // Real handpan partials deviate from exact 2:1 and 3:1 ratios due to
-            // the metal geometry (inharmonicity), so measuring each partial directly
-            // gives more accurate per-partial readings than multiplying the fundamental.
-            const octaveFreq = findHarmonicFrequency(
-              freqBufRef.current, freq * 2,
-              audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
-            );
-            const compFifthFreq = findHarmonicFrequency(
-              freqBufRef.current, freq * 3,
-              audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
-            );
-            setResult({
-              frequency: freq,
-              octaveFrequency: octaveFreq,
-              compoundFifthFrequency: compFifthFreq,
-              noteName: noteInfo.fullName,
-              cents: noteInfo.cents,
-            });
+            // null means validateFundamental rejected this frame (no harmonic family
+            // found). Silently skip the setResult call so the stability counter in
+            // QuickTuningPage does not see this false pick — the display and the counter
+            // both stay at their current values, and the next valid frame updates them.
+            if (freq !== null) {
+              const noteInfo = frequencyToNote(freq);
+              // Independently measure the 2nd and 3rd physical partials using the FFT.
+              // Real handpan partials deviate from exact 2:1 and 3:1 ratios due to
+              // the metal geometry (inharmonicity), so measuring each partial directly
+              // gives more accurate per-partial readings than multiplying the fundamental.
+              const octaveFreq = findHarmonicFrequency(
+                freqBufRef.current, freq * 2,
+                audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
+              );
+              const compFifthFreq = findHarmonicFrequency(
+                freqBufRef.current, freq * 3,
+                audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
+              );
+              setResult({
+                frequency: freq,
+                octaveFrequency: octaveFreq,
+                compoundFifthFrequency: compFifthFreq,
+                noteName: noteInfo.fullName,
+                cents: noteInfo.cents,
+              });
+            }
           }
         } else {
           // Signal below noise floor — clear the result so the display shows "listening"
