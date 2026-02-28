@@ -149,16 +149,27 @@ const QuickTuningPage: React.FC = () => {
     // assume perfect harmonicity. Using independently measured trimmed means gives each
     // partial its own accurate reading — matching how professional strobe tuners like
     // Linotune measure the fundamental, octave, and compound fifth independently.
-    // Independently measured octave and compound-fifth trimmed means; fall back to
-    // exact multiples only when no FFT measurements were collected (e.g. the partial
-    // was inaudible throughout the sustain window, so no independent measurement is
-    // available — the fallback is the best estimate we can offer in that case).
-    const octaveFreq = trimmedMean(stableOctaveFreqs.current) ?? detectedFreq * 2;
+    //
+    // Guard: only use the independent measurement if it is within ±40 cents of the
+    // exact-multiple estimate. Beyond this the FFT peak-finder has landed on a stray
+    // peak (e.g. sympathetic resonance, room noise, or a neighbouring harmonic) rather
+    // than the true physical partial. Genuine handpan inharmonicity is typically < 30¢,
+    // so a ±40¢ window accepts real deviations while rejecting false measurements.
+    const MAX_PARTIAL_CENTS = 40;
+    const rawOctave = trimmedMean(stableOctaveFreqs.current);
+    const octaveFreq = rawOctave !== null &&
+      Math.abs(1200 * Math.log2(rawOctave / (detectedFreq * 2))) <= MAX_PARTIAL_CENTS
+        ? rawOctave
+        : detectedFreq * 2;
     const targetOctaveFreq = midiToFrequency(midiNote + 12);
     const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
 
     // 19 semitones = 12 (octave) + 7 (perfect fifth) — ET target for the compound fifth
-    const compoundFifthFreq = trimmedMean(stableCFifthFreqs.current) ?? detectedFreq * 3;
+    const rawCFifth = trimmedMean(stableCFifthFreqs.current);
+    const compoundFifthFreq = rawCFifth !== null &&
+      Math.abs(1200 * Math.log2(rawCFifth / (detectedFreq * 3))) <= MAX_PARTIAL_CENTS
+        ? rawCFifth
+        : detectedFreq * 3;
     const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
     const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
