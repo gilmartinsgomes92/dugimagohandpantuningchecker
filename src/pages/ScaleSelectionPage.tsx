@@ -103,8 +103,7 @@ const ScaleSelectionPage: React.FC = () => {
       dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: 0 });
       navigate('/guided-tuning');
     } else if (knowsScale === false) {
-      alert('Scale identification feature coming soon! Please select a known scale to continue.');
-      setKnowsScale(null);
+      navigate('/scale-identifier');
     }
   };
 
@@ -140,7 +139,6 @@ const ScaleSelectionPage: React.FC = () => {
             onClick={() => setKnowsScale(false)}
           >
             🔍 Identify my scale
-            <span className="badge-lock">🔒 Pro</span>
           </button>
         </div>
 

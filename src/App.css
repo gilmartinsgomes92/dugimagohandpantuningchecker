@@ -1231,3 +1231,132 @@
 .verdict-good { color: #00ff88; }
 .verdict-warn { color: #ffaa00; }
 .verdict-bad { color: #ff4444; }
+
+/* ============================================================
+   Scale Identifier Page
+   ============================================================ */
+.scale-identifier-page {
+  gap: 20px;
+}
+
+.identifier-instructions {
+  background: #131313;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+  width: 100%;
+  max-width: 420px;
+}
+
+.identifier-instructions p {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 4px 0;
+}
+
+.identifier-live {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.identifier-note-flash {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #00d4ff;
+  animation: pulse 0.6s ease-in-out infinite;
+}
+
+.identifier-section-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+  margin: 0 0 10px;
+}
+
+.identifier-detected-notes {
+  width: 100%;
+  max-width: 420px;
+}
+
+.identifier-note-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.identifier-chip {
+  background: #0d1e24;
+  border: 1px solid #00a8cc;
+  border-radius: 20px;
+  color: #00d4ff;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 6px 16px;
+}
+
+.identifier-results {
+  width: 100%;
+  max-width: 420px;
+}
+
+.identifier-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.identifier-match-card {
+  background: #131313;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 14px 16px;
+  position: relative;
+}
+
+.identifier-match-card.exact-match {
+  border-color: #00a8cc;
+  background: #0d1e24;
+}
+
+.match-handpan-name {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 2px;
+}
+
+.match-theoretical-name {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.match-notes {
+  font-size: 0.8rem;
+  color: #555;
+  letter-spacing: 0.04em;
+}
+
+.match-exact-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #003322;
+  color: #00ff88;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+}
+
+.identifier-no-match {
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+  font-style: italic;
+}

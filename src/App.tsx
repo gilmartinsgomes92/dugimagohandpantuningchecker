@@ -8,6 +8,7 @@ import GuidedTuningPage from './pages/GuidedTuningPage';
 import ResultsDashboardPage from './pages/ResultsDashboardPage';
 import ContactFormPage from './pages/ContactFormPage';
 import ConfirmationPage from './pages/ConfirmationPage';
+import ScaleIdentifierPage from './pages/ScaleIdentifierPage';
 import './App.css';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
           <Route path="/results" element={<ResultsDashboardPage />} />
           <Route path="/contact" element={<ContactFormPage />} />
           <Route path="/confirmation" element={<ConfirmationPage />} />
+          <Route path="/scale-identifier" element={<ScaleIdentifierPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
