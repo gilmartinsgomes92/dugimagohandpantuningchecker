@@ -11,6 +11,11 @@ import type { TuningResult } from '../contexts/AppContext';
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
 const STABLE_FRAMES_REQUIRED = 90;
 
+// Frequency tolerance in Hz for stability detection.
+// If the detected frequency stays within ±FREQUENCY_TOLERANCE_HZ of the
+// anchor frequency, the stability counter increments instead of resetting.
+const FREQUENCY_TOLERANCE_HZ = 5;
+
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
@@ -41,7 +46,7 @@ const QuickTuningPage: React.FC = () => {
   const noteIndex = state.currentNoteIndex;
 
   const stableFrames = useRef(0);
-  const lastNoteName = useRef<string | null>(null);
+  const lastDetectedFrequency = useRef<number | null>(null);
   const justRegistered = useRef(false);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -111,7 +116,7 @@ const QuickTuningPage: React.FC = () => {
 
     // Reset stability tracking for the next note
     stableFrames.current = 0;
-    lastNoteName.current = null;
+    lastDetectedFrequency.current = null;
 
     // Allow registering again after a short pause
     setTimeout(() => {
@@ -119,21 +124,25 @@ const QuickTuningPage: React.FC = () => {
     }, REGISTRATION_COOLDOWN_MS);
   }, [result, noteIndex, dispatch]);
 
-  // Stability detection: auto-register when the same note is held for STABLE_FRAMES_REQUIRED frames
+  // Stability detection: auto-register when the detected frequency stays within
+  // ±FREQUENCY_TOLERANCE_HZ of the anchor frequency for STABLE_FRAMES_REQUIRED frames
   useEffect(() => {
     if (!isListening || result.frequency === null || result.noteName === null) {
       stableFrames.current = 0;
-      lastNoteName.current = null;
+      lastDetectedFrequency.current = null;
       return;
     }
 
-    if (result.noteName === lastNoteName.current) {
+    const freq = result.frequency;
+    const anchor = lastDetectedFrequency.current;
+
+    if (anchor !== null && Math.abs(freq - anchor) <= FREQUENCY_TOLERANCE_HZ) {
       stableFrames.current += 1;
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
     } else {
-      lastNoteName.current = result.noteName;
+      lastDetectedFrequency.current = freq;
       stableFrames.current = 1;
     }
   }, [result, isListening, registerNote]);
