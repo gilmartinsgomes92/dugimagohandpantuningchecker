@@ -20,7 +20,7 @@ export const useAudioProcessor = () => {
   const rafRef = useRef<number | null>(null);
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
   // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
-  const freqBufRef = useRef<Float32Array>(new Float32Array(2048));
+  const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
 
   const startListening = useCallback(async () => {
     try {
