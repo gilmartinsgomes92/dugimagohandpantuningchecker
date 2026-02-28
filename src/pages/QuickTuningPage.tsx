@@ -44,6 +44,8 @@ const QuickTuningPage: React.FC = () => {
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   const justRegistered = useRef(false);
+  // Tracks pitch classes already registered in this session to prevent duplicates
+  const registeredPitchClasses = useRef<Set<string>>(new Set());
 
   const resetStabilityState = useCallback(() => {
     stableFrames.current = 0;
@@ -91,6 +93,20 @@ const QuickTuningPage: React.FC = () => {
     const noteName = result.noteName ?? 'Unknown';
 
     if (detectedFreq === null || cents === null) return;
+
+    // Prevent the same pitch class (note letter, ignoring octave) from being registered
+    // more than once per session. A second strike of the same note after cooldown would
+    // otherwise register it again at the next noteIndex slot.
+    const pitchClass = noteName.replace(/\d+$/, '');
+    if (registeredPitchClasses.current.has(pitchClass)) {
+      resetStabilityState();
+      setTimeout(() => {
+        resetStabilityState();
+        justRegistered.current = false;
+      }, REGISTRATION_COOLDOWN_MS);
+      return;
+    }
+    registeredPitchClasses.current.add(pitchClass);
 
     // Compute compound fifth partial (3× fundamental, i.e. one octave + perfect fifth)
     // 19 semitones = 12 (octave) + 7 (perfect fifth)
