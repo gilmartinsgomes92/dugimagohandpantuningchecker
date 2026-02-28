@@ -26,7 +26,7 @@ const ResultsDashboardPage: React.FC = () => {
   const verdict = stats.outOfTune > 0
     ? { label: 'The handpan is out of tune', badge: '❌', className: 'verdict-bad' }
     : stats.slightlyOut > 0
-    ? { label: 'The handpan could use an adjustment', badge: '⚠️', className: 'verdict-warn' }
+    ? { label: 'The handpan sounds good with some room to fine-tune 🎵', badge: '⚠️', className: 'verdict-warn' }
     : { label: 'The handpan is in tune', badge: '✅', className: 'verdict-good' };
 
   const handleStartOver = () => {
