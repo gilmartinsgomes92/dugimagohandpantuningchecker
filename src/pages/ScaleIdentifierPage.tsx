@@ -6,11 +6,16 @@ import type { ScaleMatch } from '../utils/scaleIdentifier';
 
 /** Minimum ms a note must be continuously detected before it is registered */
 const NOTE_HOLD_MS = 350;
+/** After a note registers, ignore all input for this long so the handpan
+ *  resonance harmonics don't immediately interrupt the next note's window. */
+const POST_REGISTER_COOLDOWN_MS = 600;
 
 interface IdentifierState {
-  /** Pitch class numbers detected so far (unique) */
+  /** Pitch class numbers detected so far (unique, for scale matching) */
   detectedPcs: number[];
-  /** Display names for detected notes, in detection order (unique) */
+  /** Full note names already registered, to avoid duplicate chips (e.g. "D4") */
+  detectedNoteFullNames: Set<string>;
+  /** Display chips in detection order — one per unique octave+note */
   detectedNoteNames: string[];
   /** Scale matches computed from the detected set */
   matches: ScaleMatch[];
@@ -22,6 +27,7 @@ type IdentifierAction =
 
 const initialState: IdentifierState = {
   detectedPcs: [],
+  detectedNoteFullNames: new Set(),
   detectedNoteNames: [],
   matches: [],
 };
@@ -29,12 +35,18 @@ const initialState: IdentifierState = {
 function identifierReducer(state: IdentifierState, action: IdentifierAction): IdentifierState {
   switch (action.type) {
     case 'ADD_NOTE': {
-      if (state.detectedPcs.includes(action.pcNum)) return state;
-      const nextPcs = [...state.detectedPcs, action.pcNum];
+      // Ignore if the exact same full note name (e.g. "D4") was already registered
+      if (state.detectedNoteFullNames.has(action.noteFullName)) return state;
+      // A new octave of an already-known pitch class contributes a chip but
+      // doesn't change the pitch-class set used for scale matching.
+      const pcAlreadyKnown = state.detectedPcs.includes(action.pcNum);
+      const nextPcs = pcAlreadyKnown ? state.detectedPcs : [...state.detectedPcs, action.pcNum];
+      const nextFullNames = new Set(state.detectedNoteFullNames).add(action.noteFullName);
       return {
         detectedPcs: nextPcs,
+        detectedNoteFullNames: nextFullNames,
         detectedNoteNames: [...state.detectedNoteNames, action.noteFullName],
-        matches: identifyScales(nextPcs),
+        matches: pcAlreadyKnown ? state.matches : identifyScales(nextPcs),
       };
     }
     case 'RESET':
@@ -53,12 +65,17 @@ const ScaleIdentifierPage: React.FC = () => {
   // continuously detected for NOTE_HOLD_MS to avoid transient spikes.
   const lastNoteRef = useRef<string | null>(null);
   const noteStartRef = useRef<number | null>(null);
+  /** Timestamp until which all audio frames are ignored after a registration.
+   *  Prevents the decaying resonance / harmonics of the last-struck note from
+   *  interrupting the 350 ms window for the next note. */
+  const cooldownUntilRef = useRef<number>(0);
 
   const reset = useCallback(() => {
     stopListening();
     dispatch({ type: 'RESET' });
     lastNoteRef.current = null;
     noteStartRef.current = null;
+    cooldownUntilRef.current = 0;
   }, [stopListening]);
 
   // Register a pitch class when the hook reports a new note.
@@ -73,6 +90,10 @@ const ScaleIdentifierPage: React.FC = () => {
       return;
     }
 
+    // Post-registration cooldown: ignore audio until the just-struck note's
+    // resonance and harmonics have had time to decay.
+    if (Date.now() < cooldownUntilRef.current) return;
+
     if (pitchClass !== lastNoteRef.current) {
       lastNoteRef.current = pitchClass;
       noteStartRef.current = Date.now();
@@ -85,8 +106,10 @@ const ScaleIdentifierPage: React.FC = () => {
     const pcNum = noteToPitchClass(pitchClass);
     if (pcNum === null) return;
 
-    // Prevent re-firing for the same hold event
-    noteStartRef.current = Date.now() + NOTE_HOLD_MS * 100;
+    // Start cooldown and reset tracking so the next note begins completely fresh.
+    cooldownUntilRef.current = Date.now() + POST_REGISTER_COOLDOWN_MS;
+    lastNoteRef.current = null;
+    noteStartRef.current = null;
 
     dispatch({ type: 'ADD_NOTE', noteFullName, pcNum });
   }, [result]);
