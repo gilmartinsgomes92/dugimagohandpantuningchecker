@@ -7,7 +7,7 @@
  * capable of sub-cent accuracy with proper parabolic interpolation.
  */
 
-const DEFAULT_THRESHOLD = 0.05;
+const DEFAULT_THRESHOLD = 0.10;
 
 /**
  * Detects the fundamental frequency of the input buffer using the YIN algorithm.

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { detectPitch, computeRMS } from '../utils/yin';
+import { validateFundamental } from '../utils/harmonicAnalyzer';
 import { frequencyToNote } from '../utils/musicUtils';
 
 interface AudioResult {
@@ -18,6 +19,8 @@ export const useAudioProcessor = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
+  // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
+  const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
 
   const startListening = useCallback(async () => {
     try {
@@ -32,6 +35,7 @@ export const useAudioProcessor = () => {
       analyser.fftSize = 4096;
       analyserRef.current = analyser;
       bufferRef.current = new Float32Array(analyser.fftSize);
+      freqBufRef.current = new Float32Array(analyser.fftSize / 2);
 
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -42,11 +46,20 @@ export const useAudioProcessor = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
+        analyserRef.current.getFloatFrequencyData(freqBufRef.current);
 
         const rms = computeRMS(buf);
         if (rms >= 0.005) {
-          const freq = detectPitch(buf, audioCtxRef.current.sampleRate);
-          if (freq !== null) {
+          const rawFreq = detectPitch(buf, audioCtxRef.current.sampleRate);
+          if (rawFreq !== null) {
+            // Correct for octave errors: if the sub-octave has a comparable FFT
+            // peak the lower frequency is the true fundamental (YIN locked onto 2nd harmonic)
+            const freq = validateFundamental(
+              rawFreq,
+              freqBufRef.current,
+              audioCtxRef.current.sampleRate,
+              analyserRef.current.fftSize,
+            );
             const noteInfo = frequencyToNote(freq);
             setResult({ frequency: freq, noteName: noteInfo.fullName, cents: noteInfo.cents });
           }
