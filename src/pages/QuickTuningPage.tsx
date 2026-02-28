@@ -141,7 +141,10 @@ const QuickTuningPage: React.FC = () => {
   // rather than exact note name or frequency makes the counter robust against the octave
   // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
   useEffect(() => {
-    if (!isListening || result.frequency === null || result.noteName === null) {
+    // Reset and hold at 0% when not listening, no signal, or during the post-registration
+    // cooldown — the cooldown guard prevents the still-ringing note from rebuilding the
+    // ring to a confusing partial percentage before the user plays the next note.
+    if (!isListening || result.frequency === null || result.noteName === null || justRegistered.current) {
       resetStabilityState();
       return;
     }

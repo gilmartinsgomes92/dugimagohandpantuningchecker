@@ -120,6 +120,22 @@ export function validateFundamental(
     }
   }
 
+  // Check sub-third (f/3) — YIN can lock onto the 3rd harmonic on complex tones
+  // (e.g. playing D3 at 147 Hz but YIN detects its 3rd harmonic A4 at 440 Hz).
+  const subThird = detectedFreq / 3;
+  if (subThird >= 55) {
+    const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
+    if (subThirdPeak !== null) {
+      const subThirdMag = getMagnitudeAt(subThirdPeak);
+      // If the sub-third is within 10 dB of the detected frequency, prefer it as the fundamental.
+      // A wider window (10 dB vs 6 dB for f/2) is used because the fundamental is typically
+      // quieter relative to its 3rd harmonic than relative to its 2nd harmonic.
+      if (subThirdMag >= currentMag - 10) {
+        return subThirdPeak;
+      }
+    }
+  }
+
   return detectedFreq;
 }
 
