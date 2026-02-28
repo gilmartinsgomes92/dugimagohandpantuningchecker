@@ -86,6 +86,11 @@ const QuickTuningPage: React.FC = () => {
     const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
     const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
+    // Compute octave partial (2× fundamental, 12 semitones above)
+    const octaveFreq = detectedFreq * 2;
+    const targetOctaveFreq = midiToFrequency(midiNote + 12);
+    const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
+
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
 
@@ -97,6 +102,8 @@ const QuickTuningPage: React.FC = () => {
       status,
       compoundFifthFreq,
       compoundFifthCents,
+      octaveFreq,
+      octaveCents,
     };
 
     dispatch({ type: 'ADD_TUNING_RESULT', payload });

@@ -10,6 +10,8 @@ export interface TuningResult {
   status: 'in-tune' | 'slightly-out-of-tune' | 'out-of-tune' | 'skipped' | 'pending';
   compoundFifthFreq?: number;
   compoundFifthCents?: number;
+  octaveFreq?: number;
+  octaveCents?: number;
 }
 
 export interface ContactInfo {

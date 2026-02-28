@@ -70,16 +70,20 @@ const ResultsDashboardPage: React.FC = () => {
             <tr>
               <th>Note</th>
               <th>Status</th>
-              <th>Deviation</th>
+              <th>Fundamental</th>
+              <th>Octave</th>
+              <th>5th</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {tuningResults.map((r, i) => {
               const color = r.cents !== null ? centsToColor(r.cents) : '#555';
+              const octaveColor = r.octaveCents !== null && r.octaveCents !== undefined ? centsToColor(r.octaveCents) : '#555';
+              const fifthColor = r.compoundFifthCents !== null && r.compoundFifthCents !== undefined ? centsToColor(r.compoundFifthCents) : '#555';
               const statusLabel =
                 r.status === 'in-tune' ? 'In Tune' :
-                r.status === 'slightly-out-of-tune' ? 'Slightly Out of Tune' :
+                r.status === 'slightly-out-of-tune' ? 'Slightly Out' :
                 r.status === 'out-of-tune' ? 'Out of Tune' :
                 r.status === 'skipped' ? 'Skipped' : 'Pending';
               return (
@@ -87,6 +91,12 @@ const ResultsDashboardPage: React.FC = () => {
                   <td className="result-note-name">{r.noteName}</td>
                   <td>{statusLabel}</td>
                   <td style={{ color }}>{r.cents !== null ? formatCents(r.cents) : '—'}</td>
+                  <td style={{ color: octaveColor }}>
+                    {r.octaveCents !== undefined ? formatCents(r.octaveCents) : '—'}
+                  </td>
+                  <td style={{ color: fifthColor }}>
+                    {r.compoundFifthCents !== undefined ? formatCents(r.compoundFifthCents) : '—'}
+                  </td>
                   <td>
                     <span
                       className="result-dot"
