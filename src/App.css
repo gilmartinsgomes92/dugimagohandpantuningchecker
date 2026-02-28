@@ -1026,3 +1026,208 @@
   width: 100%;
   text-align: center;
 }
+
+/* ============================================================
+   Welcome CTA Group (two-button layout)
+   ============================================================ */
+.welcome-cta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+  align-items: center;
+}
+
+.welcome-cta-group .btn-large {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+}
+
+.btn-coming-soon {
+  font-size: 0.65rem;
+  background: #2a2a2a;
+  color: #666;
+  padding: 2px 7px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 6px;
+}
+
+/* ============================================================
+   Notes Count Selection Page
+   ============================================================ */
+.notes-count-page {
+  gap: 24px;
+}
+
+.notes-count-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  flex: 1;
+}
+
+.notes-count-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  margin: 0;
+}
+
+.notes-count-subtitle {
+  color: #777;
+  font-size: 0.9rem;
+  text-align: center;
+  margin: 0;
+}
+
+.notes-count-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.notes-count-btn {
+  background: #131313;
+  border: 2px solid #2a2a2a;
+  border-radius: 12px;
+  color: #ccc;
+  font-size: 1.4rem;
+  font-weight: 800;
+  padding: 18px 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.notes-count-btn:hover {
+  border-color: #00a8cc;
+  background: #0d1e24;
+  color: #fff;
+}
+
+.notes-count-btn:active {
+  transform: scale(0.95);
+}
+
+.btn-back {
+  align-self: flex-start;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   Quick Tuning Page
+   ============================================================ */
+.quick-tuning-page {
+  gap: 16px;
+}
+
+.quick-stability-ring {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.stability-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.stability-track {
+  fill: none;
+  stroke: #1e1e1e;
+  stroke-width: 8;
+}
+
+.stability-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.1s ease;
+}
+
+.stability-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stability-pct {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.stability-idle {
+  font-size: 2rem;
+}
+
+/* Registered notes list */
+.registered-notes-list {
+  width: 100%;
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.registered-notes-title {
+  font-size: 0.75rem;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+}
+
+.registered-note-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.reg-note-name {
+  color: #fff;
+  font-weight: 700;
+  min-width: 48px;
+}
+
+.reg-note-cents {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.reg-note-status {
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   Additional tuning status badges
+   ============================================================ */
+.status-slightly-out { background: #221a00; color: #ffaa00; }
+.status-out-of-tune { background: #220000; color: #ff4444; }
+
+/* ============================================================
+   Verdict variants
+   ============================================================ */
+.verdict-good { color: #00ff88; }
+.verdict-warn { color: #ffaa00; }
+.verdict-bad { color: #ff4444; }

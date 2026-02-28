@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './contexts/AppContext';
 import WelcomePage from './pages/WelcomePage';
+import NotesCountSelectionPage from './pages/NotesCountSelectionPage';
+import QuickTuningPage from './pages/QuickTuningPage';
 import ScaleSelectionPage from './pages/ScaleSelectionPage';
 import GuidedTuningPage from './pages/GuidedTuningPage';
 import ResultsDashboardPage from './pages/ResultsDashboardPage';
@@ -14,6 +16,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<WelcomePage />} />
+          <Route path="/notes-count-selection" element={<NotesCountSelectionPage />} />
+          <Route path="/quick-tuning" element={<QuickTuningPage />} />
           <Route path="/scale-selection" element={<ScaleSelectionPage />} />
           <Route path="/guided-tuning" element={<GuidedTuningPage />} />
           <Route path="/results" element={<ResultsDashboardPage />} />
