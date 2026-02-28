@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { useAudioProcessor } from '../hooks/useAudioProcessor';
 import { CentsGauge } from '../components/CentsGauge';
-import { midiToFrequency, formatCents, centsToColor } from '../utils/musicUtils';
+import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../utils/musicUtils';
 import type { TuningResult } from '../contexts/AppContext';
 
 // Auto-register a note after this many consecutive stable frames.
@@ -13,6 +13,14 @@ const STABLE_FRAMES_REQUIRED = 45;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
+
+// Number of stable frames to skip before collecting frequencies for the median.
+// The initial transient of a handpan note (attack phase) has the brightest harmonics
+// and the most noise in the fundamental estimate. Skipping the first ~15 frames
+// (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
+// phase — mirroring the behaviour of professional strobe tuners like Linotune, which
+// begin reading approximately 1 second after the note is struck.
+const ATTACK_SKIP_FRAMES = 15;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -43,7 +51,25 @@ const QuickTuningPage: React.FC = () => {
   const stableFrames = useRef(0);
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
+  // Independently collected octave and compound-fifth partial frequencies for each
+  // sustain-phase frame. Measuring partials directly from the FFT rather than deriving
+  // them as exact multiples of the fundamental accounts for the inharmonicity present
+  // in real handpan metal — giving each partial its own accurate measurement.
+  const stableOctaveFreqs = useRef<number[]>([]);
+  const stableCFifthFreqs = useRef<number[]>([]);
   const justRegistered = useRef(false);
+  // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
+  // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
+  // class "D") from registering as distinct notes.
+  const registeredNoteNames = useRef<Set<string>>(new Set());
+
+  const resetStabilityState = useCallback(() => {
+    stableFrames.current = 0;
+    lastPitchClass.current = null;
+    stableFrequencies.current = [];
+    stableOctaveFreqs.current = [];
+    stableCFifthFreqs.current = [];
+  }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
   ).length;
@@ -70,35 +96,82 @@ const QuickTuningPage: React.FC = () => {
 
   const registerNote = useCallback(() => {
     if (justRegistered.current) return;
+
+    // Compute the trimmed mean of a sorted frequency list: discard the outer 25% on
+    // each side (removing outliers) and average the central 50%. Falls back to the
+    // single middle element when trimming would leave an empty array.
+    const trimmedMean = (freqs: number[]): number | null => {
+      if (freqs.length === 0) return null;
+      const sorted = [...freqs].sort((a, b) => a - b);
+      const trimCount = Math.floor(sorted.length * 0.25);
+      const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+      return trimmed.length > 0
+        ? trimmed.reduce((sum, f) => sum + f, 0) / trimmed.length
+        : sorted[Math.floor((sorted.length - 1) / 2)];
+    };
+
+    // Derive the fundamental from the trimmed mean of collected sustain-phase frames.
+    const detectedFreq = trimmedMean(stableFrequencies.current) ?? result.frequency;
+    if (detectedFreq === null) return;
+
+    const noteData = frequencyToNote(detectedFreq);
+    const cents = noteData.cents;
+    const noteName = noteData.fullName;
+
+    // Prevent the same note from being registered more than once per session.
+    // A second strike of the same note after cooldown would otherwise register it again
+    // at the next noteIndex slot. Compare by full note name (e.g. "A3") so that different
+    // octaves of the same letter (e.g. "D2" vs "D3") are treated as distinct notes.
+    //
+    // IMPORTANT: the duplicate check is intentionally done BEFORE setting justRegistered.
+    // If we entered a 1500 ms cooldown here, the still-ringing ding note (which can ring
+    // for 5-10 s on a handpan) would re-trigger the duplicate guard on every 45-frame
+    // window, creating a cascade of back-to-back cooldowns that blocks all other notes.
+    // By simply resetting stability and returning (no cooldown), we let detection continue
+    // immediately so the next different note can accumulate without delay.
+    if (registeredNoteNames.current.has(noteName)) {
+      resetStabilityState();
+      return;
+    }
+
+    // Mark as in-progress only after confirming this is a new, unregistered note, so the
+    // ring-out duplicate path above never locks out detection of subsequent notes.
     justRegistered.current = true;
+    registeredNoteNames.current.add(noteName);
 
-    // Pick the middle element from the sorted frequency list collected during the
-    // stable window. Sorting and taking the midpoint removes extreme outlier frames
-    // (e.g. occasional octave-error detections) without interpolating between
-    // measurements, which could produce frequencies that aren't real detected values.
-    const freqList = stableFrequencies.current;
-    const sorted = [...freqList].sort((a, b) => a - b);
-    const midpointFreq = sorted.length > 0 ? sorted[Math.floor((sorted.length - 1) / 2)] : null;
-
-    const detectedFreq = midpointFreq ?? result.frequency;
-    const cents = result.cents;
-    const noteName = result.noteName ?? 'Unknown';
-
-    if (detectedFreq === null || cents === null) return;
-
-    // Compute compound fifth partial (3× fundamental, i.e. one octave + perfect fifth)
-    // 19 semitones = 12 (octave) + 7 (perfect fifth)
-    const compoundFifthFreq = detectedFreq * 3;
     const midiFloat = 12 * Math.log2(detectedFreq / 440) + 69;
     const midiNote = Math.round(midiFloat);
-    // ET target for the compound fifth note (19 semitones above the fundamental)
-    const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
-    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
-    // Compute octave partial (2× fundamental, 12 semitones above)
-    const octaveFreq = detectedFreq * 2;
+    // Independently measure the octave and compound-fifth partials from the FFT data
+    // collected during the sustain window. Real handpan partials deviate from exact 2:1
+    // and 3:1 ratios due to the physical geometry of the metal (inharmonicity), so
+    // computing them as detectedFreq × 2 / × 3 would inherit the fundamental's bias and
+    // assume perfect harmonicity. Using independently measured trimmed means gives each
+    // partial its own accurate reading — matching how professional strobe tuners like
+    // Linotune measure the fundamental, octave, and compound fifth independently.
+    //
+    // Guard: only use the independent measurement if it is within ±40 cents of the
+    // exact-multiple estimate. Beyond this the FFT peak-finder has landed on a stray
+    // peak (e.g. sympathetic resonance, room noise, or a neighbouring harmonic) rather
+    // than the true physical partial. Genuine handpan inharmonicity is typically < 30¢,
+    // so a ±40¢ window accepts real deviations while rejecting false measurements.
+    const MAX_PARTIAL_CENTS = 40;
+    const rawOctave = trimmedMean(stableOctaveFreqs.current);
+    const octaveFreq = rawOctave !== null &&
+      Math.abs(1200 * Math.log2(rawOctave / (detectedFreq * 2))) <= MAX_PARTIAL_CENTS
+        ? rawOctave
+        : detectedFreq * 2;
     const targetOctaveFreq = midiToFrequency(midiNote + 12);
     const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
+
+    // 19 semitones = 12 (octave) + 7 (perfect fifth) — ET target for the compound fifth
+    const rawCFifth = trimmedMean(stableCFifthFreqs.current);
+    const compoundFifthFreq = rawCFifth !== null &&
+      Math.abs(1200 * Math.log2(rawCFifth / (detectedFreq * 3))) <= MAX_PARTIAL_CENTS
+        ? rawCFifth
+        : detectedFreq * 3;
+    const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
+    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
@@ -119,25 +192,37 @@ const QuickTuningPage: React.FC = () => {
     dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: noteIndex + 1 });
 
     // Reset stability tracking for the next note
-    stableFrames.current = 0;
-    lastPitchClass.current = null;
-    stableFrequencies.current = [];
+    resetStabilityState();
 
-    // Allow registering again after a short pause
+    // Allow registering again after a short pause, and reset stability state
+    // so the next strike starts with a clean detection window rather than
+    // inheriting frames accumulated while the previous note was still ringing.
     setTimeout(() => {
+      resetStabilityState();
       justRegistered.current = false;
     }, REGISTRATION_COOLDOWN_MS);
-  }, [result, noteIndex, dispatch]);
+  }, [result, noteIndex, dispatch, resetStabilityState]);
 
   // Stability detection: auto-register when the same pitch class (note letter, ignoring
   // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
   // rather than exact note name or frequency makes the counter robust against the octave
   // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
   useEffect(() => {
-    if (!isListening || result.frequency === null || result.noteName === null) {
-      stableFrames.current = 0;
-      lastPitchClass.current = null;
-      stableFrequencies.current = [];
+    // Reset and hold at 0% when not listening, no signal, or during the post-registration
+    // cooldown — the cooldown guard prevents the still-ringing note from rebuilding the
+    // ring to a confusing partial percentage before the user plays the next note.
+    if (!isListening || result.frequency === null || result.noteName === null || justRegistered.current) {
+      resetStabilityState();
+      return;
+    }
+
+    // Transparently skip frames where the detected note is already registered.
+    // This prevents ring-out of a previously-registered note (which can last 5–10 s on a
+    // handpan) from either (a) accumulating false stability that re-triggers the duplicate
+    // guard on every 45-frame window, or (b) resetting the stability counter for the note
+    // the user is actually playing next. Skipped frames leave the counter unchanged so that
+    // isolated ring-out blips interleaved with the new note do not break accumulation.
+    if (registeredNoteNames.current.has(result.noteName)) {
       return;
     }
 
@@ -146,17 +231,33 @@ const QuickTuningPage: React.FC = () => {
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
-      stableFrequencies.current.push(result.frequency);
       stableFrames.current += 1;
+      // Skip attack-phase frames: only collect frequencies from the sustain phase.
+      // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
+      // where harmonics are brightest and pitch estimates are noisiest. Collecting only
+      // from frames after ATTACK_SKIP_FRAMES gives a cleaner median measurement.
+      if (stableFrames.current > ATTACK_SKIP_FRAMES) {
+        stableFrequencies.current.push(result.frequency);
+        // Also collect independently-measured octave and compound-fifth frequencies
+        // from the current frame. null values (partial not detectable) are skipped.
+        if (result.octaveFrequency !== null) {
+          stableOctaveFreqs.current.push(result.octaveFrequency);
+        }
+        if (result.compoundFifthFrequency !== null) {
+          stableCFifthFreqs.current.push(result.compoundFifthFrequency);
+        }
+      }
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
     } else {
       lastPitchClass.current = pitchClass;
       stableFrames.current = 1;
-      stableFrequencies.current = [result.frequency];
+      stableFrequencies.current = [];
+      stableOctaveFreqs.current = [];
+      stableCFifthFreqs.current = [];
     }
-  }, [result, isListening, registerNote]);
+  }, [result, isListening, registerNote, resetStabilityState]);
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';

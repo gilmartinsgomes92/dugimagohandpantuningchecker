@@ -86,14 +86,14 @@ export function findHarmonicFrequency(
  * @param freqData - Float32Array of dB values from AnalyserNode.getFloatFrequencyData()
  * @param sampleRate - Audio sample rate (Hz)
  * @param fftSize - FFT size used by the AnalyserNode
- * @returns Corrected fundamental frequency in Hz
+ * @returns Corrected fundamental frequency in Hz, or null if the candidate has no harmonic family
  */
 export function validateFundamental(
   detectedFreq: number,
   freqData: Float32Array,
   sampleRate: number,
   fftSize: number
-): number {
+): number | null {
   const binHz = sampleRate / fftSize;
 
   function getMagnitudeAt(freq: number): number {
@@ -120,7 +120,51 @@ export function validateFundamental(
     }
   }
 
-  return detectedFreq;
+  // Check sub-third (f/3) — YIN can lock onto the 3rd harmonic on complex tones
+  // (e.g. playing D3 at 147 Hz but YIN detects its 3rd harmonic A4 at 440 Hz).
+  const subThird = detectedFreq / 3;
+  if (subThird >= 55) {
+    const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
+    if (subThirdPeak !== null) {
+      const subThirdMag = getMagnitudeAt(subThirdPeak);
+      // If the sub-third is within 6 dB of the detected frequency, prefer it as the fundamental.
+      // Using the same 6 dB window as the f/2 check keeps the bar high enough to reject
+      // false positives from low-frequency environmental noise near f/3.
+      if (subThirdMag >= currentMag - 6) {
+        return subThirdPeak;
+      }
+    }
+  }
+
+  // No harmonic redirect triggered. Refine the raw YIN frequency with FFT parabolic
+  // interpolation before returning, for sub-cent accuracy on steady-state sustain tones.
+  // The f/2 and f/3 redirect paths already return FFT-interpolated peaks (subOctavePeak /
+  // subThirdPeak); applying the same treatment here makes all paths consistent and
+  // eliminates the ~5–10¢ systematic bias that arises from YIN's tau-domain interpolation
+  // when used without this final refinement step.
+  const candidate = findHarmonicFrequency(freqData, detectedFreq, sampleRate, fftSize) ?? detectedFreq;
+  const candidateMag = getMagnitudeAt(candidate);
+
+  // Forward harmonic check: confirm the candidate frequency has at least one tuned overtone
+  // in the FFT. Every genuine handpan fundamental has its octave (2f) and/or compound fifth
+  // (3f) purposely tuned by the maker and clearly audible in the spectrum. If neither partial
+  // is within 24 dB of the candidate, this detection has no harmonic family evidence — it is
+  // a false pick caused by sympathetic resonance, room noise, or a YIN lag-domain artefact
+  // (e.g. YIN locking onto C#4 when F4 is playing, because C#4's overtones at 554 Hz and
+  // 831 Hz are absent while F4's octave at 698 Hz is clearly present). Rejecting these
+  // orphaned detections prevents them from accumulating stability-counter frames and being
+  // registered as the wrong note.
+  const FORWARD_CONFIRM_DB = 24;
+  const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
+  const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
+  const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
+  const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
+  if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
+    // No harmonic family confirmed — reject this detection
+    return null;
+  }
+
+  return candidate;
 }
 
 /**

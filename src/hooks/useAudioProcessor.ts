@@ -1,17 +1,22 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { detectPitch, computeRMS } from '../utils/yin';
-import { validateFundamental } from '../utils/harmonicAnalyzer';
+import { validateFundamental, findHarmonicFrequency } from '../utils/harmonicAnalyzer';
 import { frequencyToNote } from '../utils/musicUtils';
 
 interface AudioResult {
   frequency: number | null;
+  // Independently measured 2nd partial (physical octave) — may differ from 2×frequency
+  // on real handpans due to inharmonicity in the metal geometry.
+  octaveFrequency: number | null;
+  // Independently measured 3rd partial (compound fifth) — may differ from 3×frequency.
+  compoundFifthFrequency: number | null;
   noteName: string | null;
   cents: number | null;
 }
 
 export const useAudioProcessor = () => {
   const [isListening, setIsListening] = useState(false);
-  const [result, setResult] = useState<AudioResult>({ frequency: null, noteName: null, cents: null });
+  const [result, setResult] = useState<AudioResult>({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
   const [error, setError] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -60,9 +65,37 @@ export const useAudioProcessor = () => {
               audioCtxRef.current.sampleRate,
               analyserRef.current.fftSize,
             );
-            const noteInfo = frequencyToNote(freq);
-            setResult({ frequency: freq, noteName: noteInfo.fullName, cents: noteInfo.cents });
+            // null means validateFundamental rejected this frame (no harmonic family
+            // found). Silently skip the setResult call so the stability counter in
+            // QuickTuningPage does not see this false pick — the display and the counter
+            // both stay at their current values, and the next valid frame updates them.
+            if (freq !== null) {
+              const noteInfo = frequencyToNote(freq);
+              // Independently measure the 2nd and 3rd physical partials using the FFT.
+              // Real handpan partials deviate from exact 2:1 and 3:1 ratios due to
+              // the metal geometry (inharmonicity), so measuring each partial directly
+              // gives more accurate per-partial readings than multiplying the fundamental.
+              const octaveFreq = findHarmonicFrequency(
+                freqBufRef.current, freq * 2,
+                audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
+              );
+              const compFifthFreq = findHarmonicFrequency(
+                freqBufRef.current, freq * 3,
+                audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
+              );
+              setResult({
+                frequency: freq,
+                octaveFrequency: octaveFreq,
+                compoundFifthFrequency: compFifthFreq,
+                noteName: noteInfo.fullName,
+                cents: noteInfo.cents,
+              });
+            }
           }
+        } else {
+          // Signal below noise floor — clear the result so the display shows "listening"
+          // rather than the last detected note, giving a clean visual cue to play next note.
+          setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
         }
 
         rafRef.current = requestAnimationFrame(tick);
@@ -82,7 +115,7 @@ export const useAudioProcessor = () => {
     audioCtxRef.current = null;
     analyserRef.current = null;
     setIsListening(false);
-    setResult({ frequency: null, noteName: null, cents: null });
+    setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
   }, []);
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
