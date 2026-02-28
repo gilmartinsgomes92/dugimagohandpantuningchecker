@@ -11,11 +11,6 @@ import type { TuningResult } from '../contexts/AppContext';
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
 const STABLE_FRAMES_REQUIRED = 90;
 
-// Frequency tolerance in Hz for stability detection.
-// If the detected frequency stays within ±FREQUENCY_TOLERANCE_HZ of the
-// anchor frequency, the stability counter increments instead of resetting.
-const FREQUENCY_TOLERANCE_HZ = 5;
-
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
@@ -46,7 +41,8 @@ const QuickTuningPage: React.FC = () => {
   const noteIndex = state.currentNoteIndex;
 
   const stableFrames = useRef(0);
-  const lastDetectedFrequency = useRef<number | null>(null);
+  const lastPitchClass = useRef<string | null>(null);
+  const stableFrequencies = useRef<number[]>([]);
   const justRegistered = useRef(false);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -76,7 +72,15 @@ const QuickTuningPage: React.FC = () => {
     if (justRegistered.current) return;
     justRegistered.current = true;
 
-    const detectedFreq = result.frequency;
+    // Pick the middle element from the sorted frequency list collected during the
+    // stable window. Sorting and taking the midpoint removes extreme outlier frames
+    // (e.g. occasional octave-error detections) without interpolating between
+    // measurements, which could produce frequencies that aren't real detected values.
+    const freqList = stableFrequencies.current;
+    const sorted = [...freqList].sort((a, b) => a - b);
+    const midpointFreq = sorted.length > 0 ? sorted[Math.floor((sorted.length - 1) / 2)] : null;
+
+    const detectedFreq = midpointFreq ?? result.frequency;
     const cents = result.cents;
     const noteName = result.noteName ?? 'Unknown';
 
@@ -116,7 +120,8 @@ const QuickTuningPage: React.FC = () => {
 
     // Reset stability tracking for the next note
     stableFrames.current = 0;
-    lastDetectedFrequency.current = null;
+    lastPitchClass.current = null;
+    stableFrequencies.current = [];
 
     // Allow registering again after a short pause
     setTimeout(() => {
@@ -124,26 +129,32 @@ const QuickTuningPage: React.FC = () => {
     }, REGISTRATION_COOLDOWN_MS);
   }, [result, noteIndex, dispatch]);
 
-  // Stability detection: auto-register when the detected frequency stays within
-  // ±FREQUENCY_TOLERANCE_HZ of the anchor frequency for STABLE_FRAMES_REQUIRED frames
+  // Stability detection: auto-register when the same pitch class (note letter, ignoring
+  // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
+  // rather than exact note name or frequency makes the counter robust against the octave
+  // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
   useEffect(() => {
     if (!isListening || result.frequency === null || result.noteName === null) {
       stableFrames.current = 0;
-      lastDetectedFrequency.current = null;
+      lastPitchClass.current = null;
+      stableFrequencies.current = [];
       return;
     }
 
-    const freq = result.frequency;
-    const anchor = lastDetectedFrequency.current;
+    // Strip the trailing octave digit(s) to get the pitch class, e.g. "A3" → "A", "D#4" → "D#"
+    const pitchClass = result.noteName.replace(/\d+$/, '');
+    const anchor = lastPitchClass.current;
 
-    if (anchor !== null && Math.abs(freq - anchor) <= FREQUENCY_TOLERANCE_HZ) {
+    if (anchor !== null && pitchClass === anchor) {
+      stableFrequencies.current.push(result.frequency);
       stableFrames.current += 1;
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
     } else {
-      lastDetectedFrequency.current = freq;
+      lastPitchClass.current = pitchClass;
       stableFrames.current = 1;
+      stableFrequencies.current = [result.frequency];
     }
   }, [result, isListening, registerNote]);
 
