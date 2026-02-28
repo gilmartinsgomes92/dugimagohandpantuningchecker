@@ -7,9 +7,9 @@ import { midiToFrequency, formatCents, centsToColor } from '../utils/musicUtils'
 import type { TuningResult } from '../contexts/AppContext';
 
 // Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 1.5 seconds; actual time depends on
+// At ~60fps this is approximately 0.75 seconds; actual time depends on
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 90;
+const STABLE_FRAMES_REQUIRED = 45;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
