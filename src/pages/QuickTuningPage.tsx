@@ -14,6 +14,11 @@ const STABLE_FRAMES_REQUIRED = 45;
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
+// How many consecutive frames with a different pitch class to tolerate before
+// resetting the stability counter. Allows brief ring-out blips from a previously-
+// registered note to be ignored while the new note accumulates stability.
+const MISMATCH_TOLERANCE = 2;
+
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
   if (absCents <= 15) return 'slightly-out-of-tune';
@@ -43,6 +48,10 @@ const QuickTuningPage: React.FC = () => {
   const stableFrames = useRef(0);
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
+  // How many consecutive frames had a different pitch class from the current anchor.
+  // Allows up to MISMATCH_TOLERANCE blip frames (e.g. sympathetic ring-out of a
+  // previously-registered note) without resetting the stability counter.
+  const mismatchFrames = useRef(0);
   const justRegistered = useRef(false);
   // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
@@ -53,6 +62,7 @@ const QuickTuningPage: React.FC = () => {
     stableFrames.current = 0;
     lastPitchClass.current = null;
     stableFrequencies.current = [];
+    mismatchFrames.current = 0;
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -80,7 +90,6 @@ const QuickTuningPage: React.FC = () => {
 
   const registerNote = useCallback(() => {
     if (justRegistered.current) return;
-    justRegistered.current = true;
 
     // Pick the middle element from the sorted frequency list collected during the
     // stable window. Sorting and taking the midpoint removes extreme outlier frames
@@ -100,14 +109,21 @@ const QuickTuningPage: React.FC = () => {
     // A second strike of the same note after cooldown would otherwise register it again
     // at the next noteIndex slot. Compare by full note name (e.g. "A3") so that different
     // octaves of the same letter (e.g. "D2" vs "D3") are treated as distinct notes.
+    //
+    // IMPORTANT: the duplicate check is intentionally done BEFORE setting justRegistered.
+    // If we entered a 1500 ms cooldown here, the still-ringing ding note (which can ring
+    // for 5-10 s on a handpan) would re-trigger the duplicate guard on every 45-frame
+    // window, creating a cascade of back-to-back cooldowns that blocks all other notes.
+    // By simply resetting stability and returning (no cooldown), we let detection continue
+    // immediately so the next different note can accumulate without delay.
     if (registeredNoteNames.current.has(noteName)) {
       resetStabilityState();
-      setTimeout(() => {
-        resetStabilityState();
-        justRegistered.current = false;
-      }, REGISTRATION_COOLDOWN_MS);
       return;
     }
+
+    // Mark as in-progress only after confirming this is a new, unregistered note, so the
+    // ring-out duplicate path above never locks out detection of subsequent notes.
+    justRegistered.current = true;
     registeredNoteNames.current.add(noteName);
 
     // Compute compound fifth partial (3× fundamental, i.e. one octave + perfect fifth)
@@ -172,15 +188,22 @@ const QuickTuningPage: React.FC = () => {
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
+      mismatchFrames.current = 0;
       stableFrequencies.current.push(result.frequency);
       stableFrames.current += 1;
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
     } else {
-      lastPitchClass.current = pitchClass;
-      stableFrames.current = 1;
-      stableFrequencies.current = [result.frequency];
+      mismatchFrames.current += 1;
+      if (anchor === null || mismatchFrames.current > MISMATCH_TOLERANCE) {
+        // Genuine pitch-class change (or anchor not yet set) — reset the counter.
+        mismatchFrames.current = 0;
+        lastPitchClass.current = pitchClass;
+        stableFrames.current = 1;
+        stableFrequencies.current = [result.frequency];
+      }
+      // else: within tolerance — ignore the blip and keep the existing counter intact
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 
