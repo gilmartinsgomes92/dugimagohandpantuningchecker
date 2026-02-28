@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { useAudioProcessor } from '../hooks/useAudioProcessor';
 import { CentsGauge } from '../components/CentsGauge';
-import { midiToFrequency, formatCents, centsToColor } from '../utils/musicUtils';
+import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../utils/musicUtils';
 import type { TuningResult } from '../contexts/AppContext';
 
 // Auto-register a note after this many consecutive stable frames.
@@ -13,6 +13,14 @@ const STABLE_FRAMES_REQUIRED = 45;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
+
+// Number of stable frames to skip before collecting frequencies for the median.
+// The initial transient of a handpan note (attack phase) has the brightest harmonics
+// and the most noise in the fundamental estimate. Skipping the first ~15 frames
+// (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
+// phase — mirroring the behaviour of professional strobe tuners like Linotune, which
+// begin reading approximately 1 second after the note is struck.
+const ATTACK_SKIP_FRAMES = 15;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -90,10 +98,18 @@ const QuickTuningPage: React.FC = () => {
     const midpointFreq = sorted.length > 0 ? sorted[Math.floor((sorted.length - 1) / 2)] : null;
 
     const detectedFreq = midpointFreq ?? result.frequency;
-    const cents = result.cents;
-    const noteName = result.noteName ?? 'Unknown';
 
-    if (detectedFreq === null || cents === null) return;
+    if (detectedFreq === null) return;
+
+    // Derive note name and cents consistently from the median frequency.
+    // Taking result.cents / result.noteName from the current frame at registration time
+    // introduces noise because that frame may be an attack or ring-out outlier. Using
+    // frequencyToNote(detectedFreq) ensures the logged cents and note name always match
+    // the frequency that was actually stored — eliminating multi-cent errors like +12¢
+    // that appear when the last frame in the window is noisy.
+    const noteData = frequencyToNote(detectedFreq);
+    const cents = noteData.cents;
+    const noteName = noteData.fullName;
 
     // Prevent the same note from being registered more than once per session.
     // A second strike of the same note after cooldown would otherwise register it again
@@ -188,15 +204,21 @@ const QuickTuningPage: React.FC = () => {
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
-      stableFrequencies.current.push(result.frequency);
       stableFrames.current += 1;
+      // Skip attack-phase frames: only collect frequencies from the sustain phase.
+      // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
+      // where harmonics are brightest and pitch estimates are noisiest. Collecting only
+      // from frames after ATTACK_SKIP_FRAMES gives a cleaner median measurement.
+      if (stableFrames.current > ATTACK_SKIP_FRAMES) {
+        stableFrequencies.current.push(result.frequency);
+      }
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
     } else {
       lastPitchClass.current = pitchClass;
       stableFrames.current = 1;
-      stableFrequencies.current = [result.frequency];
+      stableFrequencies.current = [];
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 
