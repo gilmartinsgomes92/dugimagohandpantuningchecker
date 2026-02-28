@@ -136,7 +136,14 @@ export function validateFundamental(
     }
   }
 
-  return detectedFreq;
+  // No harmonic redirect triggered. Refine the raw YIN frequency with FFT parabolic
+  // interpolation before returning, for sub-cent accuracy on steady-state sustain tones.
+  // The f/2 and f/3 redirect paths already return FFT-interpolated peaks (subOctavePeak /
+  // subThirdPeak); applying the same treatment here makes all paths consistent and
+  // eliminates the ~5–10¢ systematic bias that arises from YIN's tau-domain interpolation
+  // when used without this final refinement step.
+  const refinedPeak = findHarmonicFrequency(freqData, detectedFreq, sampleRate, fftSize);
+  return refinedPeak ?? detectedFreq;
 }
 
 /**
