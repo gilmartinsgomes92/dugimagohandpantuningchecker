@@ -44,6 +44,12 @@ const QuickTuningPage: React.FC = () => {
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   const justRegistered = useRef(false);
+
+  const resetStabilityState = useCallback(() => {
+    stableFrames.current = 0;
+    lastPitchClass.current = null;
+    stableFrequencies.current = [];
+  }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
   ).length;
@@ -119,15 +125,16 @@ const QuickTuningPage: React.FC = () => {
     dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: noteIndex + 1 });
 
     // Reset stability tracking for the next note
-    stableFrames.current = 0;
-    lastPitchClass.current = null;
-    stableFrequencies.current = [];
+    resetStabilityState();
 
-    // Allow registering again after a short pause
+    // Allow registering again after a short pause, and reset stability state
+    // so the next strike starts with a clean detection window rather than
+    // inheriting frames accumulated while the previous note was still ringing.
     setTimeout(() => {
+      resetStabilityState();
       justRegistered.current = false;
     }, REGISTRATION_COOLDOWN_MS);
-  }, [result, noteIndex, dispatch]);
+  }, [result, noteIndex, dispatch, resetStabilityState]);
 
   // Stability detection: auto-register when the same pitch class (note letter, ignoring
   // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
@@ -135,9 +142,7 @@ const QuickTuningPage: React.FC = () => {
   // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
   useEffect(() => {
     if (!isListening || result.frequency === null || result.noteName === null) {
-      stableFrames.current = 0;
-      lastPitchClass.current = null;
-      stableFrequencies.current = [];
+      resetStabilityState();
       return;
     }
 
@@ -156,7 +161,7 @@ const QuickTuningPage: React.FC = () => {
       stableFrames.current = 1;
       stableFrequencies.current = [result.frequency];
     }
-  }, [result, isListening, registerNote]);
+  }, [result, isListening, registerNote, resetStabilityState]);
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
