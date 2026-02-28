@@ -44,8 +44,10 @@ const QuickTuningPage: React.FC = () => {
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   const justRegistered = useRef(false);
-  // Tracks pitch classes already registered in this session to prevent duplicates
-  const registeredPitchClasses = useRef<Set<string>>(new Set());
+  // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
+  // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
+  // class "D") from registering as distinct notes.
+  const registeredNoteNames = useRef<Set<string>>(new Set());
 
   const resetStabilityState = useCallback(() => {
     stableFrames.current = 0;
@@ -94,11 +96,11 @@ const QuickTuningPage: React.FC = () => {
 
     if (detectedFreq === null || cents === null) return;
 
-    // Prevent the same pitch class (note letter, ignoring octave) from being registered
-    // more than once per session. A second strike of the same note after cooldown would
-    // otherwise register it again at the next noteIndex slot.
-    const pitchClass = noteName.replace(/\d+$/, '');
-    if (registeredPitchClasses.current.has(pitchClass)) {
+    // Prevent the same note from being registered more than once per session.
+    // A second strike of the same note after cooldown would otherwise register it again
+    // at the next noteIndex slot. Compare by full note name (e.g. "A3") so that different
+    // octaves of the same letter (e.g. "D2" vs "D3") are treated as distinct notes.
+    if (registeredNoteNames.current.has(noteName)) {
       resetStabilityState();
       setTimeout(() => {
         resetStabilityState();
@@ -106,7 +108,7 @@ const QuickTuningPage: React.FC = () => {
       }, REGISTRATION_COOLDOWN_MS);
       return;
     }
-    registeredPitchClasses.current.add(pitchClass);
+    registeredNoteNames.current.add(noteName);
 
     // Compute compound fifth partial (3× fundamental, i.e. one octave + perfect fifth)
     // 19 semitones = 12 (octave) + 7 (perfect fifth)

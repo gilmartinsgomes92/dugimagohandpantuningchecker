@@ -127,10 +127,10 @@ export function validateFundamental(
     const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
     if (subThirdPeak !== null) {
       const subThirdMag = getMagnitudeAt(subThirdPeak);
-      // If the sub-third is within 10 dB of the detected frequency, prefer it as the fundamental.
-      // A wider window (10 dB vs 6 dB for f/2) is used because the fundamental is typically
-      // quieter relative to its 3rd harmonic than relative to its 2nd harmonic.
-      if (subThirdMag >= currentMag - 10) {
+      // If the sub-third is within 6 dB of the detected frequency, prefer it as the fundamental.
+      // Using the same 6 dB window as the f/2 check keeps the bar high enough to reject
+      // false positives from low-frequency environmental noise near f/3.
+      if (subThirdMag >= currentMag - 6) {
         return subThirdPeak;
       }
     }
