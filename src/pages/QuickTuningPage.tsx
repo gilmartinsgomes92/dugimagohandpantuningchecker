@@ -14,11 +14,6 @@ const STABLE_FRAMES_REQUIRED = 45;
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
-// How many consecutive frames with a different pitch class to tolerate before
-// resetting the stability counter. Allows brief ring-out blips from a previously-
-// registered note to be ignored while the new note accumulates stability.
-const MISMATCH_TOLERANCE = 2;
-
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
   if (absCents <= 15) return 'slightly-out-of-tune';
@@ -48,10 +43,6 @@ const QuickTuningPage: React.FC = () => {
   const stableFrames = useRef(0);
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
-  // How many consecutive frames had a different pitch class from the current anchor.
-  // Allows up to MISMATCH_TOLERANCE blip frames (e.g. sympathetic ring-out of a
-  // previously-registered note) without resetting the stability counter.
-  const mismatchFrames = useRef(0);
   const justRegistered = useRef(false);
   // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
@@ -62,7 +53,6 @@ const QuickTuningPage: React.FC = () => {
     stableFrames.current = 0;
     lastPitchClass.current = null;
     stableFrequencies.current = [];
-    mismatchFrames.current = 0;
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -183,27 +173,30 @@ const QuickTuningPage: React.FC = () => {
       return;
     }
 
+    // Transparently skip frames where the detected note is already registered.
+    // This prevents ring-out of a previously-registered note (which can last 5–10 s on a
+    // handpan) from either (a) accumulating false stability that re-triggers the duplicate
+    // guard on every 45-frame window, or (b) resetting the stability counter for the note
+    // the user is actually playing next. Skipped frames leave the counter unchanged so that
+    // isolated ring-out blips interleaved with the new note do not break accumulation.
+    if (registeredNoteNames.current.has(result.noteName)) {
+      return;
+    }
+
     // Strip the trailing octave digit(s) to get the pitch class, e.g. "A3" → "A", "D#4" → "D#"
     const pitchClass = result.noteName.replace(/\d+$/, '');
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
-      mismatchFrames.current = 0;
       stableFrequencies.current.push(result.frequency);
       stableFrames.current += 1;
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
     } else {
-      mismatchFrames.current += 1;
-      if (anchor === null || mismatchFrames.current > MISMATCH_TOLERANCE) {
-        // Genuine pitch-class change (or anchor not yet set) — reset the counter.
-        mismatchFrames.current = 0;
-        lastPitchClass.current = pitchClass;
-        stableFrames.current = 1;
-        stableFrequencies.current = [result.frequency];
-      }
-      // else: within tolerance — ignore the blip and keep the existing counter intact
+      lastPitchClass.current = pitchClass;
+      stableFrames.current = 1;
+      stableFrequencies.current = [result.frequency];
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 

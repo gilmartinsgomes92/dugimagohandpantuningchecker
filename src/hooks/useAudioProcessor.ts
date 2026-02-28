@@ -63,6 +63,10 @@ export const useAudioProcessor = () => {
             const noteInfo = frequencyToNote(freq);
             setResult({ frequency: freq, noteName: noteInfo.fullName, cents: noteInfo.cents });
           }
+        } else {
+          // Signal below noise floor — clear the result so the display shows "listening"
+          // rather than the last detected note, giving a clean visual cue to play next note.
+          setResult({ frequency: null, noteName: null, cents: null });
         }
 
         rafRef.current = requestAnimationFrame(tick);
