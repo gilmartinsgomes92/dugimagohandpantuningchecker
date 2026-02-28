@@ -2,18 +2,20 @@
  * Simplified audio processing hook for scale identification.
  * Unlike useAudioProcessor (which measures cents for tuning accuracy),
  * this hook focuses on quick pitch-class recognition — just the note name,
- * no cents deviation, no harmonic analysis.
+ * no cents deviation.
  *
  * Design choices for faster note registration:
- *  - Smaller FFT buffer (2048 instead of 4096) → lower latency
+ *  - FFT buffer size 4096 (same as main hook) — needed for validateFundamental
+ *    which uses the frequency-domain data to correct octave errors
  *  - Lower RMS gate (0.003) so softer strikes are caught
- *  - No validateFundamental / harmonic analysis overhead
- *  - Reports only the pitch-class name ("C", "F#", etc.)
+ *  - Uses validateFundamental from harmonicAnalyzer to reject frames where
+ *    YIN locks onto the 2nd harmonic (e.g. D4 instead of D3)
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { detectPitch, computeRMS } from '../utils/yin';
 import { frequencyToNote } from '../utils/musicUtils';
+import { validateFundamental } from '../utils/harmonicAnalyzer';
 
 interface ScaleIdentificationResult {
   /** Detected pitch-class name, e.g. "C#", or null when silent */
@@ -40,7 +42,9 @@ export const useAudioProcessorForScaleIdentification = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
-  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
+  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
+  // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
+  const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
 
   const startListening = useCallback(async () => {
     try {
@@ -52,9 +56,10 @@ export const useAudioProcessorForScaleIdentification = () => {
       audioCtxRef.current = audioCtx;
 
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048;
+      analyser.fftSize = 4096;
       analyserRef.current = analyser;
       bufferRef.current = new Float32Array(analyser.fftSize);
+      freqBufRef.current = new Float32Array(analyser.fftSize / 2);
 
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -65,13 +70,27 @@ export const useAudioProcessorForScaleIdentification = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
+        analyserRef.current.getFloatFrequencyData(freqBufRef.current);
 
         const rms = computeRMS(buf);
         if (rms >= 0.003) {
-          const freq = detectPitch(buf, audioCtxRef.current.sampleRate);
-          if (freq !== null) {
-            const noteInfo = frequencyToNote(freq);
-            setResult({ pitchClass: noteInfo.name, noteFullName: noteInfo.fullName, frequency: freq, rms });
+          const rawFreq = detectPitch(buf, audioCtxRef.current.sampleRate);
+          if (rawFreq !== null) {
+            // Correct for octave errors using FFT harmonic analysis, same as
+            // the main tuning hook. Without this, YIN frequently locks onto
+            // the 2nd harmonic (2× the fundamental), causing D3 to read as D4.
+            const freq = validateFundamental(
+              rawFreq,
+              freqBufRef.current,
+              audioCtxRef.current.sampleRate,
+              analyserRef.current.fftSize,
+            );
+            if (freq !== null) {
+              const noteInfo = frequencyToNote(freq);
+              setResult({ pitchClass: noteInfo.name, noteFullName: noteInfo.fullName, frequency: freq, rms });
+            } else {
+              setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
+            }
           } else {
             setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
           }
