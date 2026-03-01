@@ -68,9 +68,6 @@ const QuickTuningPage: React.FC = () => {
   const stableOctaveFreqs = useRef<number[]>([]);
   const stableCFifthFreqs = useRef<number[]>([]);
   const justRegistered = useRef(false);
-  // Last accepted frequency within the current stable window, used to reject frames
-  // that jump > 100 cents (e.g. A3 ↔ A2 octave jumps while accumulating stability).
-  const lastValidFreq = useRef<number | null>(null);
   // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
   // class "D") from registering as distinct notes.
@@ -83,7 +80,6 @@ const QuickTuningPage: React.FC = () => {
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
-    lastValidFreq.current = null;
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -125,8 +121,22 @@ const QuickTuningPage: React.FC = () => {
         : sorted[Math.floor((sorted.length - 1) / 2)];
     };
 
-    // Derive the fundamental from the trimmed mean of collected sustain-phase frames.
-    const detectedFreq = trimmedMean(stableFrequencies.current) ?? result.frequency;
+    // Derive the fundamental from the most common MIDI note (mode octave) among
+    // collected sustain-phase frames. The YIN algorithm can lock onto the second
+    // harmonic of a note (e.g. F5 instead of F4) if the first post-attack frame
+    // happens to land there. By picking the mode MIDI note we choose whichever
+    // octave had the most detections, then average only those frequencies —
+    // correctly identifying F4 even when some frames detected F5.
+    const midiNumbers = stableFrequencies.current.map(f => Math.round(12 * Math.log2(f / 440) + 69));
+    const octaveCounts = new Map<number, number>();
+    for (const m of midiNumbers) octaveCounts.set(m, (octaveCounts.get(m) ?? 0) + 1);
+    const modeMidi = octaveCounts.size > 0
+      ? [...octaveCounts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      : null;
+    const modeFreqs = modeMidi !== null
+      ? stableFrequencies.current.filter((_, i) => midiNumbers[i] === modeMidi)
+      : stableFrequencies.current;
+    const detectedFreq = trimmedMean(modeFreqs) ?? result.frequency;
     if (detectedFreq === null) return;
 
     const noteData = frequencyToNote(detectedFreq);
@@ -254,15 +264,6 @@ const QuickTuningPage: React.FC = () => {
     if (anchor !== null && pitchClass === anchor) {
       // This frame matches the current anchor — reset the competing-pitch counter.
       competingFrames.current = 0;
-      // Pitch continuity check: skip frames that jump > 100 cents within a stable window.
-      // This prevents octave jumps (e.g. A3 ↔ A2, a 1200-cent gap) from either
-      // incrementing the counter or polluting the frequency collection with a wrong octave.
-      // Note: result.frequency is non-null here — the null guard above returns early.
-      if (lastValidFreq.current !== null) {
-        const jumpCents = Math.abs(1200 * Math.log2(result.frequency! / lastValidFreq.current));
-        if (jumpCents > 100) return;
-      }
-      lastValidFreq.current = result.frequency;
       stableFrames.current += 1;
       // Skip attack-phase frames: only collect frequencies from the sustain phase.
       // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
@@ -289,7 +290,6 @@ const QuickTuningPage: React.FC = () => {
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
       stableCFifthFreqs.current = [];
-      lastValidFreq.current = result.frequency;
       competingFrames.current = 0;
     } else {
       // Different pitch class from the current anchor.
@@ -304,7 +304,6 @@ const QuickTuningPage: React.FC = () => {
         stableFrequencies.current = [];
         stableOctaveFreqs.current = [];
         stableCFifthFreqs.current = [];
-        lastValidFreq.current = result.frequency;
         competingFrames.current = 0;
       }
       // Below the threshold: skip silently — the accumulated progress is preserved.
@@ -338,7 +337,7 @@ const QuickTuningPage: React.FC = () => {
         {result.frequency !== null && (
           <div className="note-prompt-freq">{result.frequency.toFixed(2)} Hz</div>
         )}
-        <p className="note-instruction">
+        <p className={`note-instruction${stabilityPct > 0 && stabilityPct < 100 ? ' note-instruction--active' : ''}`}>
           {stabilityPct > 0 && stabilityPct < 100
             ? '🎵 Keep striking the note — building your reading…'
             : 'Hold the note ringing — it will be auto-registered'}
