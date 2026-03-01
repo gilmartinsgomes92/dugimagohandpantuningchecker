@@ -318,16 +318,7 @@ const QuickTuningPage: React.FC = () => {
       competingTimeMs.current += frameDelta;
       if (competingTimeMs.current >= COMPETING_RESET_MS) {
         lastPitchClass.current = pitchClass;
-        // Preserve accumulated stability up to COMPETING_RESET_MS rather than zeroing
-        // it. On iOS, AGC amplifies background noise during the sustain of low notes
-        // (D3, E3), causing spurious pitch-class detections lasting 130–300 ms that
-        // previously erased all progress. With this change:
-        //   • An AGC noise burst followed by the original note returning simply resumes
-        //     from the preserved progress — the bar does not reset to zero.
-        //   • A genuine new note still needs STABLE_DURATION_MS to register; it only
-        //     inherits at most COMPETING_RESET_MS of head-start, so cannot register
-        //     prematurely.
-        stableTimeMs.current = Math.min(stableTimeMs.current, COMPETING_RESET_MS);
+        stableTimeMs.current = frameDelta;
         stableFrequencies.current = [];
         stableOctaveFreqs.current = [];
         stableCFifthFreqs.current = [];
