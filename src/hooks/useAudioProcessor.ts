@@ -26,29 +26,57 @@ export const useAudioProcessor = () => {
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
   // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
   const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
+  // Cleanup function for the visibilitychange listener added in startListening.
+  const visibilityCleanupRef = useRef<(() => void) | null>(null);
 
   const startListening = useCallback(async () => {
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          // Disable all iOS/Android audio processing. AGC, echo-cancellation and
-          // noise-suppression are designed for voice calls — they aggressively
-          // normalise and gate signals, which corrupts the handpan's natural
-          // attack→sustain→decay envelope and produces unstable YIN pitch readings.
-          // Disabling them gives the raw microphone signal to the pitch detector.
-          echoCancellation: false,
-          autoGainControl: false,
-          noiseSuppression: false,
-          // Mono is sufficient for pitch detection and reduces CPU load on mobile.
-          channelCount: 1,
-        },
-        video: false,
-      });
+      // Remove any previously-registered visibility listener before registering a new
+      // one (guards against startListening being called multiple times without a
+      // matching stopListening).
+      visibilityCleanupRef.current?.();
+      visibilityCleanupRef.current = null;
+      // On iOS, getUserMedia({ audio: true }) enables AGC, echo-cancellation and
+      // noise-suppression by default — all optimised for voice calls and harmful
+      // for instrument pitch detection.  We try to disable them via ideal constraints
+      // (which are advisory, not hard requirements, so they never cause an error on
+      // browsers that don't support them).  If the entire getUserMedia call fails for
+      // any other reason we fall back to the plain audio:true form so desktop
+      // configurations with non-standard audio devices still work.
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: { ideal: false },
+            autoGainControl: { ideal: false },
+            noiseSuppression: { ideal: false },
+          },
+          video: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      }
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
+      // iOS Safari creates the AudioContext in a suspended state even inside a
+      // user-gesture handler.  Resume it once here so the tick loop starts with a
+      // running context.  We also listen for page-visibility changes so that the
+      // context is automatically resumed when the user returns to the app (e.g.
+      // after switching away and back on their phone).
+      void audioCtx.resume();
+      const handleVisibility = () => {
+        const ctx = audioCtxRef.current;
+        if (!document.hidden && ctx !== null && ctx.state === 'suspended') {
+          void ctx.resume();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+      // Store the cleanup function so stopListening can remove the listener.
+      visibilityCleanupRef.current = () =>
+        document.removeEventListener('visibilitychange', handleVisibility);
 
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 4096;
@@ -63,14 +91,6 @@ export const useAudioProcessor = () => {
 
       const tick = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
-        // iOS Safari suspends the AudioContext on interactions, page visibility
-        // changes and lock-screen events. Resume it and skip this frame — data
-        // from a suspended context is stale. The next tick will run normally.
-        if (audioCtxRef.current.state === 'suspended') {
-          void audioCtxRef.current.resume();
-          rafRef.current = requestAnimationFrame(tick);
-          return;
-        }
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
@@ -133,6 +153,8 @@ export const useAudioProcessor = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    visibilityCleanupRef.current?.();
+    visibilityCleanupRef.current = null;
     streamRef.current = null;
     audioCtxRef.current = null;
     analyserRef.current = null;
