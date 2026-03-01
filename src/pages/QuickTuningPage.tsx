@@ -12,7 +12,8 @@ import type { TuningResult } from '../contexts/AppContext';
 // Android Chrome) which previously needed 2× as many strikes to fill the bar.
 
 // Auto-register a note after this many milliseconds of valid detections.
-const STABLE_DURATION_MS = 800;
+// Set to 20% of the original 800 ms window: a single clear strike is enough.
+const STABLE_DURATION_MS = 160;
 
 // Milliseconds of a *different* pitch class required before the stability counter
 // is reset. Brief stray detections (sympathetic resonance, room noise) typically
@@ -23,9 +24,9 @@ const COMPETING_RESET_MS = 130;
 const REGISTRATION_COOLDOWN_MS = 1500;
 
 // Milliseconds of the attack transient to skip before collecting frequencies.
-// The first ~300 ms of a handpan note has the brightest harmonics and noisiest
-// pitch estimate; collecting only from the sustain phase gives a cleaner reading.
-const ATTACK_SKIP_MS = 300;
+// Reduced to 50 ms so readings are captured when the fundamental is strongest
+// (near the start of the strike) rather than only during the quieter decay phase.
+const ATTACK_SKIP_MS = 50;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
