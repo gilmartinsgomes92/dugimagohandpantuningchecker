@@ -15,10 +15,9 @@ import type { TuningResult } from '../contexts/AppContext';
 const STABLE_DURATION_MS = 800;
 
 // Milliseconds of a *different* pitch class required before the stability counter
-// is reset. Brief stray detections (sympathetic resonance, room noise, and iOS
-// AGC-induced noise bursts during the note's decay) typically last 50–250 ms;
-// a genuine new note produces a sustained run longer than this window.
-const COMPETING_RESET_MS = 300;
+// is reset. Brief stray detections (sympathetic resonance, room noise) typically
+// last only 50–100 ms; a genuine new note produces a sustained run.
+const COMPETING_RESET_MS = 130;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
