@@ -19,6 +19,15 @@ const STABLE_DURATION_MS = 800;
 // last only 50–100 ms; a genuine new note produces a sustained run.
 const COMPETING_RESET_MS = 130;
 
+// Extended competing-reset threshold for notes whose detected frequency is in a
+// 2×–5× harmonic ratio with the current anchor frequency (e.g. F5 = 3×Bb3 during
+// Bb3's natural decay, or A4 = 3×D3 amplified by iOS AGC).  Natural harmonic
+// interference on a handpan typically lasts < 400 ms; using 500 ms here ensures
+// those transient harmonics do not reset the stability bar before it completes.
+// A genuinely new note at a harmonic interval (e.g. the user intentionally plays
+// the octave next) will still fire continuously for > 500 ms and reset cleanly.
+const HARMONIC_COMPETING_RESET_MS = 500;
+
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
@@ -62,6 +71,10 @@ const QuickTuningPage: React.FC = () => {
   // post-silence frame contributes a sensible default delta instead of a huge gap.
   const lastValidFrameTime = useRef<number | null>(null);
   const lastPitchClass = useRef<string | null>(null);
+  // Frequency of the current anchor note — used to detect harmonic relationships
+  // between the anchor and a competing pitch class so that natural overtone
+  // detections (e.g. F5 during Bb3 decay) do not prematurely reset the bar.
+  const anchorFreq = useRef<number | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   // Independently collected octave and compound-fifth partial frequencies for each
   // sustain-phase frame. Measuring partials directly from the FFT rather than deriving
@@ -80,6 +93,7 @@ const QuickTuningPage: React.FC = () => {
     competingTimeMs.current = 0;
     lastValidFrameTime.current = null;
     lastPitchClass.current = null;
+    anchorFreq.current = null;
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
@@ -304,6 +318,7 @@ const QuickTuningPage: React.FC = () => {
     } else if (anchor === null) {
       // No anchor yet — first detected frame; initialise the stability window.
       lastPitchClass.current = pitchClass;
+      anchorFreq.current = result.frequency;
       stableTimeMs.current = frameDelta;
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
@@ -313,11 +328,31 @@ const QuickTuningPage: React.FC = () => {
       // Different pitch class from the current anchor.
       // Don't reset immediately — brief stray detections (sympathetic resonance,
       // room noise, a single octave-slip frame) typically last only 50–100 ms.
-      // Only switch the anchor and reset the counter after COMPETING_RESET_MS
+      // Only switch the anchor and reset the counter after the effective threshold
       // of the new pitch class, indicating a genuine note change.
+      //
+      // If the competing frequency is in a 2×–5× harmonic ratio with the anchor
+      // (e.g. F5 = 3×Bb3, or A4 = 3×D3) use the longer HARMONIC_COMPETING_RESET_MS
+      // so that natural overtone detections during a note's decay do not erase
+      // accumulated stability before the bar can complete.
+      let effectiveThreshold = COMPETING_RESET_MS;
+      if (anchorFreq.current !== null) {
+        const af = anchorFreq.current;
+        const cf = result.frequency;
+        for (const ratio of [2, 3, 4, 5]) {
+          if (
+            Math.abs(1200 * Math.log2(cf / (af * ratio))) <= 100 ||
+            Math.abs(1200 * Math.log2(cf * ratio / af)) <= 100
+          ) {
+            effectiveThreshold = HARMONIC_COMPETING_RESET_MS;
+            break;
+          }
+        }
+      }
       competingTimeMs.current += frameDelta;
-      if (competingTimeMs.current >= COMPETING_RESET_MS) {
+      if (competingTimeMs.current >= effectiveThreshold) {
         lastPitchClass.current = pitchClass;
+        anchorFreq.current = result.frequency;
         stableTimeMs.current = frameDelta;
         stableFrequencies.current = [];
         stableOctaveFreqs.current = [];
