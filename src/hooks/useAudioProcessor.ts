@@ -56,8 +56,25 @@ export const useAudioProcessor = () => {
         }
       };
       document.addEventListener('visibilitychange', handleVisibility);
-      visibilityCleanupRef.current = () =>
+
+      // If the AudioContext starts suspended (e.g., after a page refresh with no
+      // prior user gesture in this navigation), resume it on the first user
+      // interaction. Clicking or touching anywhere — even to navigate to the tuning
+      // page — counts as a gesture and unblocks the AudioContext immediately.
+      const handleFirstInteraction = () => {
+        const ctx = audioCtxRef.current;
+        if (ctx !== null && ctx.state === 'suspended') {
+          void ctx.resume();
+        }
+      };
+      document.addEventListener('click', handleFirstInteraction, { once: true });
+      document.addEventListener('touchstart', handleFirstInteraction, { once: true, passive: true });
+
+      visibilityCleanupRef.current = () => {
         document.removeEventListener('visibilitychange', handleVisibility);
+        document.removeEventListener('click', handleFirstInteraction);
+        document.removeEventListener('touchstart', handleFirstInteraction);
+      };
 
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 4096;
