@@ -179,12 +179,26 @@ export function validateFundamental(
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
   const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
   if (octaveMag < candidateMag - forwardConfirmDb && cfifthMag < candidateMag - forwardConfirmDb) {
-    // No harmonic family confirmed — allow if the fundamental itself is sufficiently strong.
-    // This catches low notes like D3 where harmonics may fall below the noise floor on some
-    // instruments, but the fundamental is clearly audible. -40 dB corresponds to a clearly
-    // played note on typical microphone/line input; it is well above the -70 dB noise floor
-    // and above typical ambient room noise (~-55 dB), so this fallback does not admit
-    // environmental noise as a valid detection.
+    // No harmonic family confirmed.
+    //
+    // For notes above the D3 range (>155 Hz): return null immediately — same as the
+    // original code before any of these changes. The -40 dB fallback must NOT apply
+    // here because:
+    //   • Sympathetic resonances from other handpan notes, attack transients, and YIN
+    //     tau-domain artefacts can all produce peaks that are above -40 dB but have no
+    //     tuned harmonic family. Accepting them would set result.noteName to a spurious
+    //     note (e.g. pitch class "D" when "A" is being played), resetting the stability
+    //     counter and preventing any note above 155 Hz from registering.
+    //   • The original code already handled all these cases correctly for notes > 155 Hz
+    //     by returning null whenever both harmonics were absent. Restoring that behaviour
+    //     here makes A3 (and every other normal-range note) work exactly as before.
+    if (candidate > LOW_NOTE_THRESHOLD_HZ) {
+      return null;
+    }
+    // For D3-range notes (≤155 Hz) only: allow if the fundamental itself is sufficiently
+    // strong. This catches D3 when its harmonics fall below the noise floor on some
+    // instruments but the fundamental is clearly audible. -40 dB is well above typical
+    // ambient room noise (~-55 dB) so this fallback does not admit environmental noise.
     const STRONG_FUNDAMENTAL_DB = -40;
     if (candidateMag < STRONG_FUNDAMENTAL_DB) {
       return null;
