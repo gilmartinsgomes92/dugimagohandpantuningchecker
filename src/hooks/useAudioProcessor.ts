@@ -26,6 +26,9 @@ export const useAudioProcessor = () => {
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
   // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
   const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
+  // Cleanup function for the visibilitychange listener that resumes the AudioContext
+  // after iOS screen-lock / home-button / tab-switch events suspend it.
+  const visibilityCleanupRef = useRef<(() => void) | null>(null);
 
   const startListening = useCallback(async () => {
     try {
@@ -34,7 +37,44 @@ export const useAudioProcessor = () => {
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
+      // After `await getUserMedia()` the strict user-gesture window may have
+      // expired (Chrome resets this on fresh browser start after a restart).
+      // Calling resume() here ensures the context is running even in that case.
+      // It is a no-op when the context is already in "running" state.
+      void audioCtx.resume();
       audioCtxRef.current = audioCtx;
+
+      // iOS Safari suspends the AudioContext when the screen locks or the app is
+      // backgrounded.  Re-register a listener on every startListening call so that
+      // returning to the app after any interruption automatically resumes it.
+      // This listener is passive and never fires on desktop during normal use.
+      visibilityCleanupRef.current?.();
+      const handleVisibility = () => {
+        const ctx = audioCtxRef.current;
+        if (!document.hidden && ctx !== null && ctx.state === 'suspended') {
+          void ctx.resume();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      // If the AudioContext starts suspended (e.g., after a page refresh with no
+      // prior user gesture in this navigation), resume it on the first user
+      // interaction. Clicking or touching anywhere — even to navigate to the tuning
+      // page — counts as a gesture and unblocks the AudioContext immediately.
+      const handleFirstInteraction = () => {
+        const ctx = audioCtxRef.current;
+        if (ctx !== null && ctx.state === 'suspended') {
+          void ctx.resume();
+        }
+      };
+      document.addEventListener('click', handleFirstInteraction, { once: true });
+      document.addEventListener('touchstart', handleFirstInteraction, { once: true, passive: true });
+
+      visibilityCleanupRef.current = () => {
+        document.removeEventListener('visibilitychange', handleVisibility);
+        document.removeEventListener('click', handleFirstInteraction);
+        document.removeEventListener('touchstart', handleFirstInteraction);
+      };
 
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 4096;
@@ -49,6 +89,14 @@ export const useAudioProcessor = () => {
 
       const tick = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
+        // Re-resume passively if the context was suspended (e.g. iOS screen lock,
+        // tab switch, or post-refresh with no prior user gesture). Unlike the previous
+        // "early return" approach this does NOT stall the loop — the tick continues
+        // immediately; while suspended getFloatTimeDomainData returns zeros so RMS
+        // stays below the gate and the UI shows "Listening…" until audio flows again.
+        if (audioCtxRef.current.state === 'suspended') {
+          void audioCtxRef.current.resume();
+        }
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
@@ -111,6 +159,8 @@ export const useAudioProcessor = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    visibilityCleanupRef.current?.();
+    visibilityCleanupRef.current = null;
     streamRef.current = null;
     audioCtxRef.current = null;
     analyserRef.current = null;

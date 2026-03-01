@@ -707,6 +707,13 @@
   font-style: italic;
 }
 
+.note-instruction--active {
+  color: #e07b00;
+  font-style: normal;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
 .tuning-display {
   display: flex;
   flex-direction: row;

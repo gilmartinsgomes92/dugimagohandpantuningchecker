@@ -6,21 +6,27 @@ import { CentsGauge } from '../components/CentsGauge';
 import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../utils/musicUtils';
 import type { TuningResult } from '../contexts/AppContext';
 
-// Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 0.75 seconds; actual time depends on
-// the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 45;
+// Time-based thresholds — device and framerate independent.
+// Using wall-clock milliseconds rather than frame counts means the behaviour is
+// identical on a 60 fps desktop and a 30 fps mobile browser (iOS Safari, older
+// Android Chrome) which previously needed 2× as many strikes to fill the bar.
+
+// Auto-register a note after this many milliseconds of valid detections.
+// Set to 20% of the original 800 ms window: a single clear strike is enough.
+const STABLE_DURATION_MS = 160;
+
+// Milliseconds of a *different* pitch class required before the stability counter
+// is reset. Brief stray detections (sympathetic resonance, room noise) typically
+// last only 50–100 ms; a genuine new note produces a sustained run.
+const COMPETING_RESET_MS = 130;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
-// Number of stable frames to skip before collecting frequencies for the median.
-// The initial transient of a handpan note (attack phase) has the brightest harmonics
-// and the most noise in the fundamental estimate. Skipping the first ~15 frames
-// (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
-// phase — mirroring the behaviour of professional strobe tuners like Linotune, which
-// begin reading approximately 1 second after the note is struck.
-const ATTACK_SKIP_FRAMES = 15;
+// Milliseconds of the attack transient to skip before collecting frequencies.
+// Reduced to 50 ms so readings are captured when the fundamental is strongest
+// (near the start of the strike) rather than only during the quieter decay phase.
+const ATTACK_SKIP_MS = 50;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -48,8 +54,19 @@ const QuickTuningPage: React.FC = () => {
   const notesCount = state.notesCount ?? 0;
   const noteIndex = state.currentNoteIndex;
 
-  const stableFrames = useRef(0);
+  // Accumulated milliseconds of valid detections for the current anchor pitch class.
+  const stableTimeMs = useRef(0);
+  // Accumulated milliseconds of detections for a *competing* (different) pitch class.
+  const competingTimeMs = useRef(0);
+  // Timestamp (performance.now()) of the last valid detected frame, used to compute
+  // inter-frame delta time. Reset to null on silence / anchor change so the first
+  // post-silence frame contributes a sensible default delta instead of a huge gap.
+  const lastValidFrameTime = useRef<number | null>(null);
   const lastPitchClass = useRef<string | null>(null);
+  // Frequency of the current anchor note — used to detect harmonic relationships
+  // between the anchor and a competing pitch class so that natural overtone
+  // detections (e.g. F5 during Bb3 decay) do not prematurely reset the bar.
+  const anchorFreq = useRef<number | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   // Independently collected octave and compound-fifth partial frequencies for each
   // sustain-phase frame. Measuring partials directly from the FFT rather than deriving
@@ -64,8 +81,11 @@ const QuickTuningPage: React.FC = () => {
   const registeredNoteNames = useRef<Set<string>>(new Set());
 
   const resetStabilityState = useCallback(() => {
-    stableFrames.current = 0;
+    stableTimeMs.current = 0;
+    competingTimeMs.current = 0;
+    lastValidFrameTime.current = null;
     lastPitchClass.current = null;
+    anchorFreq.current = null;
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
@@ -110,8 +130,22 @@ const QuickTuningPage: React.FC = () => {
         : sorted[Math.floor((sorted.length - 1) / 2)];
     };
 
-    // Derive the fundamental from the trimmed mean of collected sustain-phase frames.
-    const detectedFreq = trimmedMean(stableFrequencies.current) ?? result.frequency;
+    // Derive the fundamental from the most common MIDI note (mode octave) among
+    // collected sustain-phase frames. The YIN algorithm can lock onto the second
+    // harmonic of a note (e.g. F5 instead of F4) if the first post-attack frame
+    // happens to land there. By picking the mode MIDI note we choose whichever
+    // octave had the most detections, then average only those frequencies —
+    // correctly identifying F4 even when some frames detected F5.
+    const midiNumbers = stableFrequencies.current.map(f => Math.round(12 * Math.log2(f / 440) + 69));
+    const octaveCounts = new Map<number, number>();
+    for (const m of midiNumbers) octaveCounts.set(m, (octaveCounts.get(m) ?? 0) + 1);
+    const modeMidi = octaveCounts.size > 0
+      ? [...octaveCounts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      : null;
+    const modeFreqs = modeMidi !== null
+      ? stableFrequencies.current.filter((_, i) => midiNumbers[i] === modeMidi)
+      : stableFrequencies.current;
+    const detectedFreq = trimmedMean(modeFreqs) ?? result.frequency;
     if (detectedFreq === null) return;
 
     const noteData = frequencyToNote(detectedFreq);
@@ -204,15 +238,27 @@ const QuickTuningPage: React.FC = () => {
   }, [result, noteIndex, dispatch, resetStabilityState]);
 
   // Stability detection: auto-register when the same pitch class (note letter, ignoring
-  // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
-  // rather than exact note name or frequency makes the counter robust against the octave
-  // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
+  // octave) is detected for STABLE_DURATION_MS of accumulated valid frames. Using pitch
+  // class rather than exact note name or frequency makes the counter robust against the
+  // octave jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
+  // All timing uses wall-clock milliseconds so behaviour is identical across devices
+  // regardless of whether requestAnimationFrame fires at 60 fps (desktop) or 30 fps (mobile).
   useEffect(() => {
-    // Reset and hold at 0% when not listening, no signal, or during the post-registration
-    // cooldown — the cooldown guard prevents the still-ringing note from rebuilding the
-    // ring to a confusing partial percentage before the user plays the next note.
-    if (!isListening || result.frequency === null || result.noteName === null || justRegistered.current) {
+    // Hard reset only when microphone is stopped or in the post-registration cooldown.
+    if (!isListening || justRegistered.current) {
       resetStabilityState();
+      return;
+    }
+
+    // No pitch detected this frame (low RMS or failed YIN) — skip without touching the
+    // counter. A brief quiet patch during a note's natural decay must NOT erase accumulated
+    // stability; resetting here would prevent the meter from ever reaching 100% because
+    // handpan notes regularly dip below the RMS gate during their sustain phase.
+    // Also reset lastValidFrameTime so that when the note is detected again after silence
+    // the first new frame contributes a clean 16 ms default delta rather than the full
+    // silence gap (which would inflate stableTimeMs).
+    if (result.frequency === null || result.noteName === null) {
+      lastValidFrameTime.current = null;
       return;
     }
 
@@ -226,17 +272,43 @@ const QuickTuningPage: React.FC = () => {
       return;
     }
 
+    // Skip upper harmonics (2×–5×) of already-registered notes.
+    // When a registered note (e.g. C4) keeps ringing, its overtone (e.g. G5 = 3×C4)
+    // can be detected by YIN and start accumulating as a phantom candidate for the
+    // next slot. Skipping these harmonics prevents the bar from filling with G5 (or
+    // A5 for D4, F5 for Bb3, etc.) while the user is trying to play a new note.
+    const detectedFreq = result.frequency;
+    for (const r of state.tuningResults) {
+      if (!r.detectedFrequency || r.status === 'pending') continue;
+      for (const ratio of [2, 3, 4, 5]) {
+        if (Math.abs(1200 * Math.log2(detectedFreq / (r.detectedFrequency * ratio))) <= 100) {
+          return;
+        }
+      }
+    }
+
+    // Compute wall-clock delta since the last valid frame.
+    // Cap at 100 ms to prevent a tab-switch or audio-context suspension from adding a
+    // huge single-frame jump. Typical frame interval is 16–33 ms; 100 ms is generous.
+    const now = performance.now();
+    const frameDelta = lastValidFrameTime.current !== null
+      ? Math.min(now - lastValidFrameTime.current, 100)
+      : 16; // default to ~60 fps interval for the very first frame
+    lastValidFrameTime.current = now;
+
     // Strip the trailing octave digit(s) to get the pitch class, e.g. "A3" → "A", "D#4" → "D#"
     const pitchClass = result.noteName.replace(/\d+$/, '');
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
-      stableFrames.current += 1;
+      // This frame matches the current anchor — reset the competing-pitch timer.
+      competingTimeMs.current = 0;
+      stableTimeMs.current += frameDelta;
       // Skip attack-phase frames: only collect frequencies from the sustain phase.
-      // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
-      // where harmonics are brightest and pitch estimates are noisiest. Collecting only
-      // from frames after ATTACK_SKIP_FRAMES gives a cleaner median measurement.
-      if (stableFrames.current > ATTACK_SKIP_FRAMES) {
+      // The first ATTACK_SKIP_MS cover the initial transient where harmonics are
+      // brightest and pitch estimates are noisiest. Collecting only from frames after
+      // ATTACK_SKIP_MS gives a cleaner median measurement.
+      if (stableTimeMs.current > ATTACK_SKIP_MS) {
         stableFrequencies.current.push(result.frequency);
         // Also collect independently-measured octave and compound-fifth frequencies
         // from the current frame. null values (partial not detectable) are skipped.
@@ -247,15 +319,59 @@ const QuickTuningPage: React.FC = () => {
           stableCFifthFreqs.current.push(result.compoundFifthFrequency);
         }
       }
-      if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
+      if (stableTimeMs.current >= STABLE_DURATION_MS && !justRegistered.current) {
         registerNote();
       }
-    } else {
+    } else if (anchor === null) {
+      // No anchor yet — first detected frame; initialise the stability window.
       lastPitchClass.current = pitchClass;
-      stableFrames.current = 1;
+      anchorFreq.current = result.frequency;
+      stableTimeMs.current = frameDelta;
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
       stableCFifthFreqs.current = [];
+      competingTimeMs.current = 0;
+    } else {
+      // Different pitch class from the current anchor.
+      // If the competing frequency is an upper harmonic (2×–5×) of the anchor,
+      // skip it silently and reset the competing timer — it is a physical overtone
+      // of the instrument (e.g. G5 during C4's decay, A5 during D4's decay, F5
+      // during Bb3's decay) and not a genuine new note. Checking only the upward
+      // direction (cf > af) ensures a genuinely lower-pitched note is never falsely
+      // suppressed as a "subharmonic".
+      if (anchorFreq.current !== null) {
+        const af = anchorFreq.current;
+        const cf = result.frequency;
+        for (const ratio of [2, 3, 4, 5]) {
+          // Direct upper harmonic of the anchor (e.g. G5 = 3×C4).
+          if (Math.abs(1200 * Math.log2(cf / (af * ratio))) <= 100) {
+            competingTimeMs.current = 0;
+            return;
+          }
+          // Sub-octave of an upper harmonic (e.g. G4 = G5/2 = 3×C4/2).
+          // validateFundamental's f/2 check can redirect a harmonic overtone (G5)
+          // to its sub-octave (G4) when G4 happens to be a real handpan note with
+          // its own strong FFT peak. Without this guard, G4 would compete against
+          // a C4 anchor and keep resetting the stability bar every ~130 ms.
+          // Only applies when cf is above af to avoid suppressing genuinely lower notes.
+          if (cf > af && Math.abs(1200 * Math.log2((cf * 2) / (af * ratio))) <= 100) {
+            competingTimeMs.current = 0;
+            return;
+          }
+        }
+      }
+      // Non-harmonic competing detection — count toward the anchor-reset threshold.
+      competingTimeMs.current += frameDelta;
+      if (competingTimeMs.current >= COMPETING_RESET_MS) {
+        lastPitchClass.current = pitchClass;
+        anchorFreq.current = result.frequency;
+        stableTimeMs.current = frameDelta;
+        stableFrequencies.current = [];
+        stableOctaveFreqs.current = [];
+        stableCFifthFreqs.current = [];
+        competingTimeMs.current = 0;
+      }
+      // Below threshold: skip silently — accumulated progress is preserved.
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 
@@ -263,8 +379,8 @@ const QuickTuningPage: React.FC = () => {
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
   const absCents = result.cents !== null ? Math.abs(result.cents) : null;
   const currentStatus = absCents !== null ? getTuningStatus(absCents) : null;
-  const stabilityPct = stableFrames.current > 0
-    ? Math.min(100, Math.round((stableFrames.current / STABLE_FRAMES_REQUIRED) * 100))
+  const stabilityPct = stableTimeMs.current > 0
+    ? Math.min(100, Math.round((stableTimeMs.current / STABLE_DURATION_MS) * 100))
     : 0;
 
   return (
@@ -286,7 +402,11 @@ const QuickTuningPage: React.FC = () => {
         {result.frequency !== null && (
           <div className="note-prompt-freq">{result.frequency.toFixed(2)} Hz</div>
         )}
-        <p className="note-instruction">Hold the note ringing — it will be auto-registered</p>
+        <p className={`note-instruction${stabilityPct > 0 && stabilityPct < 100 ? ' note-instruction--active' : ''}`}>
+          {stabilityPct > 0 && stabilityPct < 100
+            ? '🎵 Keep the note ringing — building your reading…'
+            : 'Strike a note — it will be auto-registered'}
+        </p>
       </div>
 
       <div className="tuning-display">
