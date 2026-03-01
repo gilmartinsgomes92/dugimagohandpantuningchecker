@@ -15,6 +15,18 @@ const NOISE_FLOOR_DB = -65; // Peaks below this dB level are treated as silence
 const FORWARD_CONFIRM_DB = 24; // Harmonic must be within this many dB of candidate
 
 /**
+ * Linearly interpolates the FFT magnitude (dB) at a given frequency.
+ * More accurate than using the nearest bin value alone.
+ */
+function getMagnitudeAt(freqData: Float32Array, freq: number, binHz: number): number {
+  const bin = freq / binHz;
+  const lo = Math.floor(bin);
+  const hi = lo + 1;
+  if (lo < 0 || hi >= freqData.length) return -Infinity;
+  return freqData[lo] + (freqData[hi] - freqData[lo]) * (bin - lo);
+}
+
+/**
  * Converts cents above/below a reference frequency to the maximum frequency offset.
  */
 function centsToFrequencyRatio(cents: number): number {
@@ -121,7 +133,16 @@ function findConfirmedFundamental(
     const octPeak = findHarmonicFrequency(freqData, freq * 2, sampleRate, fftSize);
     if (octPeak === null) continue;
 
-    // Take the peak with the highest magnitude that passes the octave check
+    // A genuine fundamental is typically louder than its overtones. If the octave is
+    // more than 3 dB louder than this candidate, the candidate is likely a
+    // sympathetically-resonating sub-harmonic of the actual played note (e.g. F3
+    // resonating when F4 is struck — F4 = octave of F3 is louder because F4 is the
+    // note being played). Reject such candidates so the scan continues upward to find
+    // the actual played note. This is the primary fix for E4/F4 detection failures.
+    const octMag = getMagnitudeAt(freqData, octPeak, binHz);
+    if (octMag > freqData[b] + 3) continue;
+
+    // Take the peak with the highest magnitude that passes both checks
     if (freqData[b] > bestMag) {
       bestMag = freqData[b];
       bestFreq = freq;
@@ -151,16 +172,7 @@ export function validateFundamental(
 ): number | null {
   const binHz = sampleRate / fftSize;
 
-  function getMagnitudeAt(freq: number): number {
-    const bin = freq / binHz;
-    const lo = Math.floor(bin);
-    const hi = lo + 1;
-    if (lo < 0 || hi >= freqData.length) return -Infinity;
-    // Linear interpolation between adjacent bins
-    return freqData[lo] + (freqData[hi] - freqData[lo]) * (bin - lo);
-  }
-
-  const currentMag = getMagnitudeAt(detectedFreq);
+  const currentMag = getMagnitudeAt(freqData, detectedFreq, binHz);
 
   // Check sub-octave (f/2) — the most common harmonic confusion.
   // The threshold is kept at 3 dB (rather than a wider window) to avoid falsely
@@ -171,7 +183,7 @@ export function validateFundamental(
   if (subOctave >= 55) {
     const subOctavePeak = findHarmonicFrequency(freqData, subOctave, sampleRate, fftSize);
     if (subOctavePeak !== null) {
-      const subMag = getMagnitudeAt(subOctavePeak);
+      const subMag = getMagnitudeAt(freqData, subOctavePeak, binHz);
       if (subMag >= currentMag - 3) {
         return subOctavePeak;
       }
@@ -185,7 +197,7 @@ export function validateFundamental(
   if (subThird >= 55) {
     const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
     if (subThirdPeak !== null) {
-      const subThirdMag = getMagnitudeAt(subThirdPeak);
+      const subThirdMag = getMagnitudeAt(freqData, subThirdPeak, binHz);
       if (subThirdMag >= currentMag - 3) {
         return subThirdPeak;
       }
@@ -199,7 +211,7 @@ export function validateFundamental(
   // eliminates the ~5–10¢ systematic bias that arises from YIN's tau-domain interpolation
   // when used without this final refinement step.
   const candidate = findHarmonicFrequency(freqData, detectedFreq, sampleRate, fftSize) ?? detectedFreq;
-  const candidateMag = getMagnitudeAt(candidate);
+  const candidateMag = getMagnitudeAt(freqData, candidate, binHz);
 
   // Forward harmonic check: confirm the candidate frequency has at least one tuned overtone
   // in the FFT. Every genuine handpan fundamental has its octave (2f) and/or compound fifth
@@ -210,8 +222,8 @@ export function validateFundamental(
   // 831 Hz are absent while F4's octave at 698 Hz is clearly present).
   const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
   const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
-  const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
-  const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
+  const octaveMag = octaveCheck !== null ? getMagnitudeAt(freqData, octaveCheck, binHz) : -Infinity;
+  const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(freqData, cfifthCheck, binHz) : -Infinity;
   if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
     // The YIN candidate has no confirmed harmonic family — it is an orphaned detection.
     // Fall back to a direct FFT scan: find the strongest peak in the handpan fundamental
