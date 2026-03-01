@@ -89,6 +89,14 @@ export const useAudioProcessor = () => {
 
       const tick = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
+        // Re-resume passively if the context was suspended (e.g. iOS screen lock,
+        // tab switch, or post-refresh with no prior user gesture). Unlike the previous
+        // "early return" approach this does NOT stall the loop — the tick continues
+        // immediately; while suspended getFloatTimeDomainData returns zeros so RMS
+        // stays below the gate and the UI shows "Listening…" until audio flows again.
+        if (audioCtxRef.current.state === 'suspended') {
+          void audioCtxRef.current.resume();
+        }
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
