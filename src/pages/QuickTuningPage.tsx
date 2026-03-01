@@ -7,9 +7,9 @@ import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../
 import type { TuningResult } from '../contexts/AppContext';
 
 // Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 0.75 seconds; actual time depends on
+// At ~60fps this is approximately 0.5 seconds; actual time depends on
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 45;
+const STABLE_FRAMES_REQUIRED = 30;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
@@ -58,6 +58,9 @@ const QuickTuningPage: React.FC = () => {
   const stableOctaveFreqs = useRef<number[]>([]);
   const stableCFifthFreqs = useRef<number[]>([]);
   const justRegistered = useRef(false);
+  // Last accepted frequency within the current stable window, used to reject frames
+  // that jump > 100 cents (e.g. A3 ↔ A2 octave jumps while accumulating stability).
+  const lastValidFreq = useRef<number | null>(null);
   // Tracks full note names (e.g. "A3", "D3") already registered this session to prevent
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
   // class "D") from registering as distinct notes.
@@ -69,6 +72,7 @@ const QuickTuningPage: React.FC = () => {
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
+    lastValidFreq.current = null;
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -231,6 +235,15 @@ const QuickTuningPage: React.FC = () => {
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
+      // Pitch continuity check: skip frames that jump > 100 cents within a stable window.
+      // This prevents octave jumps (e.g. A3 ↔ A2, a 1200-cent gap) from either
+      // incrementing the counter or polluting the frequency collection with a wrong octave.
+      // Note: result.frequency is non-null here — the null guard above returns early.
+      if (lastValidFreq.current !== null) {
+        const jumpCents = Math.abs(1200 * Math.log2(result.frequency! / lastValidFreq.current));
+        if (jumpCents > 100) return;
+      }
+      lastValidFreq.current = result.frequency;
       stableFrames.current += 1;
       // Skip attack-phase frames: only collect frequencies from the sustain phase.
       // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
@@ -256,6 +269,7 @@ const QuickTuningPage: React.FC = () => {
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
       stableCFifthFreqs.current = [];
+      lastValidFreq.current = result.frequency;
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 

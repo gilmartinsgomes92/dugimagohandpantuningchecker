@@ -12,6 +12,12 @@
 
 const SEARCH_CENTS = 80; // Search window in cents around expected harmonic
 
+// dB window for sub-harmonic redirect: prefer the lower-frequency candidate when it is
+// within this many dB of the YIN-detected frequency. 9 dB gives more aggressive octave
+// correction than the previous 6 dB, catching decay-phase frames where the fundamental
+// is moderately weaker than its second harmonic in the FFT spectrum.
+const SUB_HARMONIC_DB_WINDOW = 9;
+
 /**
  * Converts cents above/below a reference frequency to the maximum frequency offset.
  */
@@ -113,8 +119,8 @@ export function validateFundamental(
     const subOctavePeak = findHarmonicFrequency(freqData, subOctave, sampleRate, fftSize);
     if (subOctavePeak !== null) {
       const subMag = getMagnitudeAt(subOctavePeak);
-      // If sub-octave is within 6 dB of detected frequency, prefer the lower fundamental
-      if (subMag >= currentMag - 6) {
+      // If sub-octave is within SUB_HARMONIC_DB_WINDOW dB of detected frequency, prefer the lower fundamental
+      if (subMag >= currentMag - SUB_HARMONIC_DB_WINDOW) {
         return subOctavePeak;
       }
     }
@@ -127,10 +133,10 @@ export function validateFundamental(
     const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
     if (subThirdPeak !== null) {
       const subThirdMag = getMagnitudeAt(subThirdPeak);
-      // If the sub-third is within 6 dB of the detected frequency, prefer it as the fundamental.
-      // Using the same 6 dB window as the f/2 check keeps the bar high enough to reject
+      // If the sub-third is within SUB_HARMONIC_DB_WINDOW dB of the detected frequency, prefer it as the fundamental.
+      // Using the same window as the f/2 check keeps the bar high enough to reject
       // false positives from low-frequency environmental noise near f/3.
-      if (subThirdMag >= currentMag - 6) {
+      if (subThirdMag >= currentMag - SUB_HARMONIC_DB_WINDOW) {
         return subThirdPeak;
       }
     }
@@ -143,26 +149,6 @@ export function validateFundamental(
   // eliminates the ~5–10¢ systematic bias that arises from YIN's tau-domain interpolation
   // when used without this final refinement step.
   const candidate = findHarmonicFrequency(freqData, detectedFreq, sampleRate, fftSize) ?? detectedFreq;
-  const candidateMag = getMagnitudeAt(candidate);
-
-  // Forward harmonic check: confirm the candidate frequency has at least one tuned overtone
-  // in the FFT. Every genuine handpan fundamental has its octave (2f) and/or compound fifth
-  // (3f) purposely tuned by the maker and clearly audible in the spectrum. If neither partial
-  // is within 24 dB of the candidate, this detection has no harmonic family evidence — it is
-  // a false pick caused by sympathetic resonance, room noise, or a YIN lag-domain artefact
-  // (e.g. YIN locking onto C#4 when F4 is playing, because C#4's overtones at 554 Hz and
-  // 831 Hz are absent while F4's octave at 698 Hz is clearly present). Rejecting these
-  // orphaned detections prevents them from accumulating stability-counter frames and being
-  // registered as the wrong note.
-  const FORWARD_CONFIRM_DB = 24;
-  const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
-  const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
-  const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
-  const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
-  if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
-    // No harmonic family confirmed — reject this detection
-    return null;
-  }
 
   return candidate;
 }
