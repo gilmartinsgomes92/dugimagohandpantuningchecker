@@ -18,6 +18,7 @@ const WelcomePage: React.FC = () => {
           <li>✓ Real-time frequency detection with professional accuracy</li>
           <li>✓ Step-by-step note-by-note guided evaluation</li>
           <li>✓ Detailed results with cents deviation analysis</li>
+          <li>✓ Identify your handpan scale by playing its notes</li>
         </ul>
 
         <div className="welcome-cta-group">
@@ -26,6 +27,13 @@ const WelcomePage: React.FC = () => {
             onClick={() => navigate('/notes-count-selection')}
           >
             🎵 Quick Tuning Check
+          </button>
+
+          <button
+            className="btn btn-secondary btn-large"
+            onClick={() => navigate('/scale-identifier')}
+          >
+            🔍 Identify My Scale
           </button>
 
           <button
