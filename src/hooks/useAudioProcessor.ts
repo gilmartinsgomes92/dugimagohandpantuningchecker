@@ -30,7 +30,21 @@ export const useAudioProcessor = () => {
   const startListening = useCallback(async () => {
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          // Disable all iOS/Android audio processing. AGC, echo-cancellation and
+          // noise-suppression are designed for voice calls — they aggressively
+          // normalise and gate signals, which corrupts the handpan's natural
+          // attack→sustain→decay envelope and produces unstable YIN pitch readings.
+          // Disabling them gives the raw microphone signal to the pitch detector.
+          echoCancellation: false,
+          autoGainControl: false,
+          noiseSuppression: false,
+          // Mono is sufficient for pitch detection and reduces CPU load on mobile.
+          channelCount: 1,
+        },
+        video: false,
+      });
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
@@ -49,6 +63,14 @@ export const useAudioProcessor = () => {
 
       const tick = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
+        // iOS Safari suspends the AudioContext on interactions, page visibility
+        // changes and lock-screen events. Resume it and skip this frame — data
+        // from a suspended context is stale. The next tick will run normally.
+        if (audioCtxRef.current.state === 'suspended') {
+          void audioCtxRef.current.resume();
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
