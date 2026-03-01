@@ -37,6 +37,11 @@ export const useAudioProcessor = () => {
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
+      // After `await getUserMedia()` the strict user-gesture window may have
+      // expired (Chrome resets this on fresh browser start after a restart).
+      // Calling resume() here ensures the context is running even in that case.
+      // It is a no-op when the context is already in "running" state.
+      void audioCtx.resume();
       audioCtxRef.current = audioCtx;
 
       // iOS Safari suspends the AudioContext when the screen locks or the app is
