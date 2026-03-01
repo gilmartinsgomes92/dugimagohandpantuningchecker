@@ -62,12 +62,6 @@ const QuickTuningPage: React.FC = () => {
   // post-silence frame contributes a sensible default delta instead of a huge gap.
   const lastValidFrameTime = useRef<number | null>(null);
   const lastPitchClass = useRef<string | null>(null);
-  // Frequency (Hz) of the anchor note's first detection, used to identify upper
-  // harmonics. Low notes (D3, A3) have prominent physical partials (e.g. D3's 3rd
-  // harmonic is A4) that iOS AGC can amplify above the fundamental during sustain,
-  // causing spurious competing-pitch resets. Tracking the anchor frequency lets us
-  // recognise and silently skip these harmonic detections rather than resetting progress.
-  const lastAnchorFreq = useRef<number | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   // Independently collected octave and compound-fifth partial frequencies for each
   // sustain-phase frame. Measuring partials directly from the FFT rather than deriving
@@ -86,7 +80,6 @@ const QuickTuningPage: React.FC = () => {
     competingTimeMs.current = 0;
     lastValidFrameTime.current = null;
     lastPitchClass.current = null;
-    lastAnchorFreq.current = null;
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
@@ -311,7 +304,6 @@ const QuickTuningPage: React.FC = () => {
     } else if (anchor === null) {
       // No anchor yet — first detected frame; initialise the stability window.
       lastPitchClass.current = pitchClass;
-      lastAnchorFreq.current = result.frequency;
       stableTimeMs.current = frameDelta;
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
@@ -319,26 +311,6 @@ const QuickTuningPage: React.FC = () => {
       competingTimeMs.current = 0;
     } else {
       // Different pitch class from the current anchor.
-      // Before counting as competing, check whether the detected frequency is a
-      // physical harmonic (integer multiple) of the anchor. On iPhone, iOS AGC
-      // amplifies the handpan signal during natural decay — low notes have prominent
-      // upper harmonics that can temporarily dominate the spectrum:
-      //   D3 (147 Hz) → 3rd harmonic ≈ A4 (441 Hz), pitch class "A"
-      //   A3 (220 Hz) → 3rd harmonic ≈ E5 (660 Hz), pitch class "E"
-      //   A#3 (233 Hz) → 3rd harmonic ≈ F5 (699 Hz), pitch class "F"
-      // Without this check these harmonic frames cause spurious competing resets.
-      // Harmonic: integer multiple n ∈ {2,3,4,5} within ±100 cents (1 semitone).
-      if (lastAnchorFreq.current !== null) {
-        const ratio = result.frequency / lastAnchorFreq.current;
-        const isHarmonic = [2, 3, 4, 5].some(
-          n => Math.abs(1200 * Math.log2(ratio / n)) < 100,
-        );
-        if (isHarmonic) {
-          // Upper harmonic of the anchor note — treat as silence for this frame:
-          // don't count as competing and don't add to stable time.
-          return;
-        }
-      }
       // Don't reset immediately — brief stray detections (sympathetic resonance,
       // room noise, a single octave-slip frame) typically last only 50–100 ms.
       // Only switch the anchor and reset the counter after COMPETING_RESET_MS
@@ -346,7 +318,6 @@ const QuickTuningPage: React.FC = () => {
       competingTimeMs.current += frameDelta;
       if (competingTimeMs.current >= COMPETING_RESET_MS) {
         lastPitchClass.current = pitchClass;
-        lastAnchorFreq.current = result.frequency;
         stableTimeMs.current = frameDelta;
         stableFrequencies.current = [];
         stableOctaveFreqs.current = [];
