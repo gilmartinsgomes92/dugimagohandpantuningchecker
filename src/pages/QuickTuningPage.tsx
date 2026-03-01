@@ -6,27 +6,26 @@ import { CentsGauge } from '../components/CentsGauge';
 import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../utils/musicUtils';
 import type { TuningResult } from '../contexts/AppContext';
 
-// Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 0.8 seconds; actual time depends on
-// the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 50;
+// Time-based thresholds — device and framerate independent.
+// Using wall-clock milliseconds rather than frame counts means the behaviour is
+// identical on a 60 fps desktop and a 30 fps mobile browser (iOS Safari, older
+// Android Chrome) which previously needed 2× as many strikes to fill the bar.
 
-// Number of consecutive frames of a *different* pitch class required before
-// the stability counter is reset. Brief stray detections (sympathetic resonance,
-// room noise, octave slip) typically last only 1–3 frames; a genuine new note
-// produces a sustained run. Setting this to ~8 frames (~130 ms at 60 fps) means
-// a short transient between strikes does NOT wipe the accumulated progress.
-const COMPETING_RESET_THRESHOLD = 8;
+// Auto-register a note after this many milliseconds of valid detections.
+const STABLE_DURATION_MS = 800;
+
+// Milliseconds of a *different* pitch class required before the stability counter
+// is reset. Brief stray detections (sympathetic resonance, room noise) typically
+// last only 50–100 ms; a genuine new note produces a sustained run.
+const COMPETING_RESET_MS = 130;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
-// Number of stable frames to skip before collecting frequencies for the median.
-// The initial transient of a handpan note (attack phase) has the brightest harmonics
-// and the most noise in the fundamental estimate. Skipping the first ~20 frames
-// (~0.3 s at 60 fps) avoids this region and collects only from the cleaner sustain
-// phase — giving a reliable reading within a single strike.
-const ATTACK_SKIP_FRAMES = 20;
+// Milliseconds of the attack transient to skip before collecting frequencies.
+// The first ~300 ms of a handpan note has the brightest harmonics and noisiest
+// pitch estimate; collecting only from the sustain phase gives a cleaner reading.
+const ATTACK_SKIP_MS = 300;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -54,10 +53,14 @@ const QuickTuningPage: React.FC = () => {
   const notesCount = state.notesCount ?? 0;
   const noteIndex = state.currentNoteIndex;
 
-  const stableFrames = useRef(0);
-  // Counts consecutive frames of a pitch class that differs from the current anchor.
-  // Only resets the stability counter once this reaches COMPETING_RESET_THRESHOLD.
-  const competingFrames = useRef(0);
+  // Accumulated milliseconds of valid detections for the current anchor pitch class.
+  const stableTimeMs = useRef(0);
+  // Accumulated milliseconds of detections for a *competing* (different) pitch class.
+  const competingTimeMs = useRef(0);
+  // Timestamp (performance.now()) of the last valid detected frame, used to compute
+  // inter-frame delta time. Reset to null on silence / anchor change so the first
+  // post-silence frame contributes a sensible default delta instead of a huge gap.
+  const lastValidFrameTime = useRef<number | null>(null);
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   // Independently collected octave and compound-fifth partial frequencies for each
@@ -73,8 +76,9 @@ const QuickTuningPage: React.FC = () => {
   const registeredNoteNames = useRef<Set<string>>(new Set());
 
   const resetStabilityState = useCallback(() => {
-    stableFrames.current = 0;
-    competingFrames.current = 0;
+    stableTimeMs.current = 0;
+    competingTimeMs.current = 0;
+    lastValidFrameTime.current = null;
     lastPitchClass.current = null;
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
@@ -228,9 +232,11 @@ const QuickTuningPage: React.FC = () => {
   }, [result, noteIndex, dispatch, resetStabilityState]);
 
   // Stability detection: auto-register when the same pitch class (note letter, ignoring
-  // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
-  // rather than exact note name or frequency makes the counter robust against the octave
-  // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
+  // octave) is detected for STABLE_DURATION_MS of accumulated valid frames. Using pitch
+  // class rather than exact note name or frequency makes the counter robust against the
+  // octave jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
+  // All timing uses wall-clock milliseconds so behaviour is identical across devices
+  // regardless of whether requestAnimationFrame fires at 60 fps (desktop) or 30 fps (mobile).
   useEffect(() => {
     // Hard reset only when microphone is stopped or in the post-registration cooldown.
     if (!isListening || justRegistered.current) {
@@ -242,7 +248,11 @@ const QuickTuningPage: React.FC = () => {
     // counter. A brief quiet patch during a note's natural decay must NOT erase accumulated
     // stability; resetting here would prevent the meter from ever reaching 100% because
     // handpan notes regularly dip below the RMS gate during their sustain phase.
+    // Also reset lastValidFrameTime so that when the note is detected again after silence
+    // the first new frame contributes a clean 16 ms default delta rather than the full
+    // silence gap (which would inflate stableTimeMs).
     if (result.frequency === null || result.noteName === null) {
+      lastValidFrameTime.current = null;
       return;
     }
 
@@ -256,19 +266,28 @@ const QuickTuningPage: React.FC = () => {
       return;
     }
 
+    // Compute wall-clock delta since the last valid frame.
+    // Cap at 100 ms to prevent a tab-switch or audio-context suspension from adding a
+    // huge single-frame jump. Typical frame interval is 16–33 ms; 100 ms is generous.
+    const now = performance.now();
+    const frameDelta = lastValidFrameTime.current !== null
+      ? Math.min(now - lastValidFrameTime.current, 100)
+      : 16; // default to ~60 fps interval for the very first frame
+    lastValidFrameTime.current = now;
+
     // Strip the trailing octave digit(s) to get the pitch class, e.g. "A3" → "A", "D#4" → "D#"
     const pitchClass = result.noteName.replace(/\d+$/, '');
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
-      // This frame matches the current anchor — reset the competing-pitch counter.
-      competingFrames.current = 0;
-      stableFrames.current += 1;
+      // This frame matches the current anchor — reset the competing-pitch timer.
+      competingTimeMs.current = 0;
+      stableTimeMs.current += frameDelta;
       // Skip attack-phase frames: only collect frequencies from the sustain phase.
-      // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
-      // where harmonics are brightest and pitch estimates are noisiest. Collecting only
-      // from frames after ATTACK_SKIP_FRAMES gives a cleaner median measurement.
-      if (stableFrames.current > ATTACK_SKIP_FRAMES) {
+      // The first ATTACK_SKIP_MS cover the initial transient where harmonics are
+      // brightest and pitch estimates are noisiest. Collecting only from frames after
+      // ATTACK_SKIP_MS gives a cleaner median measurement.
+      if (stableTimeMs.current > ATTACK_SKIP_MS) {
         stableFrequencies.current.push(result.frequency);
         // Also collect independently-measured octave and compound-fifth frequencies
         // from the current frame. null values (partial not detectable) are skipped.
@@ -279,31 +298,31 @@ const QuickTuningPage: React.FC = () => {
           stableCFifthFreqs.current.push(result.compoundFifthFrequency);
         }
       }
-      if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
+      if (stableTimeMs.current >= STABLE_DURATION_MS && !justRegistered.current) {
         registerNote();
       }
     } else if (anchor === null) {
       // No anchor yet — first detected frame; initialise the stability window.
       lastPitchClass.current = pitchClass;
-      stableFrames.current = 1;
+      stableTimeMs.current = frameDelta;
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
       stableCFifthFreqs.current = [];
-      competingFrames.current = 0;
+      competingTimeMs.current = 0;
     } else {
       // Different pitch class from the current anchor.
       // Don't reset immediately — brief stray detections (sympathetic resonance,
-      // room noise, a single octave-slip frame) typically last only 1–3 frames.
-      // Only switch the anchor and reset the counter after COMPETING_RESET_THRESHOLD
-      // consecutive frames of the new pitch class, indicating a genuine note change.
-      competingFrames.current += 1;
-      if (competingFrames.current >= COMPETING_RESET_THRESHOLD) {
+      // room noise, a single octave-slip frame) typically last only 50–100 ms.
+      // Only switch the anchor and reset the counter after COMPETING_RESET_MS
+      // of the new pitch class, indicating a genuine note change.
+      competingTimeMs.current += frameDelta;
+      if (competingTimeMs.current >= COMPETING_RESET_MS) {
         lastPitchClass.current = pitchClass;
-        stableFrames.current = 1;
+        stableTimeMs.current = frameDelta;
         stableFrequencies.current = [];
         stableOctaveFreqs.current = [];
         stableCFifthFreqs.current = [];
-        competingFrames.current = 0;
+        competingTimeMs.current = 0;
       }
       // Below the threshold: skip silently — the accumulated progress is preserved.
     }
@@ -313,8 +332,8 @@ const QuickTuningPage: React.FC = () => {
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
   const absCents = result.cents !== null ? Math.abs(result.cents) : null;
   const currentStatus = absCents !== null ? getTuningStatus(absCents) : null;
-  const stabilityPct = stableFrames.current > 0
-    ? Math.min(100, Math.round((stableFrames.current / STABLE_FRAMES_REQUIRED) * 100))
+  const stabilityPct = stableTimeMs.current > 0
+    ? Math.min(100, Math.round((stableTimeMs.current / STABLE_DURATION_MS) * 100))
     : 0;
 
   return (
