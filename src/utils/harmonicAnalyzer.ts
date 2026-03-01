@@ -161,23 +161,19 @@ export function validateFundamental(
   // their harmonics are naturally weaker on many handpans (especially smaller or newer
   // instruments), while higher notes keep the strict 24 dB window.
   //
-  // A deeper noise floor (-70 dB) is used when searching for harmonics of low-frequency
-  // notes (≤200 Hz, e.g. D3) because their octave and compound fifth can be genuinely
+  // A deeper noise floor (-70 dB) is used when searching for harmonics of very low notes
+  // (≤155 Hz, e.g. D3 at ~147 Hz) because their octave and compound fifth can be genuinely
   // weak on some instruments. This lower floor is NOT used for the sub-octave/sub-third
   // redirect checks above, which must stay at -65 dB to avoid false redirects from
   // environmental low-frequency noise.
-  const LOW_FREQ_THRESHOLD_HZ = 200;   // ≤ this freq uses the lenient threshold (e.g. D3 at ~147 Hz)
-  const HIGH_FREQ_THRESHOLD_HZ = 400;  // ≥ this freq uses the strict threshold
-  const LOW_FREQ_CONFIRM_DB = 30;      // lenient: low notes have weaker harmonics
-  const HIGH_FREQ_CONFIRM_DB = 24;     // strict: higher notes have clearly audible partials
-  const CONFIRM_DB_DELTA = LOW_FREQ_CONFIRM_DB - HIGH_FREQ_CONFIRM_DB; // 6 dB range
-  const harmonicNoiseFloor = candidate <= LOW_FREQ_THRESHOLD_HZ ? -70 : -65;
-  const forwardConfirmDb =
-    candidate <= LOW_FREQ_THRESHOLD_HZ
-      ? LOW_FREQ_CONFIRM_DB
-      : candidate >= HIGH_FREQ_THRESHOLD_HZ
-        ? HIGH_FREQ_CONFIRM_DB
-        : LOW_FREQ_CONFIRM_DB - ((candidate - LOW_FREQ_THRESHOLD_HZ) / (HIGH_FREQ_THRESHOLD_HZ - LOW_FREQ_THRESHOLD_HZ)) * CONFIRM_DB_DELTA;
+  //
+  // The confirmation threshold is a simple step function: notes ≤155 Hz (D3 range) get a
+  // lenient 30 dB window; all notes above (E3 and higher, including A3 at 220 Hz) keep the
+  // original 24 dB. Using a step rather than interpolation ensures that no note in the normal
+  // playing range receives a threshold stricter than the original 24 dB.
+  const LOW_NOTE_THRESHOLD_HZ = 155;  // D3 (≈147 Hz) and below: use lenient thresholds
+  const harmonicNoiseFloor = candidate <= LOW_NOTE_THRESHOLD_HZ ? -70 : -65;
+  const forwardConfirmDb = candidate <= LOW_NOTE_THRESHOLD_HZ ? 30 : 24;
   const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize, harmonicNoiseFloor);
   const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize, harmonicNoiseFloor);
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;

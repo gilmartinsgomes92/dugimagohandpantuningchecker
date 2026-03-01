@@ -78,12 +78,12 @@ export const useAudioProcessor = () => {
               const octaveFreq = findHarmonicFrequency(
                 freqBufRef.current, freq * 2,
                 audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
-                freq <= 200 ? -70 : -65,
+                freq <= 155 ? -70 : -65,
               );
               const compFifthFreq = findHarmonicFrequency(
                 freqBufRef.current, freq * 3,
                 audioCtxRef.current.sampleRate, analyserRef.current.fftSize,
-                freq <= 200 ? -70 : -65,
+                freq <= 155 ? -70 : -65,
               );
               setResult({
                 frequency: freq,
