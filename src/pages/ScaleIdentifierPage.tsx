@@ -4,8 +4,12 @@ import { useAudioProcessorForScaleIdentification } from '../hooks/useAudioProces
 import { identifyScales, noteToPitchClass } from '../utils/scaleIdentifier';
 import type { ScaleMatch } from '../utils/scaleIdentifier';
 
-/** Minimum ms a note must be continuously detected before it is registered */
-const NOTE_HOLD_MS = 350;
+/**
+ * Minimum ms a note must be continuously detected before it is registered.
+ * Reduced from 350 ms to 250 ms for snappier registration without increasing
+ * false positives (the STABILITY_FRAMES filter handles that).
+ */
+const NOTE_HOLD_MS = 250;
 
 interface IdentifierState {
   /** Pitch class numbers detected so far (unique, for scale matching) */
@@ -16,6 +20,11 @@ interface IdentifierState {
   detectedNoteNames: string[];
   /** Scale matches computed from the detected set */
   matches: ScaleMatch[];
+  /**
+   * Pitch class of the first registered note — treated as the "ding" (root).
+   * Used to highlight scale matches whose root matches the ding.
+   */
+  dingPitchClass: number | null;
 }
 
 type IdentifierAction =
@@ -27,15 +36,17 @@ const initialState: IdentifierState = {
   detectedNoteFullNames: new Set(),
   detectedNoteNames: [],
   matches: [],
+  dingPitchClass: null,
 };
 
 function identifierReducer(state: IdentifierState, action: IdentifierAction): IdentifierState {
   switch (action.type) {
     case 'ADD_NOTE': {
-      // Ignore if the exact same full note name (e.g. "D4") was already registered
       if (state.detectedNoteFullNames.has(action.noteFullName)) return state;
-      // A new octave of an already-known pitch class contributes a chip but
-      // doesn't change the pitch-class set used for scale matching.
+
+      const isFirstNote = state.detectedPcs.length === 0;
+      const dingPitchClass = isFirstNote ? action.pcNum : state.dingPitchClass;
+
       const pcAlreadyKnown = state.detectedPcs.includes(action.pcNum);
       const nextPcs = pcAlreadyKnown ? state.detectedPcs : [...state.detectedPcs, action.pcNum];
       const nextFullNames = new Set(state.detectedNoteFullNames).add(action.noteFullName);
@@ -43,7 +54,10 @@ function identifierReducer(state: IdentifierState, action: IdentifierAction): Id
         detectedPcs: nextPcs,
         detectedNoteFullNames: nextFullNames,
         detectedNoteNames: [...state.detectedNoteNames, action.noteFullName],
-        matches: pcAlreadyKnown ? state.matches : identifyScales(nextPcs),
+        matches: pcAlreadyKnown
+          ? state.matches
+          : identifyScales(nextPcs, dingPitchClass ?? undefined),
+        dingPitchClass,
       };
     }
     case 'RESET':
@@ -58,19 +72,14 @@ const ScaleIdentifierPage: React.FC = () => {
   const { isListening, result, error, startListening, stopListening } = useAudioProcessorForScaleIdentification();
   const [state, dispatch] = useReducer(identifierReducer, initialState);
 
-  // Stable-note tracking: we only register a note after it has been
-  // continuously detected for NOTE_HOLD_MS to avoid transient spikes.
   const lastNoteRef = useRef<string | null>(null);
   const noteStartRef = useRef<number | null>(null);
-  /** Full note name (with octave) captured when the current candidate was first seen. */
   const candidateFullNameRef = useRef<string | null>(null);
   /**
    * Pitch class of the most recently registered note (e.g. "D").
-   * Subsequent frames reporting this same pitch class are suppressed until a
-   * genuinely different pitch class appears. This prevents the decaying ring
-   * of a just-played note from (a) re-registering the same pitch and starting
-   * an endless suppress/register cycle, and (b) registering a wrong-octave
-   * alias (e.g. F5 after F4) since both share pitch class "F".
+   * Suppresses re-registration of the same note from its own decaying ring,
+   * and also blocks wrong-octave aliases (F5 after F4) since they share "F".
+   * Lifted when a genuinely different non-null pitch class appears.
    */
   const suppressedClassRef = useRef<string | null>(null);
 
@@ -83,11 +92,6 @@ const ScaleIdentifierPage: React.FC = () => {
     suppressedClassRef.current = null;
   }, [stopListening]);
 
-  /**
-   * Clears only the detection-tracking refs, without resetting detected notes.
-   * Called before each new mic session so stale suppression or candidate windows
-   * from a previous session cannot block the fresh start.
-   */
   const clearDetectionRefs = useCallback(() => {
     lastNoteRef.current = null;
     noteStartRef.current = null;
@@ -100,46 +104,25 @@ const ScaleIdentifierPage: React.FC = () => {
     startListening();
   }, [clearDetectionRefs, startListening]);
 
-  // Register a pitch class when the hook reports a new note.
-  // Depends on `result` (a new object every audio frame) so the elapsed-time
-  // check runs every frame — not just when the pitch class string changes.
   useEffect(() => {
     const { pitchClass, noteFullName } = result;
     const now = Date.now();
 
-    // Suppress the pitch class that was just registered until a genuinely
-    // different one appears. This prevents the note's decaying ring from:
-    //  (a) re-registering the same note (causing infinite suppress cycles), and
-    //  (b) registering a wrong-octave alias (e.g. F5 after F4 shares class "F").
     if (suppressedClassRef.current !== null) {
-      if (!pitchClass) {
-        // Silent frames during suppression: keep suppression active.
-        return;
-      }
-      if (pitchClass === suppressedClassRef.current) {
-        // Still hearing the registered note's ring — ignore.
-        return;
-      }
-      // A genuinely different pitch class has appeared — lift suppression.
+      if (!pitchClass) return;
+      if (pitchClass === suppressedClassRef.current) return;
       suppressedClassRef.current = null;
     }
 
-    if (!pitchClass || !noteFullName) {
-      // Silence: pause the timer but keep the candidate note.
-      // Brief silent frames in the decaying resonance must not restart the
-      // 350 ms window for the NEXT note the player is sustaining.
-      return;
-    }
+    if (!pitchClass || !noteFullName) return;
 
     if (pitchClass !== lastNoteRef.current) {
-      // New pitch detected — start a fresh candidate window.
       lastNoteRef.current = pitchClass;
       noteStartRef.current = now;
       candidateFullNameRef.current = noteFullName;
       return;
     }
 
-    // Same pitch continuing — check hold time.
     const elapsed = now - (noteStartRef.current ?? now);
     if (elapsed < NOTE_HOLD_MS) return;
 
@@ -148,7 +131,6 @@ const ScaleIdentifierPage: React.FC = () => {
 
     const registeredName = candidateFullNameRef.current ?? noteFullName;
 
-    // Suppress this pitch class until a different one appears.
     suppressedClassRef.current = pitchClass;
     lastNoteRef.current = null;
     noteStartRef.current = null;
@@ -159,7 +141,36 @@ const ScaleIdentifierPage: React.FC = () => {
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
 
-  const { detectedNoteNames, matches } = state;
+  const { detectedNoteNames, matches, dingPitchClass } = state;
+
+  // Partition matches: ding-matched at top, others below
+  const dingMatches = matches.filter(m => m.isDingMatch);
+  const otherMatches = matches.filter(m => !m.isDingMatch);
+
+  const renderCard = (m: ScaleMatch) => (
+    <div
+      key={m.scale.theoreticalName}
+      className={[
+        'identifier-match-card',
+        m.isExactMatch ? 'exact-match' : '',
+        m.isDingMatch ? 'ding-match' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      <div className="match-handpan-name">{m.scale.handpanName}</div>
+      <div className="match-theoretical-name">{m.scale.theoreticalName}</div>
+      <div className="match-notes">
+        {m.scale.notes.filter((n, i, a) => a.indexOf(n) === i).join(' · ')}
+      </div>
+      <div className="match-badges">
+        {m.isDingMatch && (
+          <span className="match-ding-badge">⭐ Best for your Ding</span>
+        )}
+        {m.isExactMatch && (
+          <span className="match-exact-badge">✓ Exact match</span>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="page scale-identifier-page">
@@ -171,13 +182,11 @@ const ScaleIdentifierPage: React.FC = () => {
       </div>
 
       <div className="page-content">
-        {/* Instructions */}
         <div className="identifier-instructions">
-          <p>Strike every tone field and the ding, one at a time.</p>
+          <p>Start with the <strong>Ding</strong> (lowest / centre note), then strike each tone field.</p>
           <p>Let each note ring clearly before striking the next one.</p>
         </div>
 
-        {/* Microphone control */}
         <div className="mic-controls">
           <button
             className={`btn ${isListening ? 'btn-danger' : 'btn-primary'}`}
@@ -189,7 +198,6 @@ const ScaleIdentifierPage: React.FC = () => {
 
         {error && <div className="error-banner">{error}</div>}
 
-        {/* Live detection indicator */}
         {isListening && (
           <div className="identifier-live">
             {result.noteFullName ? (
@@ -200,43 +208,50 @@ const ScaleIdentifierPage: React.FC = () => {
           </div>
         )}
 
-        {/* Detected notes */}
         {detectedNoteNames.length > 0 && (
           <div className="identifier-detected-notes">
-            <p className="identifier-section-label">Notes Detected ({detectedNoteNames.length})</p>
+            <p className="identifier-section-label">
+              Notes Detected ({detectedNoteNames.length})
+              {dingPitchClass !== null && (
+                <span className="identifier-ding-hint"> · Ding: {detectedNoteNames[0]}</span>
+              )}
+            </p>
             <div className="identifier-note-chips">
-              {detectedNoteNames.map(name => (
-                <span key={name} className="identifier-chip">{name}</span>
+              {detectedNoteNames.map((name, i) => (
+                <span
+                  key={`${name}-${i}`}
+                  className={`identifier-chip${i === 0 ? ' ding-chip' : ''}`}
+                >
+                  {name}
+                </span>
               ))}
             </div>
           </div>
         )}
 
-        {/* Scale matches */}
         {matches.length > 0 && (
           <div className="identifier-results">
-            <p className="identifier-section-label">Matching Scales</p>
-            <div className="identifier-matches">
-              {matches.slice(0, 5).map(m => (
-                <div
-                  key={m.scale.theoreticalName}
-                  className={`identifier-match-card ${m.isExactMatch ? 'exact-match' : ''}`}
-                >
-                  <div className="match-handpan-name">{m.scale.handpanName}</div>
-                  <div className="match-theoretical-name">{m.scale.theoreticalName}</div>
-                  <div className="match-notes">
-                    {m.scale.notes.filter((n, i, a) => a.indexOf(n) === i).join(' · ')}
-                  </div>
-                  {m.isExactMatch && (
-                    <span className="match-exact-badge">✓ Exact match</span>
-                  )}
+            {dingMatches.length > 0 && (
+              <>
+                <p className="identifier-section-label">Best Matches (Ding = {detectedNoteNames[0]})</p>
+                <div className="identifier-matches">
+                  {dingMatches.slice(0, 5).map(renderCard)}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
+            {otherMatches.length > 0 && (
+              <>
+                <p className="identifier-section-label" style={{ marginTop: dingMatches.length > 0 ? '16px' : '0' }}>
+                  {dingMatches.length > 0 ? 'Other Matching Scales' : 'Matching Scales'}
+                </p>
+                <div className="identifier-matches">
+                  {otherMatches.slice(0, 5).map(renderCard)}
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* Hint when no match found yet */}
         {state.detectedPcs.length > 0 && matches.length === 0 && (
           <div className="identifier-no-match">
             <p>No matching scale found yet — keep playing more notes!</p>

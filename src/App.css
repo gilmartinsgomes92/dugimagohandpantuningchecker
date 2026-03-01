@@ -1342,9 +1342,6 @@
 }
 
 .match-exact-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
   background: #003322;
   color: #00ff88;
   font-size: 0.7rem;
@@ -1359,4 +1356,48 @@
   color: #666;
   font-size: 0.9rem;
   font-style: italic;
+}
+
+/* Ding chip — first registered note highlighted as the ding/root */
+.identifier-chip.ding-chip {
+  background: #1a1a00;
+  border-color: #ffcc00;
+  color: #ffcc00;
+}
+
+/* Ding-match card — scale whose root matches the detected ding */
+.identifier-match-card.ding-match {
+  border-color: #b8860b;
+  background: #1a1500;
+}
+
+.identifier-match-card.ding-match.exact-match {
+  border-color: #ffd700;
+  background: #1f1a00;
+}
+
+.match-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.match-ding-badge {
+  background: #2a2000;
+  color: #ffd700;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  border: 1px solid #7a6000;
+}
+
+/* Ding hint inline label */
+.identifier-ding-hint {
+  color: #ffcc00;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
 }

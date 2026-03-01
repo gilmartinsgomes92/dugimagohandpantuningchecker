@@ -3,14 +3,22 @@
  * Matches a set of detected pitch classes against the handpan scale database
  * and returns all scales that are consistent with the detected notes.
  *
- * Handles:
+ * Features:
  *  - Enharmonic equivalents (C#/Db both map to pitch class 1)
- *  - Octave duplications (same note played in different octaves)
+ *  - Octave de-duplication (same note in different octaves = one pitch class)
  *  - Partial matches when fewer notes than a full scale have been detected
+ *  - Ding-based "best match" flag: when the first/lowest detected note matches
+ *    a scale's root, that scale is likely the correct key
  */
 
 import { HANDPAN_SCALES_DB } from '../data/handpanScales';
 import type { HandpanScale } from '../data/handpanScales';
+
+/** Pitch class map shared by identifyScales and noteToPitchClass */
+const PC_MAP: Record<string, number> = {
+  C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5,
+  'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
+};
 
 export interface ScaleMatch {
   scale: HandpanScale;
@@ -22,17 +30,31 @@ export interface ScaleMatch {
   isFullyContained: boolean;
   /** True when the detected set exactly equals the scale's pitch-class set */
   isExactMatch: boolean;
+  /**
+   * True when the scale's root pitch class matches the ding (first/lowest
+   * detected note). Scales with this flag are the most likely candidates
+   * for the handpan's actual key.
+   */
+  isDingMatch: boolean;
 }
 
 /**
- * Given a set of detected pitch class numbers (0–11),
- * returns all scales from the database that contain every detected pitch class.
- * Results are sorted: exact matches first, then by matchedCount descending.
+ * Given a set of detected pitch class numbers (0–11) and an optional ding
+ * pitch class, returns all scales from the database that contain every
+ * detected pitch class.
+ *
+ * Results are sorted:
+ *   1. Exact match + ding match
+ *   2. Exact match
+ *   3. Fully contained + ding match (most notes matched first)
+ *   4. Fully contained (most notes matched first)
  */
-export function identifyScales(detectedPitchClasses: number[]): ScaleMatch[] {
+export function identifyScales(
+  detectedPitchClasses: number[],
+  dingPitchClass?: number,
+): ScaleMatch[] {
   if (detectedPitchClasses.length === 0) return [];
 
-  // Deduplicate detected pitch classes
   const detectedSet = new Set(detectedPitchClasses);
 
   const results: ScaleMatch[] = [];
@@ -48,22 +70,27 @@ export function identifyScales(detectedPitchClasses: number[]): ScaleMatch[] {
     const isFullyContained = matchedCount === detectedSet.size;
     const isExactMatch = isFullyContained && detectedSet.size === scalePcSet.size;
 
-    // Only include scales where all detected notes are present in the scale
-    if (isFullyContained) {
-      results.push({
-        scale,
-        matchedCount,
-        scaleSize: scalePcSet.size,
-        isFullyContained,
-        isExactMatch,
-      });
-    }
+    if (!isFullyContained) continue;
+
+    const isDingMatch =
+      dingPitchClass !== undefined &&
+      (PC_MAP[scale.root] ?? -1) === dingPitchClass;
+
+    results.push({
+      scale,
+      matchedCount,
+      scaleSize: scalePcSet.size,
+      isFullyContained,
+      isExactMatch,
+      isDingMatch,
+    });
   }
 
-  // Sort: exact matches first, then partial matches with more matched notes first
   results.sort((a, b) => {
-    if (a.isExactMatch !== b.isExactMatch) return a.isExactMatch ? -1 : 1;
-    return b.matchedCount - a.matchedCount;
+    // Exact + ding > exact > (fullContained + ding) > fullContained
+    const scoreA = (a.isExactMatch ? 4 : 0) + (a.isDingMatch ? 2 : 0) + (a.matchedCount / 20);
+    const scoreB = (b.isExactMatch ? 4 : 0) + (b.isDingMatch ? 2 : 0) + (b.matchedCount / 20);
+    return scoreB - scoreA;
   });
 
   return results;
@@ -74,9 +101,5 @@ export function identifyScales(detectedPitchClasses: number[]): ScaleMatch[] {
  * Returns null if the name is unrecognised.
  */
 export function noteToPitchClass(noteName: string): number | null {
-  const map: Record<string, number> = {
-    C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5,
-    'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11,
-  };
-  return map[noteName] ?? null;
+  return PC_MAP[noteName] ?? null;
 }

@@ -23,11 +23,13 @@ import { frequencyToNote } from '../utils/musicUtils';
 
 /**
  * Number of consecutive audio frames the same pitch class must appear before
- * it is reported as the detected note. At ~60 fps this equals ~80 ms — long
- * enough to filter out transient harmonics (1–3 frames) while being short
- * enough that the user barely notices the latency.
+ * it is reported as the detected note. At ~60 fps this equals ~50 ms — long
+ * enough to filter out transient harmonics (1–2 frames) while being short
+ * enough that the user barely notices the latency. Lowering from 5 to 3
+ * reduces the minimum detection window and helps notes register on the first
+ * play rather than requiring multiple attempts.
  */
-const STABILITY_FRAMES = 5;
+const STABILITY_FRAMES = 3;
 
 interface ScaleIdentificationResult {
   /** Detected pitch-class name, e.g. "C#", or null when silent/unstable */
