@@ -7,20 +7,20 @@ import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../
 import type { TuningResult } from '../contexts/AppContext';
 
 // Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 0.5 seconds; actual time depends on
+// At ~60fps this is approximately 1.5 seconds; actual time depends on
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 30;
+const STABLE_FRAMES_REQUIRED = 90;
 
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
 // Number of stable frames to skip before collecting frequencies for the median.
 // The initial transient of a handpan note (attack phase) has the brightest harmonics
-// and the most noise in the fundamental estimate. Skipping the first ~15 frames
-// (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
+// and the most noise in the fundamental estimate. Skipping the first ~60 frames
+// (~1 s at 60 fps) avoids this region and collects only from the cleaner sustain
 // phase — mirroring the behaviour of professional strobe tuners like Linotune, which
 // begin reading approximately 1 second after the note is struck.
-const ATTACK_SKIP_FRAMES = 15;
+const ATTACK_SKIP_FRAMES = 60;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -212,11 +212,17 @@ const QuickTuningPage: React.FC = () => {
   // rather than exact note name or frequency makes the counter robust against the octave
   // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
   useEffect(() => {
-    // Reset and hold at 0% when not listening, no signal, or during the post-registration
-    // cooldown — the cooldown guard prevents the still-ringing note from rebuilding the
-    // ring to a confusing partial percentage before the user plays the next note.
-    if (!isListening || result.frequency === null || result.noteName === null || justRegistered.current) {
+    // Hard reset only when microphone is stopped or in the post-registration cooldown.
+    if (!isListening || justRegistered.current) {
       resetStabilityState();
+      return;
+    }
+
+    // No pitch detected this frame (low RMS or failed YIN) — skip without touching the
+    // counter. A brief quiet patch during a note's natural decay must NOT erase accumulated
+    // stability; resetting here would prevent the meter from ever reaching 100% because
+    // handpan notes regularly dip below the RMS gate during their sustain phase.
+    if (result.frequency === null || result.noteName === null) {
       return;
     }
 
