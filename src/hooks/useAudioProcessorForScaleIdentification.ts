@@ -68,6 +68,17 @@ export const useAudioProcessorForScaleIdentification = () => {
    * the onset frame is much more likely to read F4 correctly.
    */
   const stableOnsetFullNameRef = useRef<string | null>(null);
+  /**
+   * Count of consecutive frames that did NOT match the current stable candidate.
+   * A single blip frame (mismatchCount = 1) is tolerated without resetting the
+   * stability counter — this allows notes like F4 whose YIN detection occasionally
+   * drops for one frame to still accumulate to STABILITY_FRAMES.  Only when
+   * mismatchCount reaches 2 (two consecutive mismatches) do we start a fresh run.
+   * D3's harmonic A4 still cannot trigger falsely: it appears for 3–4 consecutive
+   * frames, so it requires its own 2-frame startup before counting, needing 7+
+   * frames total — far more than D3's ring sustains.
+   */
+  const mismatchCountRef = useRef(0);
 
   const startListening = useCallback(async () => {
     try {
@@ -86,6 +97,7 @@ export const useAudioProcessorForScaleIdentification = () => {
       stabilityCountRef.current = 0;
       stablePitchClassRef.current = null;
       stableOnsetFullNameRef.current = null;
+      mismatchCountRef.current = 0;
 
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -100,50 +112,57 @@ export const useAudioProcessorForScaleIdentification = () => {
         const rms = computeRMS(buf);
 
         if (rms < 0.003) {
-          // Silent frame: reset stability so transient noise never accumulates
+          // Genuine silence: hard reset all stability state
           stabilityCountRef.current = 0;
           stablePitchClassRef.current = null;
           stableOnsetFullNameRef.current = null;
+          mismatchCountRef.current = 0;
           setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
           rafRef.current = requestAnimationFrame(tick);
           return;
         }
 
         const rawFreq = detectPitch(buf, audioCtxRef.current.sampleRate);
-        if (rawFreq === null) {
-          stabilityCountRef.current = 0;
-          stablePitchClassRef.current = null;
-          stableOnsetFullNameRef.current = null;
-          setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
-          rafRef.current = requestAnimationFrame(tick);
-          return;
-        }
+        const noteInfo = rawFreq !== null ? frequencyToNote(rawFreq) : null;
+        const currentClass = noteInfo?.name ?? null;
 
-        const noteInfo = frequencyToNote(rawFreq);
-
-        // Accumulate consecutive frames with the same pitch class.
-        // D3 and D4 share pitch class "D" so octave ambiguity is tolerated;
-        // the fullName from the FIRST frame of the run is used as the reported
-        // note name — at note onset the fundamental is loudest, so the first
-        // frame is least likely to be a harmonic alias (e.g. F5 instead of F4).
-        if (noteInfo.name === stablePitchClassRef.current) {
+        if (stablePitchClassRef.current === null) {
+          // No candidate yet — start a new run on the first detected pitch class
+          if (currentClass !== null) {
+            stablePitchClassRef.current = currentClass;
+            stabilityCountRef.current = 1;
+            stableOnsetFullNameRef.current = noteInfo!.fullName;
+          }
+          mismatchCountRef.current = 0;
+        } else if (currentClass === stablePitchClassRef.current) {
+          // Frame matches the current candidate: accumulate
           stabilityCountRef.current++;
+          mismatchCountRef.current = 0;
         } else {
-          stablePitchClassRef.current = noteInfo.name;
-          stabilityCountRef.current = 1;
-          stableOnsetFullNameRef.current = noteInfo.fullName;
+          // Frame does NOT match (different class or YIN failure).
+          // Allow one blip frame without resetting; only two consecutive
+          // mismatches start a fresh run.
+          mismatchCountRef.current++;
+          if (mismatchCountRef.current >= 2) {
+            // Confirmed change — start fresh with whatever is detected now
+            stablePitchClassRef.current = currentClass;
+            stabilityCountRef.current = currentClass !== null ? 1 : 0;
+            stableOnsetFullNameRef.current = noteInfo?.fullName ?? null;
+            mismatchCountRef.current = 0;
+          }
+          // Single blip: stability count is preserved; report null this frame
         }
 
-        if (stabilityCountRef.current >= STABILITY_FRAMES) {
+        if (stablePitchClassRef.current !== null && stabilityCountRef.current >= STABILITY_FRAMES) {
           setResult({
-            pitchClass: noteInfo.name,
+            pitchClass: stablePitchClassRef.current,
             noteFullName: stableOnsetFullNameRef.current!,
             frequency: rawFreq,
             rms,
           });
         } else {
-          // Still building stability — report silence so the page timer
-          // doesn't start prematurely; always include rms for cooldown escape.
+          // Still building stability — report null so the page timer doesn't
+          // start prematurely; always include rms for cooldown-escape logic.
           setResult({ pitchClass: null, noteFullName: null, frequency: null, rms });
         }
 
