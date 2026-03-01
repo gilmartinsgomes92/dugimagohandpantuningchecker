@@ -59,7 +59,7 @@ export function findHarmonicFrequency(
   }
 
   // Reject if the peak is below noise floor (-60 dB is typical silence)
-  if (peakMag < -65) return null;
+  if (peakMag < -70) return null;
 
   // Parabolic interpolation for sub-bin accuracy
   const prevMag = freqData[peakBin - 1];
@@ -148,20 +148,42 @@ export function validateFundamental(
   // Forward harmonic check: confirm the candidate frequency has at least one tuned overtone
   // in the FFT. Every genuine handpan fundamental has its octave (2f) and/or compound fifth
   // (3f) purposely tuned by the maker and clearly audible in the spectrum. If neither partial
-  // is within 24 dB of the candidate, this detection has no harmonic family evidence — it is
-  // a false pick caused by sympathetic resonance, room noise, or a YIN lag-domain artefact
-  // (e.g. YIN locking onto C#4 when F4 is playing, because C#4's overtones at 554 Hz and
-  // 831 Hz are absent while F4's octave at 698 Hz is clearly present). Rejecting these
-  // orphaned detections prevents them from accumulating stability-counter frames and being
-  // registered as the wrong note.
-  const FORWARD_CONFIRM_DB = 24;
+  // is within FORWARD_CONFIRM_DB of the candidate, this detection has no harmonic family
+  // evidence — it is a false pick caused by sympathetic resonance, room noise, or a YIN
+  // lag-domain artefact (e.g. YIN locking onto C#4 when F4 is playing, because C#4's
+  // overtones at 554 Hz and 831 Hz are absent while F4's octave at 698 Hz is clearly
+  // present). Rejecting these orphaned detections prevents them from accumulating
+  // stability-counter frames and being registered as the wrong note.
+  //
+  // The threshold is frequency-dependent: lower notes get a more lenient window because
+  // their harmonics are naturally weaker on many handpans (especially smaller or newer
+  // instruments), while higher notes keep the strict 24 dB window.
+  const LOW_FREQ_THRESHOLD_HZ = 200;   // ≤ this freq uses the lenient threshold (e.g. D3 at ~147 Hz)
+  const HIGH_FREQ_THRESHOLD_HZ = 400;  // ≥ this freq uses the strict threshold
+  const LOW_FREQ_CONFIRM_DB = 30;      // lenient: low notes have weaker harmonics
+  const HIGH_FREQ_CONFIRM_DB = 24;     // strict: higher notes have clearly audible partials
+  const CONFIRM_DB_DELTA = LOW_FREQ_CONFIRM_DB - HIGH_FREQ_CONFIRM_DB; // 6 dB range
+  const forwardConfirmDb =
+    candidate <= LOW_FREQ_THRESHOLD_HZ
+      ? LOW_FREQ_CONFIRM_DB
+      : candidate >= HIGH_FREQ_THRESHOLD_HZ
+        ? HIGH_FREQ_CONFIRM_DB
+        : LOW_FREQ_CONFIRM_DB - ((candidate - LOW_FREQ_THRESHOLD_HZ) / (HIGH_FREQ_THRESHOLD_HZ - LOW_FREQ_THRESHOLD_HZ)) * CONFIRM_DB_DELTA;
   const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
   const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
   const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
-  if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
-    // No harmonic family confirmed — reject this detection
-    return null;
+  if (octaveMag < candidateMag - forwardConfirmDb && cfifthMag < candidateMag - forwardConfirmDb) {
+    // No harmonic family confirmed — allow if the fundamental itself is sufficiently strong.
+    // This catches low notes like D3 where harmonics may fall below the noise floor on some
+    // instruments, but the fundamental is clearly audible. -40 dB corresponds to a clearly
+    // played note on typical microphone/line input; it is well above the -70 dB noise floor
+    // and above typical ambient room noise (~-55 dB), so this fallback does not admit
+    // environmental noise as a valid detection.
+    const STRONG_FUNDAMENTAL_DB = -40;
+    if (candidateMag < STRONG_FUNDAMENTAL_DB) {
+      return null;
+    }
   }
 
   return candidate;
