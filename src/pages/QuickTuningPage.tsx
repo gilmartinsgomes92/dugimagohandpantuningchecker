@@ -11,6 +11,13 @@ import type { TuningResult } from '../contexts/AppContext';
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
 const STABLE_FRAMES_REQUIRED = 90;
 
+// Number of consecutive frames of a *different* pitch class required before
+// the stability counter is reset. Brief stray detections (sympathetic resonance,
+// room noise, octave slip) typically last only 1–3 frames; a genuine new note
+// produces a sustained run. Setting this to ~8 frames (~130 ms at 60 fps) means
+// a short transient between strikes does NOT wipe the accumulated progress.
+const COMPETING_RESET_THRESHOLD = 8;
+
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
@@ -49,6 +56,9 @@ const QuickTuningPage: React.FC = () => {
   const noteIndex = state.currentNoteIndex;
 
   const stableFrames = useRef(0);
+  // Counts consecutive frames of a pitch class that differs from the current anchor.
+  // Only resets the stability counter once this reaches COMPETING_RESET_THRESHOLD.
+  const competingFrames = useRef(0);
   const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   // Independently collected octave and compound-fifth partial frequencies for each
@@ -68,6 +78,7 @@ const QuickTuningPage: React.FC = () => {
 
   const resetStabilityState = useCallback(() => {
     stableFrames.current = 0;
+    competingFrames.current = 0;
     lastPitchClass.current = null;
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
@@ -241,6 +252,8 @@ const QuickTuningPage: React.FC = () => {
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
+      // This frame matches the current anchor — reset the competing-pitch counter.
+      competingFrames.current = 0;
       // Pitch continuity check: skip frames that jump > 100 cents within a stable window.
       // This prevents octave jumps (e.g. A3 ↔ A2, a 1200-cent gap) from either
       // incrementing the counter or polluting the frequency collection with a wrong octave.
@@ -269,13 +282,32 @@ const QuickTuningPage: React.FC = () => {
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
-    } else {
+    } else if (anchor === null) {
+      // No anchor yet — first detected frame; initialise the stability window.
       lastPitchClass.current = pitchClass;
       stableFrames.current = 1;
       stableFrequencies.current = [];
       stableOctaveFreqs.current = [];
       stableCFifthFreqs.current = [];
       lastValidFreq.current = result.frequency;
+      competingFrames.current = 0;
+    } else {
+      // Different pitch class from the current anchor.
+      // Don't reset immediately — brief stray detections (sympathetic resonance,
+      // room noise, a single octave-slip frame) typically last only 1–3 frames.
+      // Only switch the anchor and reset the counter after COMPETING_RESET_THRESHOLD
+      // consecutive frames of the new pitch class, indicating a genuine note change.
+      competingFrames.current += 1;
+      if (competingFrames.current >= COMPETING_RESET_THRESHOLD) {
+        lastPitchClass.current = pitchClass;
+        stableFrames.current = 1;
+        stableFrequencies.current = [];
+        stableOctaveFreqs.current = [];
+        stableCFifthFreqs.current = [];
+        lastValidFreq.current = result.frequency;
+        competingFrames.current = 0;
+      }
+      // Below the threshold: skip silently — the accumulated progress is preserved.
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 
@@ -306,7 +338,11 @@ const QuickTuningPage: React.FC = () => {
         {result.frequency !== null && (
           <div className="note-prompt-freq">{result.frequency.toFixed(2)} Hz</div>
         )}
-        <p className="note-instruction">Hold the note ringing — it will be auto-registered</p>
+        <p className="note-instruction">
+          {stabilityPct > 0 && stabilityPct < 100
+            ? '🎵 Keep striking the note — building your reading…'
+            : 'Hold the note ringing — it will be auto-registered'}
+        </p>
       </div>
 
       <div className="tuning-display">
