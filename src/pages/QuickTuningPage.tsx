@@ -29,6 +29,19 @@ const REGISTRATION_COOLDOWN_MS = 1500;
 // begin reading approximately 1 second after the note is struck.
 const ATTACK_SKIP_FRAMES = 60;
 
+// dBFS thresholds for ambient-noise warnings (measured when no note is playing).
+// 20 × log₁₀(rms) where rms=0.005 (noise gate) ≈ −46 dBFS.
+// Values typical for phone/laptop mics in quiet vs. noisy rooms.
+const NOISE_OK_DB = -50;      // below this → 🟢 quiet (ideal)
+const NOISE_WARN_DB = -35;    // -50 to -35 → 🟡 some noise; above -35 → 🔴 noisy
+
+function getNoiseBadge(db: number, notePlaying: boolean): { label: string; cls: string } | null {
+  if (notePlaying) return null;
+  if (db < NOISE_OK_DB) return { label: `🟢 ${db.toFixed(0)} dBFS — quiet`, cls: 'noise-ok' };
+  if (db < NOISE_WARN_DB) return { label: `🟡 ${db.toFixed(0)} dBFS — some noise`, cls: 'noise-warn' };
+  return { label: `🔴 ${db.toFixed(0)} dBFS — noisy, may affect accuracy`, cls: 'noise-loud' };
+}
+
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
   if (absCents <= 15) return 'slightly-out-of-tune';
@@ -317,6 +330,9 @@ const QuickTuningPage: React.FC = () => {
   const stabilityPct = stableFrames.current > 0
     ? Math.min(100, Math.round((stableFrames.current / STABLE_FRAMES_REQUIRED) * 100))
     : 0;
+  const noiseBadge = result.rmsDb !== null
+    ? getNoiseBadge(result.rmsDb, result.frequency !== null)
+    : null;
 
   return (
     <div className="page quick-tuning-page">
@@ -398,6 +414,10 @@ const QuickTuningPage: React.FC = () => {
       </div>
 
       <CentsGauge cents={result.cents} label="Cents deviation" />
+
+      {noiseBadge && (
+        <div className={`noise-badge ${noiseBadge.cls}`}>{noiseBadge.label}</div>
+      )}
 
       {error && <div className="error-banner">{error}</div>}
 

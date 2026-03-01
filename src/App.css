@@ -714,6 +714,22 @@
   font-size: 0.9rem;
 }
 
+.noise-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
+  max-width: 340px;
+  box-sizing: border-box;
+}
+
+.noise-ok   { background: #001a0d; color: #44cc77; border: 1px solid #1a4d2e; }
+.noise-warn { background: #1a1600; color: #ccaa22; border: 1px solid #4d4000; }
+.noise-loud { background: #1a0000; color: #ff4444; border: 1px solid #4d0000; }
+
 .tuning-display {
   display: flex;
   flex-direction: row;

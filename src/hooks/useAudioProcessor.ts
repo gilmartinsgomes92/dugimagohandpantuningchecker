@@ -12,11 +12,14 @@ interface AudioResult {
   compoundFifthFrequency: number | null;
   noteName: string | null;
   cents: number | null;
+  // RMS level in dBFS (0 dBFS = full scale). Always updated, even below the noise gate.
+  // Useful for displaying an ambient noise indicator to the user.
+  rmsDb: number | null;
 }
 
 export const useAudioProcessor = () => {
   const [isListening, setIsListening] = useState(false);
-  const [result, setResult] = useState<AudioResult>({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
+  const [result, setResult] = useState<AudioResult>({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, rmsDb: null });
   const [error, setError] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -54,6 +57,7 @@ export const useAudioProcessor = () => {
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
 
         const rms = computeRMS(buf);
+        const rmsDb = 20 * Math.log10(Math.max(rms, 1e-10)); // floor prevents log10(0) = -Infinity
         if (rms >= 0.005) {
           const rawFreq = detectPitch(buf, audioCtxRef.current.sampleRate);
           if (rawFreq !== null) {
@@ -89,13 +93,14 @@ export const useAudioProcessor = () => {
                 compoundFifthFrequency: compFifthFreq,
                 noteName: noteInfo.fullName,
                 cents: noteInfo.cents,
+                rmsDb,
               });
             }
           }
         } else {
           // Signal below noise floor — clear the result so the display shows "listening"
           // rather than the last detected note, giving a clean visual cue to play next note.
-          setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
+          setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, rmsDb });
         }
 
         rafRef.current = requestAnimationFrame(tick);
@@ -115,7 +120,7 @@ export const useAudioProcessor = () => {
     audioCtxRef.current = null;
     analyserRef.current = null;
     setIsListening(false);
-    setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
+    setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, rmsDb: null });
   }, []);
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
