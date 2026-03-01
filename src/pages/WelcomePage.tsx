@@ -30,10 +30,9 @@ const WelcomePage: React.FC = () => {
 
           <button
             className="btn btn-secondary btn-large"
-            disabled
+            onClick={() => navigate('/tuner')}
           >
-            🔒 Comprehensive Tuning Check
-            <span className="btn-coming-soon">Coming Soon</span>
+            🎵 Comprehensive Tuner
           </button>
         </div>
 

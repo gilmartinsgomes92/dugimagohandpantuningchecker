@@ -191,6 +191,21 @@
   letter-spacing: 0.08em;
 }
 
+/* ---- Horizontal Strobe Tuner ---- */
+.h-strobe-container {
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #1f1f1f;
+}
+
+.h-strobe-canvas {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
 /* ---- Status bar ---- */
 .status-bar {
   display: flex;
@@ -1231,3 +1246,323 @@
 .verdict-good { color: #00ff88; }
 .verdict-warn { color: #ffaa00; }
 .verdict-bad { color: #ff4444; }
+
+/* ============================================================
+   TunerPage / TunerInterface
+   ============================================================ */
+.tuner-page .page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.tuner-page-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.tuner-page-name-label {
+  font-size: 0.85rem;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.tuner-page-name-input {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  flex: 1;
+  min-width: 140px;
+}
+
+.tuner-interface {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.tuner-interface-title {
+  font-size: 1.6rem;
+  color: #fff;
+  margin: 0;
+}
+
+.tuner-interface-subtitle {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 4px 0 0;
+}
+
+.tuner-error {
+  background: #2a0000;
+  border: 1px solid #ff4444;
+  color: #ff8888;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+}
+
+.tuner-status {
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.tuner-status-recording {
+  color: #ff4444;
+  font-weight: 600;
+}
+
+.tuner-stop-btn,
+.tuner-save-btn {
+  align-self: flex-start;
+}
+
+/* NoteInput */
+.note-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-input-label {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.note-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.note-input-select {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  padding: 8px 12px;
+  min-width: 120px;
+}
+
+.note-input-confirm {
+  white-space: nowrap;
+}
+
+/* FrequencyVisualizer */
+.frequency-visualizer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.frequency-visualizer-canvas {
+  border-radius: 8px;
+  display: block;
+  max-width: 100%;
+}
+
+.frequency-visualizer-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 0.75rem;
+}
+
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-fundamental { color: #00ff88; }
+.legend-octave      { color: #00aaff; }
+.legend-fifth       { color: #ff8800; }
+
+/* TuningResults */
+.tuning-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tuning-results-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.tuning-results-note {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.tuning-results-cents-large {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.tuning-results-idle {
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.tuning-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tuning-results-table th {
+  text-align: left;
+  padding: 8px 12px;
+  color: #666;
+  font-weight: 600;
+  border-bottom: 1px solid #222;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tuning-results-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #181818;
+}
+
+.tuning-results-label {
+  color: #ccc;
+  font-weight: 500;
+}
+
+.tuning-results-freq {
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+.tuning-results-cents {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Instructions */
+.tuner-instructions {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 0.85rem;
+}
+
+.tuner-instructions h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: #ccc;
+}
+
+.tuner-instructions ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #888;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   HistoryPage
+   ============================================================ */
+.history-page .page-title {
+  margin: 0;
+  flex: 1;
+}
+
+.history-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 0;
+  color: #555;
+}
+
+.history-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.history-session-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.history-session-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #151515;
+  border-bottom: 1px solid #222;
+}
+
+.history-session-date {
+  color: #aaa;
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.history-session-count {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.history-delete-btn,
+.history-clear-btn {
+  color: #666;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.history-table th {
+  text-align: left;
+  padding: 8px 12px;
+  color: #555;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.history-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #181818;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-note {
+  color: #fff;
+  font-weight: 700;
+}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { useAudioProcessor } from '../hooks/useAudioProcessor';
 import { CentsGauge } from '../components/CentsGauge';
+import { HStrobeTuner } from '../components/HStrobeTuner';
 import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../utils/musicUtils';
 import type { TuningResult } from '../contexts/AppContext';
 
@@ -342,6 +343,7 @@ const QuickTuningPage: React.FC = () => {
         </div>
       </div>
 
+      <HStrobeTuner cents={result.cents} noteName={result.noteName} />
       <CentsGauge cents={result.cents} label="Cents deviation" />
 
       {error && <div className="error-banner">{error}</div>}
