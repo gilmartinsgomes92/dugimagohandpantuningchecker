@@ -11,6 +11,8 @@
  */
 
 const SEARCH_CENTS = 80; // Search window in cents around expected harmonic
+const NOISE_FLOOR_DB = -65; // Peaks below this dB level are treated as silence
+const FORWARD_CONFIRM_DB = 24; // Harmonic must be within this many dB of candidate
 
 /**
  * Converts cents above/below a reference frequency to the maximum frequency offset.
@@ -59,7 +61,7 @@ export function findHarmonicFrequency(
   }
 
   // Reject if the peak is below noise floor (-60 dB is typical silence)
-  if (peakMag < -65) return null;
+  if (peakMag < NOISE_FLOOR_DB) return null;
 
   // Parabolic interpolation for sub-bin accuracy
   const prevMag = freqData[peakBin - 1];
@@ -74,6 +76,59 @@ export function findHarmonicFrequency(
   }
 
   return (peakBin + delta) * binHz;
+}
+
+/**
+ * Scans the FFT spectrum for the strongest peak in the handpan fundamental range
+ * (55–1200 Hz) whose octave (2×) is also confirmed present.
+ *
+ * Used as a fallback when the primary YIN-based detection is rejected by the forward
+ * harmonic check (e.g. when YIN locks onto a false harmonic alias whose overtones are
+ * absent from the spectrum, such as C#4 when F4 is playing).
+ *
+ * @returns Confirmed fundamental frequency in Hz, or null if none found.
+ */
+function findConfirmedFundamental(
+  freqData: Float32Array,
+  sampleRate: number,
+  fftSize: number
+): number | null {
+  const binHz = sampleRate / fftSize;
+  const numBins = freqData.length;
+  const minBin = Math.max(2, Math.floor(55 / binHz));
+  const maxBin = Math.min(numBins - 2, Math.ceil(1200 / binHz));
+
+  let bestFreq: number | null = null;
+  let bestMag = -Infinity;
+
+  for (let b = minBin; b <= maxBin; b++) {
+    // Only local maxima above the noise floor
+    if (freqData[b] < NOISE_FLOOR_DB) continue;
+    if (freqData[b] < freqData[b - 1] || freqData[b] < freqData[b + 1]) continue;
+
+    // Sub-bin refinement via parabolic interpolation
+    const prev = freqData[b - 1];
+    const next = freqData[b + 1];
+    const denom = 2.0 * freqData[b] - prev - next;
+    let delta = 0;
+    if (Math.abs(denom) > 1e-6) {
+      delta = 0.5 * (next - prev) / denom;
+      delta = Math.max(-0.5, Math.min(0.5, delta));
+    }
+    const freq = (b + delta) * binHz;
+
+    // Require a confirmed octave (2×) to rule out isolated noise peaks
+    const octPeak = findHarmonicFrequency(freqData, freq * 2, sampleRate, fftSize);
+    if (octPeak === null) continue;
+
+    // Take the peak with the highest magnitude that passes the octave check
+    if (freqData[b] > bestMag) {
+      bestMag = freqData[b];
+      bestFreq = freq;
+    }
+  }
+
+  return bestFreq;
 }
 
 /**
@@ -107,14 +162,17 @@ export function validateFundamental(
 
   const currentMag = getMagnitudeAt(detectedFreq);
 
-  // Check sub-octave (f/2) — the most common harmonic confusion
+  // Check sub-octave (f/2) — the most common harmonic confusion.
+  // The threshold is kept at 3 dB (rather than a wider window) to avoid falsely
+  // redirecting to a sympathetically-resonating lower note. When YIN makes a genuine
+  // octave error (detects 2f instead of f), the true fundamental is typically louder
+  // than or very close in level to the detected overtone, so 3 dB is sufficient.
   const subOctave = detectedFreq / 2;
   if (subOctave >= 55) {
     const subOctavePeak = findHarmonicFrequency(freqData, subOctave, sampleRate, fftSize);
     if (subOctavePeak !== null) {
       const subMag = getMagnitudeAt(subOctavePeak);
-      // If sub-octave is within 6 dB of detected frequency, prefer the lower fundamental
-      if (subMag >= currentMag - 6) {
+      if (subMag >= currentMag - 3) {
         return subOctavePeak;
       }
     }
@@ -122,15 +180,13 @@ export function validateFundamental(
 
   // Check sub-third (f/3) — YIN can lock onto the 3rd harmonic on complex tones
   // (e.g. playing D3 at 147 Hz but YIN detects its 3rd harmonic A4 at 440 Hz).
+  // Same 3 dB threshold as the sub-octave check for consistency.
   const subThird = detectedFreq / 3;
   if (subThird >= 55) {
     const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
     if (subThirdPeak !== null) {
       const subThirdMag = getMagnitudeAt(subThirdPeak);
-      // If the sub-third is within 6 dB of the detected frequency, prefer it as the fundamental.
-      // Using the same 6 dB window as the f/2 check keeps the bar high enough to reject
-      // false positives from low-frequency environmental noise near f/3.
-      if (subThirdMag >= currentMag - 6) {
+      if (subThirdMag >= currentMag - 3) {
         return subThirdPeak;
       }
     }
@@ -151,17 +207,18 @@ export function validateFundamental(
   // is within 24 dB of the candidate, this detection has no harmonic family evidence — it is
   // a false pick caused by sympathetic resonance, room noise, or a YIN lag-domain artefact
   // (e.g. YIN locking onto C#4 when F4 is playing, because C#4's overtones at 554 Hz and
-  // 831 Hz are absent while F4's octave at 698 Hz is clearly present). Rejecting these
-  // orphaned detections prevents them from accumulating stability-counter frames and being
-  // registered as the wrong note.
-  const FORWARD_CONFIRM_DB = 24;
+  // 831 Hz are absent while F4's octave at 698 Hz is clearly present).
   const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
   const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
   const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
   if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
-    // No harmonic family confirmed — reject this detection
-    return null;
+    // The YIN candidate has no confirmed harmonic family — it is an orphaned detection.
+    // Fall back to a direct FFT scan: find the strongest peak in the handpan fundamental
+    // range (55–1200 Hz) whose octave is confirmed present. This recovers cases where YIN
+    // misidentifies the pitch (e.g. C#4 when F4 is playing) that the forward check
+    // correctly rejects, but without losing the actual note being played.
+    return findConfirmedFundamental(freqData, sampleRate, fftSize);
   }
 
   return candidate;
