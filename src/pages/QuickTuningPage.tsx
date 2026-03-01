@@ -7,9 +7,9 @@ import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../
 import type { TuningResult } from '../contexts/AppContext';
 
 // Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 1.5 seconds; actual time depends on
+// At ~60fps this is approximately 0.8 seconds; actual time depends on
 // the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 90;
+const STABLE_FRAMES_REQUIRED = 50;
 
 // Number of consecutive frames of a *different* pitch class required before
 // the stability counter is reset. Brief stray detections (sympathetic resonance,
@@ -23,24 +23,10 @@ const REGISTRATION_COOLDOWN_MS = 1500;
 
 // Number of stable frames to skip before collecting frequencies for the median.
 // The initial transient of a handpan note (attack phase) has the brightest harmonics
-// and the most noise in the fundamental estimate. Skipping the first ~60 frames
-// (~1 s at 60 fps) avoids this region and collects only from the cleaner sustain
-// phase — mirroring the behaviour of professional strobe tuners like Linotune, which
-// begin reading approximately 1 second after the note is struck.
-const ATTACK_SKIP_FRAMES = 60;
-
-// dBFS thresholds for ambient-noise warnings (measured when no note is playing).
-// 20 × log₁₀(rms) where rms=0.005 (noise gate) ≈ −46 dBFS.
-// Values typical for phone/laptop mics in quiet vs. noisy rooms.
-const NOISE_OK_DB = -50;      // below this → 🟢 quiet (ideal)
-const NOISE_WARN_DB = -35;    // -50 to -35 → 🟡 some noise; above -35 → 🔴 noisy
-
-function getNoiseBadge(db: number, notePlaying: boolean): { label: string; cls: string } | null {
-  if (notePlaying) return null;
-  if (db < NOISE_OK_DB) return { label: `🟢 ${db.toFixed(0)} dBFS — quiet`, cls: 'noise-ok' };
-  if (db < NOISE_WARN_DB) return { label: `🟡 ${db.toFixed(0)} dBFS — some noise`, cls: 'noise-warn' };
-  return { label: `🔴 ${db.toFixed(0)} dBFS — noisy, may affect accuracy`, cls: 'noise-loud' };
-}
+// and the most noise in the fundamental estimate. Skipping the first ~20 frames
+// (~0.3 s at 60 fps) avoids this region and collects only from the cleaner sustain
+// phase — giving a reliable reading within a single strike.
+const ATTACK_SKIP_FRAMES = 20;
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -330,9 +316,6 @@ const QuickTuningPage: React.FC = () => {
   const stabilityPct = stableFrames.current > 0
     ? Math.min(100, Math.round((stableFrames.current / STABLE_FRAMES_REQUIRED) * 100))
     : 0;
-  const noiseBadge = result.rmsDb !== null
-    ? getNoiseBadge(result.rmsDb, result.frequency !== null)
-    : null;
 
   return (
     <div className="page quick-tuning-page">
@@ -355,8 +338,8 @@ const QuickTuningPage: React.FC = () => {
         )}
         <p className={`note-instruction${stabilityPct > 0 && stabilityPct < 100 ? ' note-instruction--active' : ''}`}>
           {stabilityPct > 0 && stabilityPct < 100
-            ? '🎵 Keep striking the note — building your reading…'
-            : 'Hold the note ringing — it will be auto-registered'}
+            ? '🎵 Keep the note ringing — building your reading…'
+            : 'Strike a note — it will be auto-registered'}
         </p>
       </div>
 
@@ -414,10 +397,6 @@ const QuickTuningPage: React.FC = () => {
       </div>
 
       <CentsGauge cents={result.cents} label="Cents deviation" />
-
-      {noiseBadge && (
-        <div className={`noise-badge ${noiseBadge.cls}`}>{noiseBadge.label}</div>
-      )}
 
       {error && <div className="error-banner">{error}</div>}
 
