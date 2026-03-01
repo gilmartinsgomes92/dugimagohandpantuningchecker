@@ -27,13 +27,15 @@ function centsToFrequencyRatio(cents: number): number {
  * @param targetFreq - The expected frequency to search around (Hz)
  * @param sampleRate - Audio sample rate (Hz)
  * @param fftSize - FFT size (number of bins × 2, since freqData.length = fftSize/2)
+ * @param noiseFloor - Minimum dB magnitude to accept as a real peak (default: -65)
  * @returns Detected frequency in Hz, or null if no significant peak found
  */
 export function findHarmonicFrequency(
   freqData: Float32Array,
   targetFreq: number,
   sampleRate: number,
-  fftSize: number
+  fftSize: number,
+  noiseFloor = -65
 ): number | null {
   const binHz = sampleRate / fftSize;
   const numBins = freqData.length; // = fftSize / 2
@@ -59,7 +61,7 @@ export function findHarmonicFrequency(
   }
 
   // Reject if the peak is below noise floor (-60 dB is typical silence)
-  if (peakMag < -70) return null;
+  if (peakMag < noiseFloor) return null;
 
   // Parabolic interpolation for sub-bin accuracy
   const prevMag = freqData[peakBin - 1];
@@ -158,19 +160,26 @@ export function validateFundamental(
   // The threshold is frequency-dependent: lower notes get a more lenient window because
   // their harmonics are naturally weaker on many handpans (especially smaller or newer
   // instruments), while higher notes keep the strict 24 dB window.
+  //
+  // A deeper noise floor (-70 dB) is used when searching for harmonics of low-frequency
+  // notes (≤200 Hz, e.g. D3) because their octave and compound fifth can be genuinely
+  // weak on some instruments. This lower floor is NOT used for the sub-octave/sub-third
+  // redirect checks above, which must stay at -65 dB to avoid false redirects from
+  // environmental low-frequency noise.
   const LOW_FREQ_THRESHOLD_HZ = 200;   // ≤ this freq uses the lenient threshold (e.g. D3 at ~147 Hz)
   const HIGH_FREQ_THRESHOLD_HZ = 400;  // ≥ this freq uses the strict threshold
   const LOW_FREQ_CONFIRM_DB = 30;      // lenient: low notes have weaker harmonics
   const HIGH_FREQ_CONFIRM_DB = 24;     // strict: higher notes have clearly audible partials
   const CONFIRM_DB_DELTA = LOW_FREQ_CONFIRM_DB - HIGH_FREQ_CONFIRM_DB; // 6 dB range
+  const harmonicNoiseFloor = candidate <= LOW_FREQ_THRESHOLD_HZ ? -70 : -65;
   const forwardConfirmDb =
     candidate <= LOW_FREQ_THRESHOLD_HZ
       ? LOW_FREQ_CONFIRM_DB
       : candidate >= HIGH_FREQ_THRESHOLD_HZ
         ? HIGH_FREQ_CONFIRM_DB
         : LOW_FREQ_CONFIRM_DB - ((candidate - LOW_FREQ_THRESHOLD_HZ) / (HIGH_FREQ_THRESHOLD_HZ - LOW_FREQ_THRESHOLD_HZ)) * CONFIRM_DB_DELTA;
-  const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
-  const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
+  const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize, harmonicNoiseFloor);
+  const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize, harmonicNoiseFloor);
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
   const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
   if (octaveMag < candidateMag - forwardConfirmDb && cfifthMag < candidateMag - forwardConfirmDb) {
