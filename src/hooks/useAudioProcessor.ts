@@ -26,47 +26,24 @@ export const useAudioProcessor = () => {
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
   // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
   const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
-  // Cleanup function for the visibilitychange listener added in startListening.
+  // Cleanup function for the visibilitychange listener that resumes the AudioContext
+  // after iOS screen-lock / home-button / tab-switch events suspend it.
   const visibilityCleanupRef = useRef<(() => void) | null>(null);
 
   const startListening = useCallback(async () => {
     try {
       setError(null);
-      // Remove any previously-registered visibility listener before registering a new
-      // one (guards against startListening being called multiple times without a
-      // matching stopListening).
-      visibilityCleanupRef.current?.();
-      visibilityCleanupRef.current = null;
-      // On iOS, getUserMedia({ audio: true }) enables AGC, echo-cancellation and
-      // noise-suppression by default — all optimised for voice calls and harmful
-      // for instrument pitch detection.  We try to disable them via ideal constraints
-      // (which are advisory, not hard requirements, so they never cause an error on
-      // browsers that don't support them).  If the entire getUserMedia call fails for
-      // any other reason we fall back to the plain audio:true form so desktop
-      // configurations with non-standard audio devices still work.
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: { ideal: false },
-            autoGainControl: { ideal: false },
-            noiseSuppression: { ideal: false },
-          },
-          video: false,
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
-      // iOS Safari creates the AudioContext in a suspended state even inside a
-      // user-gesture handler.  Resume it once here so the tick loop starts with a
-      // running context.  We also listen for page-visibility changes so that the
-      // context is automatically resumed when the user returns to the app (e.g.
-      // after switching away and back on their phone).
-      void audioCtx.resume();
+
+      // iOS Safari suspends the AudioContext when the screen locks or the app is
+      // backgrounded.  Re-register a listener on every startListening call so that
+      // returning to the app after any interruption automatically resumes it.
+      // This listener is passive and never fires on desktop during normal use.
+      visibilityCleanupRef.current?.();
       const handleVisibility = () => {
         const ctx = audioCtxRef.current;
         if (!document.hidden && ctx !== null && ctx.state === 'suspended') {
@@ -74,7 +51,6 @@ export const useAudioProcessor = () => {
         }
       };
       document.addEventListener('visibilitychange', handleVisibility);
-      // Store the cleanup function so stopListening can remove the listener.
       visibilityCleanupRef.current = () =>
         document.removeEventListener('visibilitychange', handleVisibility);
 
