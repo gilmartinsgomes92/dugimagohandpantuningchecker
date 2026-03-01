@@ -13,7 +13,7 @@
  * Detects the fundamental frequency of the input buffer using the YIN algorithm.
  * @param buffer - Float32Array of time-domain audio samples
  * @param sampleRate - Audio sample rate in Hz
- * @param threshold - YIN threshold (lower = more accurate but more octave errors, default 0.05)
+ * @param threshold - YIN threshold (lower = more accurate but more octave errors, default 0.10)
  * @returns Fundamental frequency in Hz, or null if not detected
  */
 export function detectPitch(

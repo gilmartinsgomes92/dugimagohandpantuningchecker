@@ -27,13 +27,15 @@ function centsToFrequencyRatio(cents: number): number {
  * @param targetFreq - The expected frequency to search around (Hz)
  * @param sampleRate - Audio sample rate (Hz)
  * @param fftSize - FFT size (number of bins × 2, since freqData.length = fftSize/2)
+ * @param noiseFloor - Minimum dB magnitude to accept as a real peak (default: -65)
  * @returns Detected frequency in Hz, or null if no significant peak found
  */
 export function findHarmonicFrequency(
   freqData: Float32Array,
   targetFreq: number,
   sampleRate: number,
-  fftSize: number
+  fftSize: number,
+  noiseFloor = -65
 ): number | null {
   const binHz = sampleRate / fftSize;
   const numBins = freqData.length; // = fftSize / 2
@@ -59,7 +61,7 @@ export function findHarmonicFrequency(
   }
 
   // Reject if the peak is below noise floor (-60 dB is typical silence)
-  if (peakMag < -65) return null;
+  if (peakMag < noiseFloor) return null;
 
   // Parabolic interpolation for sub-bin accuracy
   const prevMag = freqData[peakBin - 1];
@@ -148,20 +150,59 @@ export function validateFundamental(
   // Forward harmonic check: confirm the candidate frequency has at least one tuned overtone
   // in the FFT. Every genuine handpan fundamental has its octave (2f) and/or compound fifth
   // (3f) purposely tuned by the maker and clearly audible in the spectrum. If neither partial
-  // is within 24 dB of the candidate, this detection has no harmonic family evidence — it is
-  // a false pick caused by sympathetic resonance, room noise, or a YIN lag-domain artefact
-  // (e.g. YIN locking onto C#4 when F4 is playing, because C#4's overtones at 554 Hz and
-  // 831 Hz are absent while F4's octave at 698 Hz is clearly present). Rejecting these
-  // orphaned detections prevents them from accumulating stability-counter frames and being
-  // registered as the wrong note.
-  const FORWARD_CONFIRM_DB = 24;
-  const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
-  const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
+  // is within FORWARD_CONFIRM_DB of the candidate, this detection has no harmonic family
+  // evidence — it is a false pick caused by sympathetic resonance, room noise, or a YIN
+  // lag-domain artefact (e.g. YIN locking onto C#4 when F4 is playing, because C#4's
+  // overtones at 554 Hz and 831 Hz are absent while F4's octave at 698 Hz is clearly
+  // present). Rejecting these orphaned detections prevents them from accumulating
+  // stability-counter frames and being registered as the wrong note.
+  //
+  // The threshold is frequency-dependent: lower notes get a more lenient window because
+  // their harmonics are naturally weaker on many handpans (especially smaller or newer
+  // instruments), while higher notes keep the strict 24 dB window.
+  //
+  // A deeper noise floor (-70 dB) is used when searching for harmonics of very low notes
+  // (≤155 Hz, e.g. D3 at ~147 Hz) because their octave and compound fifth can be genuinely
+  // weak on some instruments. This lower floor is NOT used for the sub-octave/sub-third
+  // redirect checks above, which must stay at -65 dB to avoid false redirects from
+  // environmental low-frequency noise.
+  //
+  // The confirmation threshold is a simple step function: notes ≤155 Hz (D3 range) get a
+  // lenient 30 dB window; all notes above (E3 and higher, including A3 at 220 Hz) keep the
+  // original 24 dB. Using a step rather than interpolation ensures that no note in the normal
+  // playing range receives a threshold stricter than the original 24 dB.
+  const LOW_NOTE_THRESHOLD_HZ = 155;  // D3 (≈147 Hz) and below: use lenient thresholds
+  const harmonicNoiseFloor = candidate <= LOW_NOTE_THRESHOLD_HZ ? -70 : -65;
+  const forwardConfirmDb = candidate <= LOW_NOTE_THRESHOLD_HZ ? 30 : 24;
+  const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize, harmonicNoiseFloor);
+  const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize, harmonicNoiseFloor);
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
   const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
-  if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
-    // No harmonic family confirmed — reject this detection
-    return null;
+  if (octaveMag < candidateMag - forwardConfirmDb && cfifthMag < candidateMag - forwardConfirmDb) {
+    // No harmonic family confirmed.
+    //
+    // For notes above the D3 range (>155 Hz): return null immediately — same as the
+    // original code before any of these changes. The -40 dB fallback must NOT apply
+    // here because:
+    //   • Sympathetic resonances from other handpan notes, attack transients, and YIN
+    //     tau-domain artefacts can all produce peaks that are above -40 dB but have no
+    //     tuned harmonic family. Accepting them would set result.noteName to a spurious
+    //     note (e.g. pitch class "D" when "A" is being played), resetting the stability
+    //     counter and preventing any note above 155 Hz from registering.
+    //   • The original code already handled all these cases correctly for notes > 155 Hz
+    //     by returning null whenever both harmonics were absent. Restoring that behaviour
+    //     here makes A3 (and every other normal-range note) work exactly as before.
+    if (candidate > LOW_NOTE_THRESHOLD_HZ) {
+      return null;
+    }
+    // For D3-range notes (≤155 Hz) only: allow if the fundamental itself is sufficiently
+    // strong. This catches D3 when its harmonics fall below the noise floor on some
+    // instruments but the fundamental is clearly audible. -40 dB is well above typical
+    // ambient room noise (~-55 dB) so this fallback does not admit environmental noise.
+    const STRONG_FUNDAMENTAL_DB = -40;
+    if (candidateMag < STRONG_FUNDAMENTAL_DB) {
+      return null;
+    }
   }
 
   return candidate;
