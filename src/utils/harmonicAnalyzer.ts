@@ -113,21 +113,12 @@ export function validateFundamental(
 
   const currentMag = getMagnitudeAt(detectedFreq);
 
-  // Check sub-octave (f/2) — the most common harmonic confusion
-  const subOctave = detectedFreq / 2;
-  if (subOctave >= 55) {
-    const subOctavePeak = findHarmonicFrequency(freqData, subOctave, sampleRate, fftSize);
-    if (subOctavePeak !== null) {
-      const subMag = getMagnitudeAt(subOctavePeak);
-      // If sub-octave is within SUB_HARMONIC_DB_WINDOW dB of detected frequency, prefer the lower fundamental
-      if (subMag >= currentMag - SUB_HARMONIC_DB_WINDOW) {
-        return subOctavePeak;
-      }
-    }
-  }
-
-  // Check sub-third (f/3) — YIN can lock onto the 3rd harmonic on complex tones
-  // (e.g. playing D3 at 147 Hz but YIN detects its 3rd harmonic A4 at 440 Hz).
+  // Check sub-third (f/3) FIRST — YIN can lock onto the 3rd harmonic on complex tones
+  // (e.g. playing D3 at 147 Hz but YIN detects its 3rd harmonic A4 at 440 Hz, or
+  // playing C4 at 261 Hz but YIN detects its compound-fifth G5 at 784 Hz).
+  // Checking f/3 before f/2 ensures that when both f/3 (true fundamental) and f/2
+  // (sub-octave, which may be a real handpan note with its own FFT peak) are within
+  // the dB window, we prefer the lower (more likely true) fundamental.
   const subThird = detectedFreq / 3;
   if (subThird >= 55) {
     const subThirdPeak = findHarmonicFrequency(freqData, subThird, sampleRate, fftSize);
@@ -138,6 +129,21 @@ export function validateFundamental(
       // false positives from low-frequency environmental noise near f/3.
       if (subThirdMag >= currentMag - SUB_HARMONIC_DB_WINDOW) {
         return subThirdPeak;
+      }
+    }
+  }
+
+  // Check sub-octave (f/2) — YIN can lock onto the 2nd harmonic (e.g. C4 playing
+  // but YIN detects C5). Only reached when f/3 did not match, so we never prefer
+  // the sub-octave when the sub-third (true fundamental) is also present.
+  const subOctave = detectedFreq / 2;
+  if (subOctave >= 55) {
+    const subOctavePeak = findHarmonicFrequency(freqData, subOctave, sampleRate, fftSize);
+    if (subOctavePeak !== null) {
+      const subMag = getMagnitudeAt(subOctavePeak);
+      // If sub-octave is within SUB_HARMONIC_DB_WINDOW dB of detected frequency, prefer the lower fundamental
+      if (subMag >= currentMag - SUB_HARMONIC_DB_WINDOW) {
+        return subOctavePeak;
       }
     }
   }

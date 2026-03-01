@@ -342,7 +342,18 @@ const QuickTuningPage: React.FC = () => {
         const af = anchorFreq.current;
         const cf = result.frequency;
         for (const ratio of [2, 3, 4, 5]) {
+          // Direct upper harmonic of the anchor (e.g. G5 = 3×C4).
           if (Math.abs(1200 * Math.log2(cf / (af * ratio))) <= 100) {
+            competingTimeMs.current = 0;
+            return;
+          }
+          // Sub-octave of an upper harmonic (e.g. G4 = G5/2 = 3×C4/2).
+          // validateFundamental's f/2 check can redirect a harmonic overtone (G5)
+          // to its sub-octave (G4) when G4 happens to be a real handpan note with
+          // its own strong FFT peak. Without this guard, G4 would compete against
+          // a C4 anchor and keep resetting the stability bar every ~130 ms.
+          // Only applies when cf is above af to avoid suppressing genuinely lower notes.
+          if (cf > af && Math.abs(1200 * Math.log2((cf * 2) / (af * ratio))) <= 100) {
             competingTimeMs.current = 0;
             return;
           }
