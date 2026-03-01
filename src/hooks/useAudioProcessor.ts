@@ -33,28 +33,7 @@ export const useAudioProcessor = () => {
   const startListening = useCallback(async () => {
     try {
       setError(null);
-      // On iOS Safari, getUserMedia({ audio: true }) enables AGC, echo-cancellation and
-      // noise-suppression by default.  AGC compresses the attack then amplifies background
-      // noise during the handpan's decay — pushing amplified noise above the RMS gate and
-      // triggering spurious pitch-class detections, which fires the competing-pitch reset
-      // and wipes the stability counter mid-note.
-      // We request { ideal: false } advisory hints to disable these processing stages.
-      // These are hints, not requirements: browsers that don't support the hint silently
-      // ignore it, so desktop setups continue working unchanged.  A try/catch falls back
-      // to plain { audio: true } as an additional safety net.
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: { ideal: false },
-            autoGainControl: { ideal: false },
-            noiseSuppression: { ideal: false },
-          },
-          video: false,
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
