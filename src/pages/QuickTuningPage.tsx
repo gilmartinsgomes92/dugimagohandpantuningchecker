@@ -96,9 +96,10 @@ function getTuningClassName(status: TuningResult['status']): string {
 }
 
 const QuickTuningPage: React.FC = () => {
+  const DEBUG = new URLSearchParams(window.location.search).has('debug');
   const navigate = useNavigate();
   const { state, dispatch } = useAppContext();
-  const { isListening, result, error, startListening, stopListening } = useAudioProcessor();
+  const { isListening, result, error, startListening, stopListening, debugInfo } = useAudioProcessor();
 
   const notesCount = state.notesCount ?? 0;
   const noteIndex = state.currentNoteIndex;
@@ -467,6 +468,43 @@ const QuickTuningPage: React.FC = () => {
           View Results →
         </button>
       </div>
+
+      {DEBUG && debugInfo && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 12,
+            left: 12,
+            right: 12,
+            padding: 12,
+            background: 'rgba(0,0,0,0.85)',
+            color: '#0f0',
+            fontSize: 12,
+            borderRadius: 10,
+            zIndex: 9999,
+            lineHeight: 1.35,
+            fontFamily: 'monospace',
+          }}
+        >
+          <div>audio: {debugInfo.audioState}</div>
+          <div>
+            rms: {debugInfo.rms.toFixed(4)} (peak {debugInfo.rmsPeak.toFixed(4)})
+          </div>
+          <div>noise: {debugInfo.noiseFloor.toFixed(4)}</div>
+          <div>
+            strikeArmed: {String(debugInfo.strikeArmed)} waiting: {String(debugInfo.waitingStabilization)}
+          </div>
+          <div>
+            note: {debugInfo.noteName ?? '—'} score: {debugInfo.matchScore.toFixed(2)}
+          </div>
+          <div>
+            freq: {debugInfo.rawFreq ? debugInfo.rawFreq.toFixed(2) : '—'} →{' '}
+            {debugInfo.smoothedFreq ? debugInfo.smoothedFreq.toFixed(2) : '—'}
+          </div>
+          <div>reject: {debugInfo.rejectReason || '—'}</div>
+        </div>
+      )}
+
     </div>
   );
 };
