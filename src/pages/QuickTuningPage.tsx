@@ -15,17 +15,17 @@ const REGISTRATION_COOLDOWN_MS = 1500;
 // (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
 // phase — mirroring the behaviour of professional strobe tuners like Linotune, which
 // begin reading approximately 1 second after the note is struck.
-const ATTACK_SKIP_FRAMES = 15;
+const ATTACK_SKIP_FRAMES = 8;
 
 // Minimum number of sustain-phase frequency samples required before registration.
 // Even if confidence exceeds the threshold earlier, we wait for enough measurements
 // to produce a reliable trimmed mean.
-const MIN_FREQ_SAMPLES = 10;
+const MIN_FREQ_SAMPLES = 6;
 
 // EMA confidence parameters
-const RISE_RATE = 0.08;   // confidence += RISE_RATE * matchScore per matching frame
-const DECAY_RATE = 0.02;  // confidence -= DECAY_RATE per frame for non-matching notes
-const CONFIDENCE_THRESHOLD = 0.75; // confidence level required to register a note
+const RISE_RATE = 0.12;   // confidence += RISE_RATE * matchScore per matching frame
+const DECAY_RATE = 0.015;  // confidence -= DECAY_RATE per frame for non-matching notes
+const CONFIDENCE_THRESHOLD = 0.65; // confidence level required to register a note
 
 /**
  * Per-pitch-class EMA confidence tracker.
