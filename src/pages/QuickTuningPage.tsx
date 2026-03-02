@@ -14,23 +14,20 @@ const REGISTRATION_COOLDOWN_MS = 1500;
 // and the most noise in the fundamental estimate. Skipping the first ~15 frames
 // (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
 // phase — mirroring the behaviour of professional strobe tuners like Linotune, which
-// begin reading approximately ~0.6–0.8 seconds after the note is struck.
-// NOTE: after disabling OS/browser voice-processing (AGC/NS/EC), handpan sustains
-// become stable sooner and we can shorten this skip so a single clean strike
-// can register a note.
-const ATTACK_SKIP_FRAMES = 5;
+// begin reading approximately 1 second after the note is struck.
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+const ATTACK_SKIP_FRAMES = IS_IOS ? 3 : 5;
 
 // Minimum number of sustain-phase frequency samples required before registration.
 // Even if confidence exceeds the threshold earlier, we wait for enough measurements
 // to produce a reliable trimmed mean.
-// Tuned so 1 solid strike can typically provide enough sustain-phase samples.
-const MIN_FREQ_SAMPLES = 3;
+const MIN_FREQ_SAMPLES = IS_IOS ? 2 : 3;
 
 // EMA confidence parameters
 const RISE_RATE = 0.12;   // confidence += RISE_RATE * matchScore per matching frame
 const DECAY_RATE = 0.015;  // confidence -= DECAY_RATE per frame for non-matching notes
-// Tuned for single-strike registration while still rejecting brief sympathetic blips.
-const CONFIDENCE_THRESHOLD = 0.42; // confidence level required to register a note
+const CONFIDENCE_THRESHOLD = IS_IOS ? 0.34 : 0.42; // confidence level required to register a note
 
 /**
  * Per-pitch-class EMA confidence tracker.
