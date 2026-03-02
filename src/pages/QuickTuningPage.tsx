@@ -6,21 +6,74 @@ import { CentsGauge } from '../components/CentsGauge';
 import { midiToFrequency, formatCents, centsToColor, frequencyToNote } from '../utils/musicUtils';
 import type { TuningResult } from '../contexts/AppContext';
 
-// Auto-register a note after this many consecutive stable frames.
-// At ~60fps this is approximately 0.75 seconds; actual time depends on
-// the requestAnimationFrame rate used by the useAudioProcessor hook.
-const STABLE_FRAMES_REQUIRED = 45;
-
 // Cooldown in ms before the next note can be registered after one is confirmed
 const REGISTRATION_COOLDOWN_MS = 1500;
 
-// Number of stable frames to skip before collecting frequencies for the median.
+// Number of frames to skip (attack phase) before collecting frequencies for the trimmed mean.
 // The initial transient of a handpan note (attack phase) has the brightest harmonics
 // and the most noise in the fundamental estimate. Skipping the first ~15 frames
 // (~250 ms at 60 fps) avoids this region and collects only from the cleaner sustain
 // phase — mirroring the behaviour of professional strobe tuners like Linotune, which
 // begin reading approximately 1 second after the note is struck.
 const ATTACK_SKIP_FRAMES = 15;
+
+// Minimum number of sustain-phase frequency samples required before registration.
+// Even if confidence exceeds the threshold earlier, we wait for enough measurements
+// to produce a reliable trimmed mean.
+const MIN_FREQ_SAMPLES = 10;
+
+// EMA confidence parameters
+const RISE_RATE = 0.08;   // confidence += RISE_RATE * matchScore per matching frame
+const DECAY_RATE = 0.02;  // confidence -= DECAY_RATE per frame for non-matching notes
+const CONFIDENCE_THRESHOLD = 0.75; // confidence level required to register a note
+
+/**
+ * Per-pitch-class EMA confidence tracker.
+ *
+ * Tracks a confidence value for each detected pitch class. On each frame:
+ *  - The detected pitch class rises by RISE_RATE × matchScore (template quality)
+ *  - All other tracked pitch classes decay by DECAY_RATE
+ *
+ * This replaces the binary stability counter + GLITCH_TOLERANCE system so that
+ * short bursts of sympathetic resonance cause only a small confidence dip rather
+ * than a catastrophic reset to 0.
+ */
+class NoteConfidenceTracker {
+  private confidences: Map<string, number> = new Map();
+
+  update(pitchClass: string, matchScore: number): void {
+    // When matchScore is 0 there is no confidence boost for the detected pitch class,
+    // but the decay for all other classes still runs. This is intentional: a matchScore
+    // of 0 means the template matcher found no good evidence for the note, so we should
+    // not increase confidence — only let competing candidates decay slightly.
+    const current = this.confidences.get(pitchClass) ?? 0;
+    this.confidences.set(pitchClass, Math.min(1, current + RISE_RATE * matchScore));
+
+    for (const [pc, conf] of this.confidences) {
+      if (pc !== pitchClass) {
+        this.confidences.set(pc, Math.max(0, conf - DECAY_RATE));
+      }
+    }
+  }
+
+  getConfidence(pitchClass: string): number {
+    return this.confidences.get(pitchClass) ?? 0;
+  }
+
+  getLeadingEntry(): { pitchClass: string; confidence: number } | null {
+    let best: { pitchClass: string; confidence: number } | null = null;
+    for (const [pc, conf] of this.confidences) {
+      if (conf > 0 && (best === null || conf > best.confidence)) {
+        best = { pitchClass: pc, confidence: conf };
+      }
+    }
+    return best;
+  }
+
+  reset(): void {
+    this.confidences.clear();
+  }
+}
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 7) return 'in-tune';
@@ -48,8 +101,6 @@ const QuickTuningPage: React.FC = () => {
   const notesCount = state.notesCount ?? 0;
   const noteIndex = state.currentNoteIndex;
 
-  const stableFrames = useRef(0);
-  const lastPitchClass = useRef<string | null>(null);
   const stableFrequencies = useRef<number[]>([]);
   // Independently collected octave and compound-fifth partial frequencies for each
   // sustain-phase frame. Measuring partials directly from the FFT rather than deriving
@@ -62,16 +113,20 @@ const QuickTuningPage: React.FC = () => {
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
   // class "D") from registering as distinct notes.
   const registeredNoteNames = useRef<Set<string>>(new Set());
-  // Consecutive wrong-pitch-class frame counter for glitch tolerance
-  const glitchCount = useRef(0);
+  // EMA confidence tracker — replaces binary stableFrames + GLITCH_TOLERANCE counter
+  const trackerRef = useRef<NoteConfidenceTracker>(new NoteConfidenceTracker());
+  // Pitch class of the current leading candidate (highest confidence)
+  const leadingPitchClassRef = useRef<string | null>(null);
+  // Number of frames the current leading pitch class has been leading (for attack skip)
+  const leadingFrameCountRef = useRef(0);
 
   const resetStabilityState = useCallback(() => {
-    stableFrames.current = 0;
-    lastPitchClass.current = null;
+    trackerRef.current.reset();
+    leadingPitchClassRef.current = null;
+    leadingFrameCountRef.current = 0;
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
-    glitchCount.current = 0;
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -206,11 +261,10 @@ const QuickTuningPage: React.FC = () => {
     }, REGISTRATION_COOLDOWN_MS);
   }, [result, noteIndex, dispatch, resetStabilityState]);
 
-  // Stability detection: auto-register when the same pitch class (note letter, ignoring
-  // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
-  // rather than exact note name or frequency makes the counter robust against the octave
-  // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
-  const GLITCH_TOLERANCE = 3;
+  // EMA Confidence stability: auto-register when the leading pitch class confidence
+  // reaches CONFIDENCE_THRESHOLD and at least MIN_FREQ_SAMPLES have been collected.
+  // Using per-pitch-class EMA means short bursts of sympathetic resonance only cause
+  // a small confidence dip (DECAY_RATE per frame) rather than resetting to 0.
 
   useEffect(() => {
     // Reset stability when not listening or during post-registration cooldown.
@@ -227,8 +281,8 @@ const QuickTuningPage: React.FC = () => {
     // Transparently skip frames where the detected note is already registered.
     // This prevents ring-out of a previously-registered note (which can last 5–10 s on a
     // handpan) from either (a) accumulating false stability that re-triggers the duplicate
-    // guard on every 45-frame window, or (b) resetting the stability counter for the note
-    // the user is actually playing next. Skipped frames leave the counter unchanged so that
+    // guard on every window, or (b) resetting the stability counter for the note the user
+    // is actually playing next. Skipped frames leave the tracker unchanged so that
     // isolated ring-out blips interleaved with the new note do not break accumulation.
     if (registeredNoteNames.current.has(result.noteName)) {
       return;
@@ -236,16 +290,31 @@ const QuickTuningPage: React.FC = () => {
 
     // Strip the trailing octave digit(s) to get the pitch class, e.g. "A3" → "A", "D#4" → "D#"
     const pitchClass = result.noteName.replace(/\d+$/, '');
-    const anchor = lastPitchClass.current;
+    const matchScore = result.matchScore;
 
-    if (anchor !== null && pitchClass === anchor) {
-      glitchCount.current = 0;
-      stableFrames.current += 1;
+    // Update per-pitch-class EMA confidence
+    trackerRef.current.update(pitchClass, matchScore);
+
+    const leading = trackerRef.current.getLeadingEntry();
+    if (leading === null) return;
+
+    // Detect leader change — reset frame counter and frequency collection for the new leader
+    if (leading.pitchClass !== leadingPitchClassRef.current) {
+      leadingPitchClassRef.current = leading.pitchClass;
+      leadingFrameCountRef.current = 0;
+      stableFrequencies.current = [];
+      stableOctaveFreqs.current = [];
+      stableCFifthFreqs.current = [];
+    }
+
+    // Only count and collect when the current frame's pitch matches the leading candidate
+    if (pitchClass === leading.pitchClass) {
+      leadingFrameCountRef.current += 1;
       // Skip attack-phase frames: only collect frequencies from the sustain phase.
       // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
       // where harmonics are brightest and pitch estimates are noisiest. Collecting only
-      // from frames after ATTACK_SKIP_FRAMES gives a cleaner median measurement.
-      if (stableFrames.current > ATTACK_SKIP_FRAMES) {
+      // from frames after ATTACK_SKIP_FRAMES gives a cleaner trimmed-mean measurement.
+      if (leadingFrameCountRef.current > ATTACK_SKIP_FRAMES) {
         stableFrequencies.current.push(result.frequency);
         // Also collect independently-measured octave and compound-fifth frequencies
         // from the current frame. null values (partial not detectable) are skipped.
@@ -256,20 +325,15 @@ const QuickTuningPage: React.FC = () => {
           stableCFifthFreqs.current.push(result.compoundFifthFrequency);
         }
       }
-      if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
-        registerNote();
-      }
-    } else if (anchor !== null && glitchCount.current < GLITCH_TOLERANCE) {
-      // Tolerate up to GLITCH_TOLERANCE consecutive wrong-pitch-class frames (noise
-      // glitches, sympathetic resonance). Skip without resetting the stability counter.
-      glitchCount.current += 1;
-    } else {
-      glitchCount.current = 0;
-      lastPitchClass.current = pitchClass;
-      stableFrames.current = 1;
-      stableFrequencies.current = [];
-      stableOctaveFreqs.current = [];
-      stableCFifthFreqs.current = [];
+    }
+
+    // Register when confidence threshold is reached and enough samples collected
+    if (
+      leading.confidence >= CONFIDENCE_THRESHOLD &&
+      stableFrequencies.current.length >= MIN_FREQ_SAMPLES &&
+      !justRegistered.current
+    ) {
+      registerNote();
     }
   }, [result, isListening, registerNote, resetStabilityState]);
 
@@ -277,9 +341,9 @@ const QuickTuningPage: React.FC = () => {
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
   const absCents = result.cents !== null ? Math.abs(result.cents) : null;
   const currentStatus = absCents !== null ? getTuningStatus(absCents) : null;
-  const stabilityPct = stableFrames.current > 0
-    ? Math.min(100, Math.round((stableFrames.current / STABLE_FRAMES_REQUIRED) * 100))
-    : 0;
+  // Stability ring shows the leading note's EMA confidence (0–100%)
+  const leadingEntry = trackerRef.current.getLeadingEntry();
+  const stabilityPct = leadingEntry ? Math.round(leadingEntry.confidence * 100) : 0;
 
   return (
     <div className="page quick-tuning-page">
