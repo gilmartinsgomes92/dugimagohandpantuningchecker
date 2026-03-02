@@ -29,6 +29,13 @@ const WelcomePage: React.FC = () => {
           </button>
 
           <button
+            className="btn btn-primary btn-large"
+            onClick={() => navigate('/tuning/start')}
+          >
+            🎯 Guided 2-Step Tuning
+          </button>
+
+          <button
             className="btn btn-secondary btn-large"
             disabled
           >
