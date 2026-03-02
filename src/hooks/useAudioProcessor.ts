@@ -78,10 +78,18 @@ export const useAudioProcessor = () => {
   const noteOnsetMsRef = useRef<number>(0);
   const lastEmitMsRef = useRef<number>(0);
 
+  // Strike handling: delay measurement until sustain phase
+  const strikeTimeRef = useRef<number>(0);
+  const waitingForStabilizationRef = useRef<boolean>(false);
+
   // Number of consecutive below-threshold frames before clearing the result to null.
   // Prevents flicker when a handpan note's amplitude gradually decays through the RMS
   // threshold, causing the display to oscillate between the note and "Listening…".
   const SILENCE_GRACE_FRAMES = 5;
+  // Handpan strike handling
+  const STRIKE_RMS_THRESHOLD = 0.02;
+  const STRIKE_COOLDOWN_MS = 900;
+  const STABILIZATION_DELAY_MS = 480;
   const EMIT_INTERVAL_MS = 70; // ~14 Hz UI updates
   const ONSET_DELAY_MS = 450;  // hide cents during attack
   const CENTS_SMOOTH_ALPHA = 0.18;
@@ -97,6 +105,8 @@ export const useAudioProcessor = () => {
     smoothedCentsRef.current = null;
     noteOnsetMsRef.current = 0;
     lastEmitMsRef.current = 0;
+    strikeTimeRef.current = 0;
+    waitingForStabilizationRef.current = false;
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -128,6 +138,23 @@ export const useAudioProcessor = () => {
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
 
         const rms = computeRMS(buf);
+        const now = performance.now();
+
+        // Strike detection: on handpans, the attack transient is not tunable.
+        // We detect the strike and wait a short stabilization delay before measuring.
+        if (rms > STRIKE_RMS_THRESHOLD && now - strikeTimeRef.current > STRIKE_COOLDOWN_MS) {
+          strikeTimeRef.current = now;
+          waitingForStabilizationRef.current = true;
+        }
+
+        if (waitingForStabilizationRef.current) {
+          if (now - strikeTimeRef.current < STABILIZATION_DELAY_MS) {
+            rafRef.current = requestAnimationFrame(tick);
+            return;
+          }
+          waitingForStabilizationRef.current = false;
+        }
+
         if (rms >= 0.005) {
           // Stage 1 — Note Identification: spectral template matching against all
           // handpan notes (MIDI 50–84). Scores the entire FFT spectrum against known
@@ -269,6 +296,8 @@ setResult({
                 smoothedCentsRef.current = null;
                 noteOnsetMsRef.current = 0;
                 lastEmitMsRef.current = 0;
+                strikeTimeRef.current = 0;
+                waitingForStabilizationRef.current = false;
                 setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
               }
             }
@@ -283,6 +312,8 @@ setResult({
               smoothedCentsRef.current = null;
               noteOnsetMsRef.current = 0;
               lastEmitMsRef.current = 0;
+              strikeTimeRef.current = 0;
+              waitingForStabilizationRef.current = false;
               setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
             }
           }
@@ -298,6 +329,8 @@ setResult({
             smoothedCentsRef.current = null;
             noteOnsetMsRef.current = 0;
             lastEmitMsRef.current = 0;
+            strikeTimeRef.current = 0;
+            waitingForStabilizationRef.current = false;
             setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
           }
         }
@@ -322,6 +355,8 @@ setResult({
     smoothedCentsRef.current = null;
     noteOnsetMsRef.current = 0;
     lastEmitMsRef.current = 0;
+    strikeTimeRef.current = 0;
+    waitingForStabilizationRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
