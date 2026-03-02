@@ -116,7 +116,6 @@ export const useAudioProcessor = () => {
     autoGainControl: false,
     channelCount: 1,
     sampleRate: 48000,
-    latency: 0,
   },
   video: false,
 });
