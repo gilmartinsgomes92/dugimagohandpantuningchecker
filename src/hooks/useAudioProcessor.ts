@@ -3,7 +3,6 @@ import { computeRMS } from '../utils/yin';
 import { findHarmonicFrequency } from '../utils/harmonicAnalyzer';
 import { detectPitchInWindow } from '../utils/pitchInWindow';
 import { matchNote } from '../utils/spectralMatcher';
-import { frequencyToNote } from '../utils/musicUtils';
 
 interface AudioResult {
   frequency: number | null;
@@ -19,17 +18,17 @@ interface AudioResult {
 }
 
 /** Half-width (in cents) of the precision search window for detectPitchInWindow. */
-const PRECISION_WINDOW_CENTS = 20;
+const PRECISION_WINDOW_CENTS = 40;
 
 /** EMA smoothing factor for frequency output (0–1). Lower = more smoothing. */
-const FREQ_SMOOTH_ALPHA = 0.35;
+const FREQ_SMOOTH_ALPHA = 0.15;
 
 /**
  * Maximum cents jump allowed between consecutive smoothed readings.
  * Frames where the raw frequency jumps more than this from the smoothed value
  * are treated as spectral glitches and skipped entirely.
  */
-const MAX_CENTS_JUMP = 80;
+const MAX_CENTS_JUMP = 45;
 
 /**
  * Returns the Hz search bounds for a ±PRECISION_WINDOW_CENTS window around targetFreq.
@@ -37,6 +36,22 @@ const MAX_CENTS_JUMP = 80;
 function precisionWindow(targetFreq: number): { lo: number; hi: number } {
   const ratio = Math.pow(2, PRECISION_WINDOW_CENTS / 1200);
   return { lo: targetFreq / ratio, hi: targetFreq * ratio };
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+function midiToFullName(midiNote: number): string {
+  const name = NOTE_NAMES[((midiNote % 12) + 12) % 12];
+  const octave = Math.floor(midiNote / 12) - 1;
+  return `${name}${octave}`;
+}
+
+function centsFromNominal(freqHz: number, nominalHz: number): number {
+  return 1200 * Math.log2(freqHz / nominalHz);
+}
+
+function clamp(val: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, val));
 }
 
 export const useAudioProcessor = () => {
@@ -48,9 +63,8 @@ export const useAudioProcessor = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
-  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
-  // Frequency-domain buffer for FFT magnitude data (dB), used by spectral matcher
-  const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
+  const bufferRef = useRef<Float32Array>(new Float32Array(8192));
+  const freqBufRef = useRef<Float32Array>(new Float32Array(4096));
   // Re-entrancy guard: prevents duplicate audio streams from concurrent startListening calls
   const isStartedRef = useRef(false);
   // Consecutive silent/failed frames counter for silence grace logic
@@ -60,11 +74,17 @@ export const useAudioProcessor = () => {
   const smoothedMidiRef = useRef<number | null>(null);
   const smoothedOctaveRef = useRef<number | null>(null);
   const smoothedCFifthRef = useRef<number | null>(null);
+  const smoothedCentsRef = useRef<number | null>(null);
+  const noteOnsetMsRef = useRef<number>(0);
+  const lastEmitMsRef = useRef<number>(0);
 
   // Number of consecutive below-threshold frames before clearing the result to null.
   // Prevents flicker when a handpan note's amplitude gradually decays through the RMS
   // threshold, causing the display to oscillate between the note and "Listening…".
   const SILENCE_GRACE_FRAMES = 5;
+  const EMIT_INTERVAL_MS = 70; // ~14 Hz UI updates
+  const ONSET_DELAY_MS = 450;  // hide cents during attack
+  const CENTS_SMOOTH_ALPHA = 0.18;
 
   const startListening = useCallback(async () => {
     if (isStartedRef.current) return;
@@ -74,6 +94,9 @@ export const useAudioProcessor = () => {
     smoothedMidiRef.current = null;
     smoothedOctaveRef.current = null;
     smoothedCFifthRef.current = null;
+    smoothedCentsRef.current = null;
+    noteOnsetMsRef.current = 0;
+    lastEmitMsRef.current = 0;
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -87,7 +110,7 @@ export const useAudioProcessor = () => {
       audioCtxRef.current = audioCtx;
 
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 4096;
+      analyser.fftSize = 8192;
       analyser.smoothingTimeConstant = 0.85;
       analyserRef.current = analyser;
       bufferRef.current = new Float32Array(analyser.fftSize);
@@ -124,11 +147,18 @@ export const useAudioProcessor = () => {
             // Note-change reset: when the spectral matcher locks onto a different MIDI
             // note, clear all smoothing state so there is no sluggish crossfade.
             if (smoothedMidiRef.current !== null && smoothedMidiRef.current !== midiNote) {
-              smoothedFreqRef.current = null;
-              smoothedOctaveRef.current = null;
-              smoothedCFifthRef.current = null;
-            }
+            smoothedFreqRef.current = null;
+            smoothedOctaveRef.current = null;
+            smoothedCFifthRef.current = null;
+
+             // reset cents smoothing + onset timing on note change
+           smoothedCentsRef.current = null;
+           noteOnsetMsRef.current = performance.now();
+           lastEmitMsRef.current = 0;
+           }
+
             smoothedMidiRef.current = midiNote;
+            if (noteOnsetMsRef.current === 0) noteOnsetMsRef.current = performance.now();
 
             // Stage 2 — Precision Measurement: run detectPitchInWindow with tight
             // ±20-cent windows centered on the known ET frequencies. This uses the
@@ -145,7 +175,7 @@ export const useAudioProcessor = () => {
             // below the noise floor (common on high-octave handpan notes during decay).
             // This is safe because octaveFreq was detected within ±PRECISION_WINDOW_CENTS
             // of nominalFreq × 2, so octaveFreq / 2 is guaranteed to be close to the
-            // true fundamental and will map to the correct note via frequencyToNote().
+            // true fundamental and stays close to the matched nominal note.
             if (freq === null && octaveFreq !== null) {
               freq = octaveFreq / 2;
             }
@@ -168,43 +198,66 @@ export const useAudioProcessor = () => {
 
               const smoothedFreq = smoothedFreqRef.current;
 
-              // Derive note info from the smoothed frequency for consistent display
-              const noteInfo = frequencyToNote(smoothedFreq);
+    const noteName = midiToFullName(midiNote);
 
-              const compFifthNominal = nominalFreq * 3;
-              const cfWin = precisionWindow(compFifthNominal);
-              // Use detectPitchInWindow for compound fifth if within the usable FFT range;
-              // fall back to findHarmonicFrequency on the AnalyserNode FFT otherwise.
-              const compFifthFreq = compFifthNominal <= sampleRate / 2
-                ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi)
-                : findHarmonicFrequency(
-                    freqBufRef.current,
-                    compFifthNominal,
-                    sampleRate,
-                    analyserRef.current.fftSize,
-                  );
+// cents relative to the matched note nominal (NOT nearest note)
+const rawCents = clamp(centsFromNominal(smoothedFreq, nominalFreq), -60, 60);
 
-              // EMA smoothing on octave and compound-fifth partials
-              smoothedOctaveRef.current = octaveFreq === null
-                ? smoothedOctaveRef.current
-                : smoothedOctaveRef.current === null
-                  ? octaveFreq
-                  : FREQ_SMOOTH_ALPHA * octaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
+// smooth in cents domain (more stable UI)
+smoothedCentsRef.current =
+  smoothedCentsRef.current === null
+    ? rawCents
+    : CENTS_SMOOTH_ALPHA * rawCents + (1 - CENTS_SMOOTH_ALPHA) * smoothedCentsRef.current;
 
-              smoothedCFifthRef.current = compFifthFreq === null
-                ? smoothedCFifthRef.current
-                : smoothedCFifthRef.current === null
-                  ? compFifthFreq
-                  : FREQ_SMOOTH_ALPHA * compFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
+// rate-limit UI updates + hide cents during attack transient
+const nowMs = performance.now();
+if (nowMs - lastEmitMsRef.current < EMIT_INTERVAL_MS) {
+  rafRef.current = requestAnimationFrame(tick);
+  return;
+}
+lastEmitMsRef.current = nowMs;
 
-              setResult({
-                frequency: smoothedFreq,
-                octaveFrequency: smoothedOctaveRef.current,
-                compoundFifthFrequency: smoothedCFifthRef.current,
-                noteName: noteInfo.fullName,
-                cents: noteInfo.cents,
-                matchScore: score,
-              });
+const showCents = nowMs - noteOnsetMsRef.current >= ONSET_DELAY_MS;
+const compFifthNominal = nominalFreq * 3;
+const cfWin = precisionWindow(compFifthNominal);
+
+// Use detectPitchInWindow for compound fifth if within usable FFT range;
+// fall back to findHarmonicFrequency otherwise.
+const compFifthFreq =
+  compFifthNominal <= sampleRate / 2
+    ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi)
+    : findHarmonicFrequency(
+        freqBufRef.current,
+        compFifthNominal,
+        sampleRate,
+        analyserRef.current.fftSize,
+      );
+
+// EMA smoothing on octave and compound-fifth partials
+smoothedOctaveRef.current =
+  octaveFreq === null
+    ? smoothedOctaveRef.current
+    : smoothedOctaveRef.current === null
+      ? octaveFreq
+      : FREQ_SMOOTH_ALPHA * octaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
+
+smoothedCFifthRef.current =
+  compFifthFreq === null
+    ? smoothedCFifthRef.current
+    : smoothedCFifthRef.current === null
+      ? compFifthFreq
+      : FREQ_SMOOTH_ALPHA * compFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
+
+// ✅ THIS was missing — emit the result (rate-limited)
+setResult({
+  frequency: smoothedFreq,
+  octaveFrequency: smoothedOctaveRef.current,
+  compoundFifthFrequency: smoothedCFifthRef.current,
+  noteName,
+  cents: showCents ? smoothedCentsRef.current : null,
+  matchScore: score,
+});
+              
             } else {
               // Template matched but no measurable partial found — count as silent
               silenceCountRef.current += 1;
@@ -213,6 +266,9 @@ export const useAudioProcessor = () => {
                 smoothedMidiRef.current = null;
                 smoothedOctaveRef.current = null;
                 smoothedCFifthRef.current = null;
+                smoothedCentsRef.current = null;
+                noteOnsetMsRef.current = 0;
+                lastEmitMsRef.current = 0;
                 setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
               }
             }
@@ -224,6 +280,9 @@ export const useAudioProcessor = () => {
               smoothedMidiRef.current = null;
               smoothedOctaveRef.current = null;
               smoothedCFifthRef.current = null;
+              smoothedCentsRef.current = null;
+              noteOnsetMsRef.current = 0;
+              lastEmitMsRef.current = 0;
               setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
             }
           }
@@ -236,6 +295,9 @@ export const useAudioProcessor = () => {
             smoothedMidiRef.current = null;
             smoothedOctaveRef.current = null;
             smoothedCFifthRef.current = null;
+            smoothedCentsRef.current = null;
+            noteOnsetMsRef.current = 0;
+            lastEmitMsRef.current = 0;
             setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
           }
         }
@@ -257,6 +319,9 @@ export const useAudioProcessor = () => {
     smoothedMidiRef.current = null;
     smoothedOctaveRef.current = null;
     smoothedCFifthRef.current = null;
+    smoothedCentsRef.current = null;
+    noteOnsetMsRef.current = 0;
+    lastEmitMsRef.current = 0;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
