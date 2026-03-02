@@ -16,7 +16,7 @@
 
 import { computeRMS } from './yin';
 
-const FFT_SIZE = 4096;
+const FFT_SIZE = 8192;
 const NOISE_FLOOR_RMS = 0.005;
 const NOISE_FLOOR_DB = -65;
 
