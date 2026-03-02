@@ -32,7 +32,7 @@ const COMP_FIFTH_WINDOW_CENTS = 15;
 
 // ── FFT size (must match what AnalyserNode provides) ─────────────────────────
 
-const FFT_SIZE = 4096;
+const FFT_SIZE = 8192;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ export function useStrobeTuner(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   // Pre-allocated time-domain buffer (reused every frame to avoid GC pressure).
-  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(FFT_SIZE));
+  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(FFT_SIZE * 4)));
   // Stability frame counter kept in a ref so the RAF closure always reads
   // the latest value without a stale closure over state.
   const stabilityFramesRef = useRef(0);
@@ -205,7 +205,7 @@ export function useStrobeTuner(
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = FFT_SIZE;
       analyserRef.current = analyser;
-      bufferRef.current = new Float32Array(FFT_SIZE);
+      bufferRef.current = new Float32Array(new ArrayBuffer(FFT_SIZE * 4));
 
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
