@@ -29,7 +29,13 @@ import {
 export interface DetectedNote {
   name: string;
   frequency: number;
+  /** Octave partial frequency (2× fundamental). */
+  octave?: number;
+  /** Compound-fifth partial frequency (3× fundamental). */
+  compoundFifth?: number;
+  /** @deprecated Use `octave` instead. */
   octaveFrequency?: number;
+  /** @deprecated Use `compoundFifth` instead. */
   compoundFifthFrequency?: number;
 }
 
@@ -43,11 +49,20 @@ const StrobeTuningPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, dispatch } = useAppContext();
 
-  const detectedNote: DetectedNote | undefined = location.state?.detectedNote;
+  // Prefer AppContext detectedNote (set by IdentifyNotePage); fall back to location state
+  const contextNote = state.detectedNote;
+  const locationNote: DetectedNote | undefined = location.state?.detectedNote;
+  const detectedNote: DetectedNote | undefined = contextNote ?? locationNote;
 
   const targetFundamental = detectedNote?.frequency ?? 440;
-  const targetOctave = detectedNote?.octaveFrequency ?? targetFundamental * 2;
-  const targetCompoundFifth = detectedNote?.compoundFifthFrequency ?? targetFundamental * 3;
+  const targetOctave =
+    detectedNote?.octave ??
+    detectedNote?.octaveFrequency ??
+    targetFundamental * 2;
+  const targetCompoundFifth =
+    detectedNote?.compoundFifth ??
+    detectedNote?.compoundFifthFrequency ??
+    targetFundamental * 3;
 
   const {
     frequency,
@@ -65,9 +80,9 @@ const StrobeTuningPage: React.FC = () => {
   const noteIndex = state.currentNoteIndex;
   const totalNotes = state.notesCount ?? 0;
 
-  // Redirect to home if no note data was passed via navigation state
+  // Redirect to identify-note if no note data is available
   useEffect(() => {
-    if (!detectedNote) navigate('/');
+    if (!detectedNote) navigate('/tuning/identify-note');
   }, [detectedNote, navigate]);
 
   const handleAdvance = useCallback(() => {
@@ -80,6 +95,23 @@ const StrobeTuningPage: React.FC = () => {
       absCents <= FUND_DISPLAY_TOLERANCE * 3.5 ? 'slightly-out-of-tune' :
       'out-of-tune';
 
+    // RECORD_MEASUREMENT drives the 2-step tuning state machine (phase + index).
+    dispatch({
+      type: 'RECORD_MEASUREMENT',
+      payload: {
+        noteName: detectedNote.name,
+        frequency,
+        octaveFrequency: octaveFrequency ?? null,
+        compoundFifthFrequency: compoundFifthFrequency ?? null,
+        fundamentalCents: cents.fundamental,
+        octaveCents: cents.octave ?? null,
+        compoundFifthCents: cents.compoundFifth ?? null,
+      },
+    });
+
+    // ADD_TUNING_RESULT keeps the TuningResult[] array in sync so that
+    // ResultsDashboardPage (which renders tuningResults[]) continues to work
+    // for both the legacy quick-tuning flow and the new guided flow.
     dispatch({
       type: 'ADD_TUNING_RESULT',
       payload: {
@@ -96,10 +128,11 @@ const StrobeTuningPage: React.FC = () => {
     });
 
     if (noteIndex + 1 < totalNotes) {
-      dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: noteIndex + 1 });
-      navigate('/identify-note');
+      dispatch({ type: 'MOVE_TO_IDENTIFICATION' }); // also clears detectedNote
+      navigate('/tuning/identify-note');
     } else {
-      navigate('/results');
+      dispatch({ type: 'MOVE_TO_RESULTS' });
+      navigate('/tuning/results');
     }
   }, [
     detectedNote, cents, frequency, octaveFrequency, compoundFifthFrequency,
@@ -143,6 +176,7 @@ const StrobeTuningPage: React.FC = () => {
 
   const handleSkip = () => {
     if (!detectedNote) return;
+    dispatch({ type: 'SKIP_NOTE' });
     dispatch({
       type: 'ADD_TUNING_RESULT',
       payload: {
@@ -154,10 +188,11 @@ const StrobeTuningPage: React.FC = () => {
       },
     });
     if (noteIndex + 1 < totalNotes) {
-      dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: noteIndex + 1 });
-      navigate('/identify-note');
+      dispatch({ type: 'MOVE_TO_IDENTIFICATION' }); // also clears detectedNote
+      navigate('/tuning/identify-note');
     } else {
-      navigate('/results');
+      dispatch({ type: 'MOVE_TO_RESULTS' });
+      navigate('/tuning/results');
     }
   };
 
@@ -168,6 +203,9 @@ const StrobeTuningPage: React.FC = () => {
 
       {/* ── Header ── */}
       <div className="page-header">
+        {totalNotes > 0 && (
+          <p className="tuning-progress">Note {noteIndex + 1} of {totalNotes}</p>
+        )}
         <h2 className="strobe-note-title">Now play {detectedNote.name} steadily…</h2>
         <p className="strobe-instruction">Hold the note ringing while the strobe locks in</p>
         <p className="strobe-target-freq">Target: {targetFundamental.toFixed(2)} Hz</p>

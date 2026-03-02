@@ -54,10 +54,13 @@ function pageReducer(_state: PageState, action: PageAction): PageState {
 
 const IdentifyNotePage: React.FC = () => {
   const navigate = useNavigate();
-  const { dispatch: appDispatch } = useAppContext();
+  const { state, dispatch: appDispatch } = useAppContext();
   const { isListening, result, error, startListening, stopListening } = useAudioProcessor();
 
   const [pageState, pageDispatch] = useReducer(pageReducer, { phase: 'idle' });
+
+  const noteIndex = state.currentNoteIndex;
+  const totalNotes = state.notesCount ?? 0;
 
   // Stability detection refs (mirrors QuickTuningPage approach)
   const stableFrames = useRef(0);
@@ -105,11 +108,14 @@ const IdentifyNotePage: React.FC = () => {
       payload: {
         name: detectedResult.name,
         frequency: detectedResult.frequency,
+        octave: detectedResult.octaveFrequency ?? detectedResult.frequency * 2,
+        compoundFifth: detectedResult.compoundFifthFrequency ?? detectedResult.frequency * 3,
         octaveFrequency: detectedResult.octaveFrequency ?? undefined,
         compoundFifthFrequency: detectedResult.compoundFifthFrequency ?? undefined,
       },
     });
-    navigate('/strobe-tuning', { state: { detectedNote: detectedResult } });
+    appDispatch({ type: 'MOVE_TO_STROBE_MEASUREMENT' });
+    navigate('/tuning/strobe-measurement', { state: { detectedNote: detectedResult } });
   }, [pageState, appDispatch, navigate]);
 
   // Propagate hook errors to the error phase
@@ -168,6 +174,9 @@ const IdentifyNotePage: React.FC = () => {
 
       {/* ── Header ── */}
       <div className="page-header">
+        {totalNotes > 0 && (
+          <p className="tuning-progress">Note {noteIndex + 1} of {totalNotes}</p>
+        )}
         <h1 className="identify-title">Identify Your Note</h1>
         <p className="identify-subtitle">Step 1 of 2 — Let's find out which note you're playing</p>
       </div>

@@ -30,6 +30,7 @@ const ResultsDashboardPage: React.FC = () => {
     : { label: 'The handpan is in tune', badge: '✅', className: 'verdict-good' };
 
   const handleStartOver = () => {
+    dispatch({ type: 'RESET_TUNING_SESSION' });
     dispatch({ type: 'RESET_EVALUATION' });
     navigate('/');
   };
