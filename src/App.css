@@ -1231,3 +1231,153 @@
 .verdict-good { color: #00ff88; }
 .verdict-warn { color: #ffaa00; }
 .verdict-bad { color: #ff4444; }
+
+/* ============================================================
+   Strobe Tuning Page (Step 2)
+   ============================================================ */
+.strobe-tuning-page {
+  gap: 16px;
+}
+
+.strobe-note-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 6px;
+}
+
+.strobe-instruction {
+  color: #888;
+  font-size: 0.9rem;
+  margin: 0 0 4px;
+  font-style: italic;
+}
+
+.strobe-target-freq {
+  font-size: 0.85rem;
+  color: #555;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Main strobe area */
+.strobe-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.strobe-cents-overlay {
+  font-size: 1.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  transition: color 0.2s;
+}
+
+.strobe-listening-hint {
+  color: #00a8cc;
+  font-size: 0.9rem;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Partials measurement grid */
+.partials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.partial-box {
+  background: #131313;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.3s;
+}
+
+.partial-box.partial-in-tune     { border-color: #005533; }
+.partial-box.partial-slightly-out { border-color: #443300; }
+.partial-box.partial-out-of-tune  { border-color: #440000; }
+.partial-box.partial-pending      { border-color: #222; }
+
+.partial-name {
+  font-size: 0.68rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.partial-target-freq {
+  font-size: 0.72rem;
+  color: #444;
+  font-variant-numeric: tabular-nums;
+}
+
+.partial-detected-freq {
+  font-size: 0.8rem;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+}
+
+.partial-cents {
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.2s;
+}
+
+.partial-icon {
+  font-size: 0.85rem;
+}
+
+/* Stability status bar */
+.strobe-stability-status {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #666;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.stability-locked {
+  color: #00ff88;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.stability-countdown {
+  color: #888;
+  font-size: 0.82rem;
+  font-style: italic;
+}
+
+.stability-progress {
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Responsive: stack partials on very small screens */
+@media (max-width: 400px) {
+  .partials-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .strobe-note-title {
+    font-size: 1.3rem;
+  }
+}
