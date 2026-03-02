@@ -147,19 +147,28 @@ export function validateFundamental(
 
   // Forward harmonic check: confirm the candidate frequency has at least one tuned overtone
   // in the FFT. Every genuine handpan fundamental has its octave (2f) and/or compound fifth
-  // (3f) purposely tuned by the maker and clearly audible in the spectrum. If neither partial
-  // is within 24 dB of the candidate, this detection has no harmonic family evidence — it is
+  // (3f) purposely tuned by the maker and clearly audible in the spectrum. If no partial
+  // is within 36 dB of the candidate, this detection has no harmonic family evidence — it is
   // a false pick caused by sympathetic resonance, room noise, or a YIN lag-domain artefact
   // (e.g. YIN locking onto C#4 when F4 is playing, because C#4's overtones at 554 Hz and
   // 831 Hz are absent while F4's octave at 698 Hz is clearly present). Rejecting these
   // orphaned detections prevents them from accumulating stability-counter frames and being
   // registered as the wrong note.
-  const FORWARD_CONFIRM_DB = 24;
+  // The window is 36 dB (widened from 24) because higher tone fields (C5, D5, B4, etc.)
+  // often have upper partials 25–35 dB below the fundamental, especially during decay.
+  const FORWARD_CONFIRM_DB = 36;
   const octaveCheck = findHarmonicFrequency(freqData, candidate * 2, sampleRate, fftSize);
   const cfifthCheck = findHarmonicFrequency(freqData, candidate * 3, sampleRate, fftSize);
   const octaveMag = octaveCheck !== null ? getMagnitudeAt(octaveCheck) : -Infinity;
   const cfifthMag = cfifthCheck !== null ? getMagnitudeAt(cfifthCheck) : -Infinity;
-  if (octaveMag < candidateMag - FORWARD_CONFIRM_DB && cfifthMag < candidateMag - FORWARD_CONFIRM_DB) {
+
+  // Also check 4f (double octave) as a fallback — some handpan notes have 4f more
+  // prominent than 2f or 3f due to the specific dimple geometry.
+  const doubleOctCheck = findHarmonicFrequency(freqData, candidate * 4, sampleRate, fftSize);
+  const doubleOctMag = doubleOctCheck !== null ? getMagnitudeAt(doubleOctCheck) : -Infinity;
+
+  const bestPartialMag = Math.max(octaveMag, cfifthMag, doubleOctMag);
+  if (bestPartialMag < candidateMag - FORWARD_CONFIRM_DB) {
     // No harmonic family confirmed — reject this detection
     return null;
   }

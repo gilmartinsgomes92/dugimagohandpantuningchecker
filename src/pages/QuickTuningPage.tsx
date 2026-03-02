@@ -62,6 +62,8 @@ const QuickTuningPage: React.FC = () => {
   // duplicates. Using full name rather than pitch class avoids blocking D2 and D3 (both
   // class "D") from registering as distinct notes.
   const registeredNoteNames = useRef<Set<string>>(new Set());
+  // Consecutive wrong-pitch-class frame counter for glitch tolerance
+  const glitchCount = useRef(0);
 
   const resetStabilityState = useCallback(() => {
     stableFrames.current = 0;
@@ -69,6 +71,7 @@ const QuickTuningPage: React.FC = () => {
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
+    glitchCount.current = 0;
   }, []);
   const registeredCount = state.tuningResults.filter(
     r => r.status !== 'pending'
@@ -207,12 +210,17 @@ const QuickTuningPage: React.FC = () => {
   // octave) is detected for STABLE_FRAMES_REQUIRED consecutive frames. Using pitch class
   // rather than exact note name or frequency makes the counter robust against the octave
   // jumps that the YIN algorithm produces on handpan harmonics (e.g. A3 ↔ A2).
+  const GLITCH_TOLERANCE = 3;
+
   useEffect(() => {
-    // Reset and hold at 0% when not listening, no signal, or during the post-registration
-    // cooldown — the cooldown guard prevents the still-ringing note from rebuilding the
-    // ring to a confusing partial percentage before the user plays the next note.
-    if (!isListening || result.frequency === null || result.noteName === null || justRegistered.current) {
+    // Reset stability when not listening or during post-registration cooldown.
+    // Only skip (not reset) when the result is null — silence grace in useAudioProcessor
+    // handles the clearing, so resetting here would destroy accumulated progress on decay dips.
+    if (!isListening || justRegistered.current) {
       resetStabilityState();
+      return;
+    }
+    if (result.frequency === null || result.noteName === null) {
       return;
     }
 
@@ -231,6 +239,7 @@ const QuickTuningPage: React.FC = () => {
     const anchor = lastPitchClass.current;
 
     if (anchor !== null && pitchClass === anchor) {
+      glitchCount.current = 0;
       stableFrames.current += 1;
       // Skip attack-phase frames: only collect frequencies from the sustain phase.
       // The first ATTACK_SKIP_FRAMES of each stable window cover the initial transient
@@ -250,7 +259,12 @@ const QuickTuningPage: React.FC = () => {
       if (stableFrames.current >= STABLE_FRAMES_REQUIRED && !justRegistered.current) {
         registerNote();
       }
+    } else if (anchor !== null && glitchCount.current < GLITCH_TOLERANCE) {
+      // Tolerate up to GLITCH_TOLERANCE consecutive wrong-pitch-class frames (noise
+      // glitches, sympathetic resonance). Skip without resetting the stability counter.
+      glitchCount.current += 1;
     } else {
+      glitchCount.current = 0;
       lastPitchClass.current = pitchClass;
       stableFrames.current = 1;
       stableFrequencies.current = [];
