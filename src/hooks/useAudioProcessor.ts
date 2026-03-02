@@ -17,7 +17,6 @@ interface AudioResult {
   matchScore: number;
 }
 
-
 export type DebugInfo = {
   audioState: string;
   rms: number;
@@ -30,7 +29,6 @@ export type DebugInfo = {
   smoothedFreq: number | null;
   rejectReason: string;
 };
-
 
 /** Half-width (in cents) of the precision search window for detectPitchInWindow. */
 const PRECISION_WINDOW_CENTS = 40;
@@ -69,11 +67,19 @@ function clamp(val: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, val));
 }
 
-const DEBUG_ENABLED = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+const DEBUG_ENABLED =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
 export const useAudioProcessor = () => {
   const [isListening, setIsListening] = useState(false);
-  const [result, setResult] = useState<AudioResult>({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
+  const [result, setResult] = useState<AudioResult>({
+    frequency: null,
+    octaveFrequency: null,
+    compoundFifthFrequency: null,
+    noteName: null,
+    cents: null,
+    matchScore: 0,
+  });
   const [error, setError] = useState<string | null>(null);
 
   const [debugInfo, setDebugInfo] = useState<DebugInfo>({
@@ -93,13 +99,18 @@ export const useAudioProcessor = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  // TS + CF build: avoid SharedArrayBuffer typing mismatch
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(8192 * 4)));
   const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(4096 * 4)));
-  // Re-entrancy guard: prevents duplicate audio streams from concurrent startListening calls
+
+  // Re-entrancy guard
   const isStartedRef = useRef(false);
-  // Consecutive silent/failed frames counter for silence grace logic
+
+  // Silence grace
   const silenceCountRef = useRef(0);
-  // EMA smoothing state for frequency output (null = not yet initialised)
+
+  // Smoothing state
   const smoothedFreqRef = useRef<number | null>(null);
   const smoothedMidiRef = useRef<number | null>(null);
   const smoothedOctaveRef = useRef<number | null>(null);
@@ -108,37 +119,45 @@ export const useAudioProcessor = () => {
   const noteOnsetMsRef = useRef<number>(0);
   const lastEmitMsRef = useRef<number>(0);
 
+  // Debug trackers
   const rmsPeakRef = useRef(0);
   const noiseFloorRef = useRef(0.002);
   const rejectReasonRef = useRef('');
+  const lastMatchScoreRef = useRef(0);
+  const lastNoteNameRef = useRef<string | null>(null);
+  const lastRawFreqRef = useRef<number | null>(null);
 
   // Strike handling: delay measurement until sustain phase
   const strikeTimeRef = useRef<number>(0);
   const waitingForStabilizationRef = useRef<boolean>(false);
-  const strikeArmedRef = useRef<boolean>(true);
 
-  // Number of consecutive below-threshold frames before clearing the result to null.
-  // Prevents flicker when a handpan note's amplitude gradually decays through the RMS
-  // threshold, causing the display to oscillate between the note and "Listening…".
+  // Strike re-arm hysteresis (fix iOS pulsing)
+  const strikeArmedRef = useRef<boolean>(true);
+  const quietFramesRef = useRef<number>(999);
+
+  // Platform tuning
   const IS_IOS =
     typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   const SILENCE_GRACE_FRAMES = 5;
 
-  // Handpan strike handling (edge-triggered: quiet -> loud)
+  // Main audio gate (keeps CPU down)
   const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
-  const STRIKE_ARM_RMS = IS_IOS ? 0.004 : 0.006;   // below this, we "arm" for next strike
-  const STRIKE_FIRE_RMS = IS_IOS ? 0.008 : 0.012;  // above this (while armed) = strike event
-  const STRIKE_COOLDOWN_MS = IS_IOS ? 650 : 900;   // avoid double-triggers on bounce
-  const STABILIZATION_DELAY_MS = IS_IOS ? 260 : 480; // ignore attack transient
 
-  const EMIT_INTERVAL_MS = 70; // ~14 Hz UI updates
-  const ONSET_DELAY_MS = 450;  // hide cents during attack
+  // Strike hysteresis thresholds
+  const ARM_RMS_THRESHOLD = IS_IOS ? 0.0045 : 0.006;
+  const STRIKE_RMS_THRESHOLD = IS_IOS ? 0.012 : 0.02;
+  const REARM_QUIET_FRAMES = IS_IOS ? 10 : 6;
+
+  const STRIKE_COOLDOWN_MS = IS_IOS ? 700 : 900;
+  const STABILIZATION_DELAY_MS = IS_IOS ? 260 : 480;
+
+  // UI / cents behavior
+  const EMIT_INTERVAL_MS = 70; // ~14 Hz
+  const ONSET_DELAY_MS = 450;
   const CENTS_SMOOTH_ALPHA = 0.18;
 
-  const startListening = useCallback(async () => {
-    if (isStartedRef.current) return;
-    isStartedRef.current = true;
+  const resetState = useCallback(() => {
     silenceCountRef.current = 0;
     smoothedFreqRef.current = null;
     smoothedMidiRef.current = null;
@@ -147,34 +166,44 @@ export const useAudioProcessor = () => {
     smoothedCentsRef.current = null;
     noteOnsetMsRef.current = 0;
     lastEmitMsRef.current = 0;
+
     rmsPeakRef.current = 0;
     noiseFloorRef.current = 0.002;
     rejectReasonRef.current = '';
-    rmsPeakRef.current = 0;
-    noiseFloorRef.current = 0.002;
-    rejectReasonRef.current = '';
+    lastMatchScoreRef.current = 0;
+    lastNoteNameRef.current = null;
+    lastRawFreqRef.current = null;
+
     strikeTimeRef.current = 0;
-    strikeArmedRef.current = true;
     waitingForStabilizationRef.current = false;
     strikeArmedRef.current = true;
-    waitingForStabilizationRef.current = false;
-    waitingForStabilizationRef.current = false;
+    quietFramesRef.current = 999;
+  }, []);
+
+  const startListening = useCallback(async () => {
+    if (isStartedRef.current) return;
+    isStartedRef.current = true;
+    resetState();
+
     try {
       setError(null);
+
       const stream = await navigator.mediaDevices.getUserMedia({
-  audio: {
-    echoCancellation: false,
-    noiseSuppression: false,
-    autoGainControl: false,
-    channelCount: 1,
-    sampleRate: { ideal: 48000 },
-  },
-  video: false,
-});
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1,
+          sampleRate: { ideal: 48000 },
+        },
+        video: false,
+      });
+
       if (!isStartedRef.current) {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
         return;
       }
+
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
@@ -184,6 +213,7 @@ export const useAudioProcessor = () => {
       analyser.fftSize = 8192;
       analyser.smoothingTimeConstant = 0.85;
       analyserRef.current = analyser;
+
       bufferRef.current = new Float32Array(new ArrayBuffer(analyser.fftSize * 4));
       freqBufRef.current = new Float32Array(new ArrayBuffer((analyser.fftSize / 2) * 4));
 
@@ -194,63 +224,71 @@ export const useAudioProcessor = () => {
 
       const tick = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
+
         const buf = bufferRef.current;
         analyserRef.current.getFloatTimeDomainData(buf);
         analyserRef.current.getFloatFrequencyData(freqBufRef.current);
 
         const rms = computeRMS(buf);
-        // debug: peak + noise floor tracking
+        const now = performance.now();
+
+        // Track peak and a moving noise-floor estimate
         rmsPeakRef.current = Math.max(rmsPeakRef.current * 0.96, rms);
         if (rms < 0.004) {
           noiseFloorRef.current = 0.98 * noiseFloorRef.current + 0.02 * rms;
         }
-        rejectReasonRef.current = '';
-        const now = performance.now();
 
-        // Strike detection (edge-triggered): on handpans, the attack transient is not tunable.
-        // We detect a quiet -> loud transition and then wait a short stabilization delay before measuring.
-        if (rms < STRIKE_ARM_RMS) {
+        rejectReasonRef.current = '';
+
+        // --- Strike re-arm + hysteresis (fixes iPhone pulsing) ---
+        if (rms < ARM_RMS_THRESHOLD) {
+          quietFramesRef.current += 1;
+        } else {
+          quietFramesRef.current = 0;
+        }
+
+        if (quietFramesRef.current >= REARM_QUIET_FRAMES) {
           strikeArmedRef.current = true;
         }
+
         if (
           strikeArmedRef.current &&
-          rms > STRIKE_FIRE_RMS &&
+          rms >= STRIKE_RMS_THRESHOLD &&
           now - strikeTimeRef.current > STRIKE_COOLDOWN_MS
         ) {
           strikeTimeRef.current = now;
-          strikeArmedRef.current = false;
           waitingForStabilizationRef.current = true;
+          strikeArmedRef.current = false;
+          quietFramesRef.current = 0;
         }
 
         if (waitingForStabilizationRef.current) {
           if (now - strikeTimeRef.current < STABILIZATION_DELAY_MS) {
-            // debug overlay update (lightweight)
-        if (DEBUG_ENABLED) {
-          setDebugInfo({
-          audioState: audioCtxRef.current?.state ?? 'none',
-          rms,
-          rmsPeak: rmsPeakRef.current,
-          noiseFloor: noiseFloorRef.current,
-          waitingStabilization: waitingForStabilizationRef.current,
-          matchScore: result.matchScore,
-          noteName: result.noteName,
-          rawFreq: result.frequency,
-          smoothedFreq: smoothedFreqRef.current,
-          rejectReason: rejectReasonRef.current,
-          });
-        }
+            rejectReasonRef.current = 'waiting stabilization';
 
-        rafRef.current = requestAnimationFrame(tick);
+            if (DEBUG_ENABLED) {
+              setDebugInfo({
+                audioState: audioCtxRef.current?.state ?? 'none',
+                rms,
+                rmsPeak: rmsPeakRef.current,
+                noiseFloor: noiseFloorRef.current,
+                waitingStabilization: true,
+                matchScore: lastMatchScoreRef.current,
+                noteName: lastNoteNameRef.current,
+                rawFreq: lastRawFreqRef.current,
+                smoothedFreq: smoothedFreqRef.current,
+                rejectReason: rejectReasonRef.current,
+              });
+            }
+
+            rafRef.current = requestAnimationFrame(tick);
             return;
           }
           waitingForStabilizationRef.current = false;
         }
 
+        // Main gate
         if (rms >= SIGNAL_RMS_THRESHOLD) {
-          // Stage 1 — Note Identification: spectral template matching against all
-          // handpan notes (MIDI 50–84). Scores the entire FFT spectrum against known
-          // harmonic templates so that notes where the octave/compound-fifth is louder
-          // than the fundamental are still identified correctly.
           const match = matchNote(
             freqBufRef.current,
             audioCtxRef.current.sampleRate,
@@ -262,29 +300,21 @@ export const useAudioProcessor = () => {
             const { midiNote, nominalFreq, score } = match;
             const sampleRate = audioCtxRef.current.sampleRate;
 
-            // Note-change reset: when the spectral matcher locks onto a different MIDI
-            // note, clear all smoothing state so there is no sluggish crossfade.
-            if (smoothedMidiRef.current !== null && smoothedMidiRef.current !== midiNote) {
-            smoothedFreqRef.current = null;
-            smoothedOctaveRef.current = null;
-            smoothedCFifthRef.current = null;
+            lastMatchScoreRef.current = score;
+            lastNoteNameRef.current = midiToFullName(midiNote);
 
-             // reset cents smoothing + onset timing on note change
-           smoothedCentsRef.current = null;
-           noteOnsetMsRef.current = performance.now();
-           lastEmitMsRef.current = 0;
-    rmsPeakRef.current = 0;
-    noiseFloorRef.current = 0.002;
-    rejectReasonRef.current = '';
-           }
+            if (smoothedMidiRef.current !== null && smoothedMidiRef.current !== midiNote) {
+              smoothedFreqRef.current = null;
+              smoothedOctaveRef.current = null;
+              smoothedCFifthRef.current = null;
+              smoothedCentsRef.current = null;
+              noteOnsetMsRef.current = performance.now();
+              lastEmitMsRef.current = 0;
+            }
 
             smoothedMidiRef.current = midiNote;
             if (noteOnsetMsRef.current === 0) noteOnsetMsRef.current = performance.now();
 
-            // Stage 2 — Precision Measurement: run detectPitchInWindow with tight
-            // ±20-cent windows centered on the known ET frequencies. This uses the
-            // raw time-domain buffer with a Hann-windowed 4096-point FFT for higher
-            // accuracy than the AnalyserNode's pre-computed FFT.
             const fundWin = precisionWindow(nominalFreq);
             let freq = detectPitchInWindow(buf, sampleRate, fundWin.lo, fundWin.hi);
 
@@ -292,197 +322,152 @@ export const useAudioProcessor = () => {
             const octWin = precisionWindow(octaveNominal);
             const octaveFreq = detectPitchInWindow(buf, sampleRate, octWin.lo, octWin.hi);
 
-            // Fallback: derive fundamental from octave if the fundamental partial is
-            // below the noise floor (common on high-octave handpan notes during decay).
-            // This is safe because octaveFreq was detected within ±PRECISION_WINDOW_CENTS
-            // of nominalFreq × 2, so octaveFreq / 2 is guaranteed to be close to the
-            // true fundamental and stays close to the matched nominal note.
             if (freq === null && octaveFreq !== null) {
               freq = octaveFreq / 2;
             }
 
+            lastRawFreqRef.current = freq;
+
             if (freq !== null) {
-              // Outlier gate: skip frames where the raw frequency jumps more than
-              // MAX_CENTS_JUMP cents from the current smoothed value (likely a glitch).
               if (smoothedFreqRef.current !== null) {
                 const centsJump = Math.abs(1200 * Math.log2(freq / smoothedFreqRef.current));
                 if (centsJump > MAX_CENTS_JUMP) {
                   rejectReasonRef.current = 'jump rejected';
-                  // debug overlay update (lightweight)
-        if (DEBUG_ENABLED) {
-          setDebugInfo({
-          audioState: audioCtxRef.current?.state ?? 'none',
-          rms,
-          rmsPeak: rmsPeakRef.current,
-          noiseFloor: noiseFloorRef.current,
-          waitingStabilization: waitingForStabilizationRef.current,
-          matchScore: result.matchScore,
-          noteName: result.noteName,
-          rawFreq: result.frequency,
-          smoothedFreq: smoothedFreqRef.current,
-          rejectReason: rejectReasonRef.current,
-          });
-        }
-
-        rafRef.current = requestAnimationFrame(tick);
+                  if (DEBUG_ENABLED) {
+                    setDebugInfo({
+                      audioState: audioCtxRef.current?.state ?? 'none',
+                      rms,
+                      rmsPeak: rmsPeakRef.current,
+                      noiseFloor: noiseFloorRef.current,
+                      waitingStabilization: false,
+                      matchScore: lastMatchScoreRef.current,
+                      noteName: lastNoteNameRef.current,
+                      rawFreq: lastRawFreqRef.current,
+                      smoothedFreq: smoothedFreqRef.current,
+                      rejectReason: rejectReasonRef.current,
+                    });
+                  }
+                  rafRef.current = requestAnimationFrame(tick);
                   return;
                 }
               }
 
-              // EMA smoothing on fundamental frequency
-              smoothedFreqRef.current = smoothedFreqRef.current === null
-                ? freq
-                : FREQ_SMOOTH_ALPHA * freq + (1 - FREQ_SMOOTH_ALPHA) * smoothedFreqRef.current;
+              smoothedFreqRef.current =
+                smoothedFreqRef.current === null
+                  ? freq
+                  : FREQ_SMOOTH_ALPHA * freq + (1 - FREQ_SMOOTH_ALPHA) * smoothedFreqRef.current;
 
               const smoothedFreq = smoothedFreqRef.current;
 
-    const noteName = midiToFullName(midiNote);
+              const noteName = midiToFullName(midiNote);
+              const rawCents = clamp(centsFromNominal(smoothedFreq, nominalFreq), -60, 60);
 
-// cents relative to the matched note nominal (NOT nearest note)
-const rawCents = clamp(centsFromNominal(smoothedFreq, nominalFreq), -60, 60);
+              smoothedCentsRef.current =
+                smoothedCentsRef.current === null
+                  ? rawCents
+                  : CENTS_SMOOTH_ALPHA * rawCents + (1 - CENTS_SMOOTH_ALPHA) * smoothedCentsRef.current;
 
-// smooth in cents domain (more stable UI)
-smoothedCentsRef.current =
-  smoothedCentsRef.current === null
-    ? rawCents
-    : CENTS_SMOOTH_ALPHA * rawCents + (1 - CENTS_SMOOTH_ALPHA) * smoothedCentsRef.current;
+              const nowMs = performance.now();
+              if (nowMs - lastEmitMsRef.current < EMIT_INTERVAL_MS) {
+                rafRef.current = requestAnimationFrame(tick);
+                return;
+              }
+              lastEmitMsRef.current = nowMs;
 
-// rate-limit UI updates + hide cents during attack transient
-const nowMs = performance.now();
-if (nowMs - lastEmitMsRef.current < EMIT_INTERVAL_MS) {
-  rafRef.current = requestAnimationFrame(tick);
-  return;
-}
-lastEmitMsRef.current = nowMs;
+              const showCents = nowMs - noteOnsetMsRef.current >= ONSET_DELAY_MS;
 
-const showCents = nowMs - noteOnsetMsRef.current >= ONSET_DELAY_MS;
-const compFifthNominal = nominalFreq * 3;
-const cfWin = precisionWindow(compFifthNominal);
+              const compFifthNominal = nominalFreq * 3;
+              const cfWin = precisionWindow(compFifthNominal);
+              const compFifthFreq =
+                compFifthNominal <= sampleRate / 2
+                  ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi)
+                  : findHarmonicFrequency(
+                      freqBufRef.current,
+                      compFifthNominal,
+                      sampleRate,
+                      analyserRef.current.fftSize,
+                    );
 
-// Use detectPitchInWindow for compound fifth if within usable FFT range;
-// fall back to findHarmonicFrequency otherwise.
-const compFifthFreq =
-  compFifthNominal <= sampleRate / 2
-    ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi)
-    : findHarmonicFrequency(
-        freqBufRef.current,
-        compFifthNominal,
-        sampleRate,
-        analyserRef.current.fftSize,
-      );
+              smoothedOctaveRef.current =
+                octaveFreq === null
+                  ? smoothedOctaveRef.current
+                  : smoothedOctaveRef.current === null
+                    ? octaveFreq
+                    : FREQ_SMOOTH_ALPHA * octaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
 
-// EMA smoothing on octave and compound-fifth partials
-smoothedOctaveRef.current =
-  octaveFreq === null
-    ? smoothedOctaveRef.current
-    : smoothedOctaveRef.current === null
-      ? octaveFreq
-      : FREQ_SMOOTH_ALPHA * octaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
+              smoothedCFifthRef.current =
+                compFifthFreq === null
+                  ? smoothedCFifthRef.current
+                  : smoothedCFifthRef.current === null
+                    ? compFifthFreq
+                    : FREQ_SMOOTH_ALPHA * compFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
 
-smoothedCFifthRef.current =
-  compFifthFreq === null
-    ? smoothedCFifthRef.current
-    : smoothedCFifthRef.current === null
-      ? compFifthFreq
-      : FREQ_SMOOTH_ALPHA * compFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
-
-// ✅ THIS was missing — emit the result (rate-limited)
-setResult({
-  frequency: smoothedFreq,
-  octaveFrequency: smoothedOctaveRef.current,
-  compoundFifthFrequency: smoothedCFifthRef.current,
-  noteName,
-  cents: showCents ? smoothedCentsRef.current : null,
-  matchScore: score,
-});
-              
+              setResult({
+                frequency: smoothedFreq,
+                octaveFrequency: smoothedOctaveRef.current,
+                compoundFifthFrequency: smoothedCFifthRef.current,
+                noteName,
+                cents: showCents ? smoothedCentsRef.current : null,
+                matchScore: score,
+              });
             } else {
-              // Template matched but no measurable partial found — count as silent
               rejectReasonRef.current = 'freq null';
               silenceCountRef.current += 1;
               if (silenceCountRef.current >= SILENCE_GRACE_FRAMES) {
-                smoothedFreqRef.current = null;
-                smoothedMidiRef.current = null;
-                smoothedOctaveRef.current = null;
-                smoothedCFifthRef.current = null;
-                smoothedCentsRef.current = null;
-                noteOnsetMsRef.current = 0;
-                lastEmitMsRef.current = 0;
-    rmsPeakRef.current = 0;
-    noiseFloorRef.current = 0.002;
-    rejectReasonRef.current = '';
-                strikeTimeRef.current = 0;
-            strikeArmedRef.current = true;
-            waitingForStabilizationRef.current = false;
-              strikeArmedRef.current = true;
-              waitingForStabilizationRef.current = false;
-                strikeArmedRef.current = true;
-                waitingForStabilizationRef.current = false;
-                waitingForStabilizationRef.current = false;
-                setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
+                resetState();
+                setResult({
+                  frequency: null,
+                  octaveFrequency: null,
+                  compoundFifthFrequency: null,
+                  noteName: null,
+                  cents: null,
+                  matchScore: 0,
+                });
               }
             }
           } else {
-            // No template match above threshold — count as silent/failed frame
             rejectReasonRef.current = 'no match';
             silenceCountRef.current += 1;
             if (silenceCountRef.current >= SILENCE_GRACE_FRAMES) {
-              smoothedFreqRef.current = null;
-              smoothedMidiRef.current = null;
-              smoothedOctaveRef.current = null;
-              smoothedCFifthRef.current = null;
-              smoothedCentsRef.current = null;
-              noteOnsetMsRef.current = 0;
-              lastEmitMsRef.current = 0;
-    rmsPeakRef.current = 0;
-    noiseFloorRef.current = 0.002;
-    rejectReasonRef.current = '';
-              strikeTimeRef.current = 0;
-            strikeArmedRef.current = true;
-            waitingForStabilizationRef.current = false;
-              strikeArmedRef.current = true;
-              waitingForStabilizationRef.current = false;
-              waitingForStabilizationRef.current = false;
-              setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
+              resetState();
+              setResult({
+                frequency: null,
+                octaveFrequency: null,
+                compoundFifthFrequency: null,
+                noteName: null,
+                cents: null,
+                matchScore: 0,
+              });
             }
           }
         } else {
-          // Signal below noise floor — use silence grace to avoid flickering when the
           rejectReasonRef.current = 'rms too low';
-          // note's amplitude decays gradually through the RMS threshold.
           silenceCountRef.current += 1;
           if (silenceCountRef.current >= SILENCE_GRACE_FRAMES) {
-            smoothedFreqRef.current = null;
-            smoothedMidiRef.current = null;
-            smoothedOctaveRef.current = null;
-            smoothedCFifthRef.current = null;
-            smoothedCentsRef.current = null;
-            noteOnsetMsRef.current = 0;
-            lastEmitMsRef.current = 0;
-    rmsPeakRef.current = 0;
-    noiseFloorRef.current = 0.002;
-    rejectReasonRef.current = '';
-            strikeTimeRef.current = 0;
-            strikeArmedRef.current = true;
-            waitingForStabilizationRef.current = false;
-            waitingForStabilizationRef.current = false;
-            setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
+            resetState();
+            setResult({
+              frequency: null,
+              octaveFrequency: null,
+              compoundFifthFrequency: null,
+              noteName: null,
+              cents: null,
+              matchScore: 0,
+            });
           }
         }
 
-        // debug overlay update (lightweight)
         if (DEBUG_ENABLED) {
           setDebugInfo({
-          audioState: audioCtxRef.current?.state ?? 'none',
-          rms,
-          rmsPeak: rmsPeakRef.current,
-          noiseFloor: noiseFloorRef.current,
-          waitingStabilization: waitingForStabilizationRef.current,
-          matchScore: result.matchScore,
-          noteName: result.noteName,
-          rawFreq: result.frequency,
-          smoothedFreq: smoothedFreqRef.current,
-          rejectReason: rejectReasonRef.current,
+            audioState: audioCtxRef.current?.state ?? 'none',
+            rms,
+            rmsPeak: rmsPeakRef.current,
+            noiseFloor: noiseFloorRef.current,
+            waitingStabilization: waitingForStabilizationRef.current,
+            matchScore: lastMatchScoreRef.current,
+            noteName: lastNoteNameRef.current,
+            rawFreq: lastRawFreqRef.current,
+            smoothedFreq: smoothedFreqRef.current,
+            rejectReason: rejectReasonRef.current,
           });
         }
 
@@ -494,32 +479,27 @@ setResult({
       isStartedRef.current = false;
       setError(err instanceof Error ? err.message : 'Microphone access denied');
     }
-  }, []);
+  }, [resetState]);
 
   const stopListening = useCallback(() => {
     isStartedRef.current = false;
-    silenceCountRef.current = 0;
-    smoothedFreqRef.current = null;
-    smoothedMidiRef.current = null;
-    smoothedOctaveRef.current = null;
-    smoothedCFifthRef.current = null;
-    smoothedCentsRef.current = null;
-    noteOnsetMsRef.current = 0;
-    lastEmitMsRef.current = 0;
-    rmsPeakRef.current = 0;
-    noiseFloorRef.current = 0.002;
-    rejectReasonRef.current = '';
-    strikeTimeRef.current = 0;
-    waitingForStabilizationRef.current = false;
+    resetState();
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
-    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     audioCtxRef.current = null;
     analyserRef.current = null;
     setIsListening(false);
-    setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
-  }, []);
+    setResult({
+      frequency: null,
+      octaveFrequency: null,
+      compoundFifthFrequency: null,
+      noteName: null,
+      cents: null,
+      matchScore: 0,
+    });
+  }, [resetState]);
 
   useEffect(() => () => { stopListening(); }, [stopListening]);
 
