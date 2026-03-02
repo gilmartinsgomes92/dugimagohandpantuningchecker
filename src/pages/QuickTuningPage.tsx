@@ -349,6 +349,7 @@ const QuickTuningPage: React.FC = () => {
   const stabilityPct = leadingEntry ? Math.round(leadingEntry.confidence * 100) : 0;
 
   return (
+  <>
     <div className="page quick-tuning-page">
       <div className="page-header">
         <div className="tuning-progress-bar">
@@ -468,35 +469,39 @@ const QuickTuningPage: React.FC = () => {
           View Results →
         </button>
       </div>
-    </div>
-
-      {DEBUG && debugInfo && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 12,
-            left: 12,
-            right: 12,
-            padding: 12,
-            background: 'rgba(0,0,0,0.85)',
-            color: '#00ff66',
-            fontSize: 12,
-            borderRadius: 10,
-            zIndex: 9999,
-            lineHeight: 1.35,
-            fontFamily: 'monospace',
-          }}
-        >
-          <div>audio: {debugInfo.audioState}</div>
-          <div>rms: {debugInfo.rms.toFixed(4)} (peak {debugInfo.rmsPeak.toFixed(4)})</div>
-          <div>noise: {debugInfo.noiseFloor.toFixed(4)}</div>
-          <div>waiting: {String(debugInfo.waitingStabilization)}</div>
-          <div>note: {debugInfo.noteName ?? '—'} score: {debugInfo.matchScore.toFixed(2)}</div>
-          <div>freq: {debugInfo.rawFreq ? debugInfo.rawFreq.toFixed(2) : '—'} → {debugInfo.smoothedFreq ? debugInfo.smoothedFreq.toFixed(2) : '—'}</div>
-          <div>reject: {debugInfo.rejectReason || '—'}</div>
         </div>
-      )}
-  );
+
+    {DEBUG && debugInfo && (
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 12,
+          left: 12,
+          right: 12,
+          padding: 12,
+          background: 'rgba(0,0,0,0.85)',
+          color: '#00ff66',
+          fontSize: 12,
+          borderRadius: 10,
+          zIndex: 9999,
+          lineHeight: 1.35,
+          fontFamily: 'monospace',
+        }}
+      >
+        <div>audio: {debugInfo.audioState}</div>
+        <div>rms: {debugInfo.rms.toFixed(4)} (peak {debugInfo.rmsPeak.toFixed(4)})</div>
+        <div>noise: {debugInfo.noiseFloor.toFixed(4)}</div>
+        <div>waiting: {String(debugInfo.waitingStabilization)}</div>
+        <div>note: {debugInfo.noteName ?? '—'} score: {debugInfo.matchScore.toFixed(2)}</div>
+        <div>
+          freq: {debugInfo.rawFreq ? debugInfo.rawFreq.toFixed(2) : '—'} →{' '}
+          {debugInfo.smoothedFreq ? debugInfo.smoothedFreq.toFixed(2) : '—'}
+        </div>
+        <div>reject: {debugInfo.rejectReason || '—'}</div>
+      </div>
+    )}
+  </>
+);
 };
 
 export default QuickTuningPage;
