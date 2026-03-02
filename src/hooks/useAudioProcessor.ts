@@ -63,8 +63,8 @@ export const useAudioProcessor = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
-  const bufferRef = useRef<Float32Array>(new Float32Array(8192));
-  const freqBufRef = useRef<Float32Array>(new Float32Array(4096));
+  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(8192 * 4)));
+  const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(4096 * 4)));
   // Re-entrancy guard: prevents duplicate audio streams from concurrent startListening calls
   const isStartedRef = useRef(false);
   // Consecutive silent/failed frames counter for silence grace logic
@@ -113,8 +113,8 @@ export const useAudioProcessor = () => {
       analyser.fftSize = 8192;
       analyser.smoothingTimeConstant = 0.85;
       analyserRef.current = analyser;
-      bufferRef.current = new Float32Array(analyser.fftSize);
-      freqBufRef.current = new Float32Array(analyser.fftSize / 2);
+      bufferRef.current = new Float32Array(new ArrayBuffer(analyser.fftSize * 4));
+      freqBufRef.current = new Float32Array(new ArrayBuffer((analyser.fftSize / 2) * 4));
 
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
