@@ -142,7 +142,7 @@ export function useStrobeTuner(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   // Pre-allocated time-domain buffer (reused every frame to avoid GC pressure).
-  const bufferRef = useRef<Float32Array>(new Float32Array(FFT_SIZE));
+  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(FFT_SIZE));
   // Stability frame counter kept in a ref so the RAF closure always reads
   // the latest value without a stale closure over state.
   const stabilityFramesRef = useRef(0);
