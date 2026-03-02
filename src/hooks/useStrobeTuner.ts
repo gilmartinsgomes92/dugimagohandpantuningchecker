@@ -7,7 +7,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { detectPitchInWindow } from '../utils/pitchInWindow';
+import { detectPitchInWindowPhaseDiff } from '../utils/pitchInWindow';
 
 // ── Stability constants ──────────────────────────────────────────────────────
 
@@ -146,6 +146,12 @@ export function useStrobeTuner(
   // Stability frame counter kept in a ref so the RAF closure always reads
   // the latest value without a stale closure over state.
   const stabilityFramesRef = useRef(0);
+  // Phase spectra for phase-difference correction (one per partial).
+  const prevPhaseFundRef = useRef<Float64Array | null>(null);
+  const prevPhaseOctRef = useRef<Float64Array | null>(null);
+  const prevPhaseCFifthRef = useRef<Float64Array | null>(null);
+  // AudioContext.currentTime of the previous tick, used to compute hop size.
+  const prevTimeRef = useRef<number | null>(null);
 
   const stopListening = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -156,6 +162,10 @@ export function useStrobeTuner(
     analyserRef.current = null;
     rafRef.current = null;
     stabilityFramesRef.current = 0;
+    prevPhaseFundRef.current = null;
+    prevPhaseOctRef.current = null;
+    prevPhaseCFifthRef.current = null;
+    prevTimeRef.current = null;
     setIsListening(false);
     setFrequency(null);
     setOctaveFrequency(null);
@@ -185,6 +195,11 @@ export function useStrobeTuner(
 
       setIsListening(true);
 
+      // Pre-allocated per-partial phase output arrays (reused every frame).
+      const currPhaseFund = new Float64Array(FFT_SIZE / 2);
+      const currPhaseOct = new Float64Array(FFT_SIZE / 2);
+      const currPhaseCFifth = new Float64Array(FFT_SIZE / 2);
+
       const tick = () => {
         if (!analyserRef.current || !audioCtxRef.current) return;
 
@@ -192,22 +207,69 @@ export function useStrobeTuner(
         const buf = bufferRef.current;
         const sr = audioCtxRef.current.sampleRate;
 
+        // Compute hop size in samples from the elapsed AudioContext time.
+        const currentTime = audioCtxRef.current.currentTime;
+        const hopSize = prevTimeRef.current !== null
+          ? Math.max(0, Math.round((currentTime - prevTimeRef.current) * sr))
+          : 0;
+        prevTimeRef.current = currentTime;
+
         // Narrow-band detection for each partial independently.
-        const detectedFund = detectPitchInWindow(
+        const detectedFund = detectPitchInWindowPhaseDiff(
           buf, sr,
           windowLo(targetFundamental, FUND_WINDOW_CENTS),
           windowHi(targetFundamental, FUND_WINDOW_CENTS),
+          prevPhaseFundRef.current,
+          currPhaseFund,
+          hopSize,
         );
-        const detectedOctave = detectPitchInWindow(
+        const detectedOctave = detectPitchInWindowPhaseDiff(
           buf, sr,
           windowLo(targetOctave, OCTAVE_WINDOW_CENTS),
           windowHi(targetOctave, OCTAVE_WINDOW_CENTS),
+          prevPhaseOctRef.current,
+          currPhaseOct,
+          hopSize,
         );
-        const detectedCFifth = detectPitchInWindow(
+        const detectedCFifth = detectPitchInWindowPhaseDiff(
           buf, sr,
           windowLo(targetCompoundFifth, COMP_FIFTH_WINDOW_CENTS),
           windowHi(targetCompoundFifth, COMP_FIFTH_WINDOW_CENTS),
+          prevPhaseCFifthRef.current,
+          currPhaseCFifth,
+          hopSize,
         );
+
+        // Update phase history: copy current phases to prev refs for next frame.
+        // Only update when detection succeeded (non-null); reset on silence so
+        // the next non-silent frame falls back to parabolic interpolation.
+        if (detectedFund !== null) {
+          if (prevPhaseFundRef.current === null) {
+            prevPhaseFundRef.current = new Float64Array(currPhaseFund);
+          } else {
+            prevPhaseFundRef.current.set(currPhaseFund);
+          }
+        } else {
+          prevPhaseFundRef.current = null;
+        }
+        if (detectedOctave !== null) {
+          if (prevPhaseOctRef.current === null) {
+            prevPhaseOctRef.current = new Float64Array(currPhaseOct);
+          } else {
+            prevPhaseOctRef.current.set(currPhaseOct);
+          }
+        } else {
+          prevPhaseOctRef.current = null;
+        }
+        if (detectedCFifth !== null) {
+          if (prevPhaseCFifthRef.current === null) {
+            prevPhaseCFifthRef.current = new Float64Array(currPhaseCFifth);
+          } else {
+            prevPhaseCFifthRef.current.set(currPhaseCFifth);
+          }
+        } else {
+          prevPhaseCFifthRef.current = null;
+        }
 
         // Cents deviations from each target.
         const cFund = detectedFund !== null ? calcCents(detectedFund, targetFundamental) : null;
