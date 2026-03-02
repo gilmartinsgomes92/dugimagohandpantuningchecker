@@ -11,6 +11,7 @@
  *  3. Convert Hz search bounds to FFT bin indices
  *  4. Find the highest-magnitude bin within the window
  *  5. Parabolic interpolation for sub-bin (≈ ±1¢) frequency accuracy
+ *     OR phase-difference correction (≈ ±0.1¢) when prevPhase is supplied
  */
 
 import { computeRMS } from './yin';
@@ -90,6 +91,102 @@ export function detectPitchInWindow(
   }
 
   return (peakBin + delta) * binHz;
+}
+
+/**
+ * Detects the dominant frequency within a restricted frequency window using
+ * FFT-based peak finding with phase-difference correction for near-exact
+ * (≈ ±0.1 cent) sub-bin accuracy.
+ *
+ * On the **first frame** (prevPhase === null or hopSize ≤ 0), falls back to
+ * parabolic interpolation (≈ ±1 cent), identical to `detectPitchInWindow`.
+ * On subsequent frames, the instantaneous frequency is computed from the rate
+ * of phase change across the hop interval (phase-vocoder technique).
+ *
+ * @param buffer      - Float32Array of time-domain audio samples
+ * @param sampleRate  - Audio sample rate in Hz
+ * @param searchLoHz  - Lower bound of search window in Hz
+ * @param searchHiHz  - Upper bound of search window in Hz
+ * @param prevPhase   - Phase spectrum (atan2) from the previous frame, or null on first call
+ * @param currPhase   - Output array (length fftSize/2) that receives the current phase spectrum
+ * @param hopSize     - Number of audio samples between the previous frame and this frame
+ * @returns Detected frequency in Hz, or null if no significant signal found
+ */
+export function detectPitchInWindowPhaseDiff(
+  buffer: Float32Array,
+  sampleRate: number,
+  searchLoHz: number,
+  searchHiHz: number,
+  prevPhase: Float64Array | null,
+  currPhase: Float64Array,
+  hopSize: number,
+): number | null {
+  // Noise floor gate: reject silent or near-silent signals
+  if (computeRMS(buffer) < NOISE_FLOOR_RMS) return null;
+
+  const fftSize = FFT_SIZE;
+  const re = new Float64Array(fftSize);
+  const im = new Float64Array(fftSize);
+  const len = Math.min(buffer.length, fftSize);
+
+  // Apply Hann window to reduce spectral leakage
+  for (let i = 0; i < len; i++) {
+    const w = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
+    re[i] = buffer[i] * w;
+  }
+
+  radix2FFT(re, im, fftSize);
+
+  // Build dB magnitude spectrum and store phase spectrum
+  const numBins = fftSize / 2;
+  const magDB = new Float32Array(numBins);
+  for (let k = 0; k < numBins; k++) {
+    const mag = Math.sqrt(re[k] * re[k] + im[k] * im[k]) / fftSize;
+    magDB[k] = mag > 1e-12 ? 20 * Math.log10(mag) : -Infinity;
+    currPhase[k] = Math.atan2(im[k], re[k]);
+  }
+
+  // Convert search window bounds to bin indices
+  const binHz = sampleRate / fftSize;
+  const lowBin = Math.max(1, Math.floor(searchLoHz / binHz));
+  const highBin = Math.min(numBins - 2, Math.ceil(searchHiHz / binHz));
+
+  if (lowBin >= highBin) return null;
+
+  // Find peak magnitude bin within the window
+  let peakBin = lowBin;
+  let peakMag = magDB[lowBin];
+  for (let k = lowBin + 1; k <= highBin; k++) {
+    if (magDB[k] > peakMag) {
+      peakMag = magDB[k];
+      peakBin = k;
+    }
+  }
+
+  // Reject if peak is below noise floor
+  if (peakMag < NOISE_FLOOR_DB) return null;
+
+  // First frame or unusably small hop: fall back to parabolic interpolation
+  if (prevPhase === null || hopSize < 16) {
+    const prevMag = magDB[peakBin - 1];
+    const nextMag = magDB[peakBin + 1];
+    const denom = 2.0 * peakMag - prevMag - nextMag;
+    let delta = 0;
+    if (Math.abs(denom) > 1e-6) {
+      delta = 0.5 * (nextMag - prevMag) / denom;
+      delta = Math.max(-0.5, Math.min(0.5, delta));
+    }
+    return (peakBin + delta) * binHz;
+  }
+
+  // Phase-difference correction (phase-vocoder instantaneous frequency)
+  const TWO_PI = 2 * Math.PI;
+  const expectedPhaseAdvance = TWO_PI * peakBin * hopSize / fftSize;
+  let phaseDiff = currPhase[peakBin] - prevPhase[peakBin] - expectedPhaseAdvance;
+  // Wrap to [-π, π]
+  phaseDiff = phaseDiff - TWO_PI * Math.round(phaseDiff / TWO_PI);
+  const binDeviation = phaseDiff / (TWO_PI * hopSize / fftSize);
+  return (peakBin + binDeviation) * binHz;
 }
 
 /**

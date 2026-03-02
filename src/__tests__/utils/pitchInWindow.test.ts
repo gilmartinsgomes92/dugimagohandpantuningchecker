@@ -10,7 +10,7 @@
  * - High-noise environment with target signal → correct frequency
  */
 
-import { detectPitchInWindow } from '../../utils/pitchInWindow';
+import { detectPitchInWindow, detectPitchInWindowPhaseDiff } from '../../utils/pitchInWindow';
 import {
   generateSineWave,
   generateHarmonicSignal,
@@ -164,5 +164,86 @@ describe('detectPitchInWindow – noisy signal', () => {
     const detected = detectPitchInWindow(noisySignal, SAMPLE_RATE, loHz, hiHz);
     expect(detected).not.toBeNull();
     expect(centDeviation(detected!, freq)).toBeLessThanOrEqual(3);
+  });
+});
+
+// ── Phase-difference correction ───────────────────────────────────────────────
+
+describe('detectPitchInWindowPhaseDiff – phase-difference correction', () => {
+  const FFT_SIZE = 4096;
+
+  it('yields sub-cent accuracy for two consecutive frames of a known sine wave', () => {
+    const freq = 440.0; // A4 — not at an exact bin centre
+    const loHz = freq * Math.pow(2, -20 / 1200);
+    const hiHz = freq * Math.pow(2, 20 / 1200);
+    const hopSize = Math.round(SAMPLE_RATE / 60); // ≈ 735 samples at 60 fps
+
+    // Frame 1: starting at sample 0
+    const buffer1 = generateSineWave(freq, SAMPLE_RATE, FFT_SIZE, 0.5, 0);
+    const currPhase1 = new Float64Array(FFT_SIZE / 2);
+    detectPitchInWindowPhaseDiff(buffer1, SAMPLE_RATE, loHz, hiHz, null, currPhase1, hopSize);
+
+    // Frame 2: starting at sample hopSize (phase-shifted by hopSize samples)
+    const phaseOffset = (2 * Math.PI * freq * hopSize) / SAMPLE_RATE;
+    const buffer2 = generateSineWave(freq, SAMPLE_RATE, FFT_SIZE, 0.5, phaseOffset);
+    const currPhase2 = new Float64Array(FFT_SIZE / 2);
+    const detected = detectPitchInWindowPhaseDiff(
+      buffer2, SAMPLE_RATE, loHz, hiHz, currPhase1, currPhase2, hopSize,
+    );
+
+    expect(detected).not.toBeNull();
+    // Phase-diff correction should achieve sub-cent accuracy
+    expect(centDeviation(detected!, freq)).toBeLessThan(0.5);
+  });
+
+  it('first frame (null prevPhase) returns the same result as parabolic interpolation', () => {
+    const freq = 440.0;
+    const loHz = freq * Math.pow(2, -20 / 1200);
+    const hiHz = freq * Math.pow(2, 20 / 1200);
+    const hopSize = 735;
+
+    const buffer = generateSineWave(freq, SAMPLE_RATE, FFT_SIZE, 0.5);
+    const currPhase = new Float64Array(FFT_SIZE / 2);
+
+    const phaseDiffResult = detectPitchInWindowPhaseDiff(
+      buffer, SAMPLE_RATE, loHz, hiHz, null, currPhase, hopSize,
+    );
+    const parabolicResult = detectPitchInWindow(buffer, SAMPLE_RATE, loHz, hiHz);
+
+    expect(phaseDiffResult).not.toBeNull();
+    expect(parabolicResult).not.toBeNull();
+    // Both code paths use parabolic interpolation when prevPhase is null
+    expect(phaseDiffResult!).toBeCloseTo(parabolicResult!, 10);
+  });
+
+  it('phase unwrapping: large hop size (>2π wrap) still yields accurate result', () => {
+    const freq = 440.0;
+    const loHz = freq * Math.pow(2, -20 / 1200);
+    const hiHz = freq * Math.pow(2, 20 / 1200);
+    // Large hop causes many full 2π phase cycles — requires correct unwrapping
+    const hopSize = Math.round(SAMPLE_RATE / 20); // ≈ 2205 samples
+
+    const buffer1 = generateSineWave(freq, SAMPLE_RATE, FFT_SIZE, 0.5, 0);
+    const currPhase1 = new Float64Array(FFT_SIZE / 2);
+    detectPitchInWindowPhaseDiff(buffer1, SAMPLE_RATE, loHz, hiHz, null, currPhase1, hopSize);
+
+    const phaseOffset = (2 * Math.PI * freq * hopSize) / SAMPLE_RATE;
+    const buffer2 = generateSineWave(freq, SAMPLE_RATE, FFT_SIZE, 0.5, phaseOffset);
+    const currPhase2 = new Float64Array(FFT_SIZE / 2);
+    const detected = detectPitchInWindowPhaseDiff(
+      buffer2, SAMPLE_RATE, loHz, hiHz, currPhase1, currPhase2, hopSize,
+    );
+
+    expect(detected).not.toBeNull();
+    expect(centDeviation(detected!, freq)).toBeLessThan(0.5);
+  });
+
+  it('returns null for a below-noise-floor signal regardless of prevPhase', () => {
+    const silent = new Float32Array(FFT_SIZE);
+    const currPhase = new Float64Array(FFT_SIZE / 2);
+    const prevPhase = new Float64Array(FFT_SIZE / 2);
+    expect(detectPitchInWindowPhaseDiff(
+      silent, SAMPLE_RATE, 400, 480, prevPhase, currPhase, 735,
+    )).toBeNull();
   });
 });
