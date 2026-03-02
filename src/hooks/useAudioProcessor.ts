@@ -109,7 +109,17 @@ export const useAudioProcessor = () => {
     waitingForStabilizationRef.current = false;
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+  audio: {
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+    channelCount: 1,
+    sampleRate: 48000,
+    latency: 0,
+  },
+  video: false,
+});
       if (!isStartedRef.current) {
         stream.getTracks().forEach(t => t.stop());
         return;
