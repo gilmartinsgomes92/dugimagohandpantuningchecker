@@ -81,15 +81,23 @@ export const useAudioProcessor = () => {
   // Strike handling: delay measurement until sustain phase
   const strikeTimeRef = useRef<number>(0);
   const waitingForStabilizationRef = useRef<boolean>(false);
+  const strikeArmedRef = useRef<boolean>(true);
 
   // Number of consecutive below-threshold frames before clearing the result to null.
   // Prevents flicker when a handpan note's amplitude gradually decays through the RMS
   // threshold, causing the display to oscillate between the note and "Listening…".
+  const IS_IOS =
+    typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
   const SILENCE_GRACE_FRAMES = 5;
-  // Handpan strike handling
-  const STRIKE_RMS_THRESHOLD = 0.02;
-  const STRIKE_COOLDOWN_MS = 900;
-  const STABILIZATION_DELAY_MS = 480;
+
+  // Handpan strike handling (edge-triggered: quiet -> loud)
+  const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
+  const STRIKE_ARM_RMS = IS_IOS ? 0.004 : 0.006;   // below this, we "arm" for next strike
+  const STRIKE_FIRE_RMS = IS_IOS ? 0.008 : 0.012;  // above this (while armed) = strike event
+  const STRIKE_COOLDOWN_MS = IS_IOS ? 650 : 900;   // avoid double-triggers on bounce
+  const STABILIZATION_DELAY_MS = IS_IOS ? 260 : 480; // ignore attack transient
+
   const EMIT_INTERVAL_MS = 70; // ~14 Hz UI updates
   const ONSET_DELAY_MS = 450;  // hide cents during attack
   const CENTS_SMOOTH_ALPHA = 0.18;
@@ -106,6 +114,10 @@ export const useAudioProcessor = () => {
     noteOnsetMsRef.current = 0;
     lastEmitMsRef.current = 0;
     strikeTimeRef.current = 0;
+    strikeArmedRef.current = true;
+    waitingForStabilizationRef.current = false;
+    strikeArmedRef.current = true;
+    waitingForStabilizationRef.current = false;
     waitingForStabilizationRef.current = false;
     try {
       setError(null);
@@ -115,7 +127,7 @@ export const useAudioProcessor = () => {
     noiseSuppression: false,
     autoGainControl: false,
     channelCount: 1,
-    sampleRate: 48000,
+    sampleRate: { ideal: 48000 },
   },
   video: false,
 });
@@ -149,10 +161,18 @@ export const useAudioProcessor = () => {
         const rms = computeRMS(buf);
         const now = performance.now();
 
-        // Strike detection: on handpans, the attack transient is not tunable.
-        // We detect the strike and wait a short stabilization delay before measuring.
-        if (rms > STRIKE_RMS_THRESHOLD && now - strikeTimeRef.current > STRIKE_COOLDOWN_MS) {
+        // Strike detection (edge-triggered): on handpans, the attack transient is not tunable.
+        // We detect a quiet -> loud transition and then wait a short stabilization delay before measuring.
+        if (rms < STRIKE_ARM_RMS) {
+          strikeArmedRef.current = true;
+        }
+        if (
+          strikeArmedRef.current &&
+          rms > STRIKE_FIRE_RMS &&
+          now - strikeTimeRef.current > STRIKE_COOLDOWN_MS
+        ) {
           strikeTimeRef.current = now;
+          strikeArmedRef.current = false;
           waitingForStabilizationRef.current = true;
         }
 
@@ -164,7 +184,7 @@ export const useAudioProcessor = () => {
           waitingForStabilizationRef.current = false;
         }
 
-        if (rms >= 0.005) {
+        if (rms >= SIGNAL_RMS_THRESHOLD) {
           // Stage 1 — Note Identification: spectral template matching against all
           // handpan notes (MIDI 50–84). Scores the entire FFT spectrum against known
           // harmonic templates so that notes where the octave/compound-fifth is louder
@@ -306,6 +326,12 @@ setResult({
                 noteOnsetMsRef.current = 0;
                 lastEmitMsRef.current = 0;
                 strikeTimeRef.current = 0;
+            strikeArmedRef.current = true;
+            waitingForStabilizationRef.current = false;
+              strikeArmedRef.current = true;
+              waitingForStabilizationRef.current = false;
+                strikeArmedRef.current = true;
+                waitingForStabilizationRef.current = false;
                 waitingForStabilizationRef.current = false;
                 setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
               }
@@ -322,6 +348,10 @@ setResult({
               noteOnsetMsRef.current = 0;
               lastEmitMsRef.current = 0;
               strikeTimeRef.current = 0;
+            strikeArmedRef.current = true;
+            waitingForStabilizationRef.current = false;
+              strikeArmedRef.current = true;
+              waitingForStabilizationRef.current = false;
               waitingForStabilizationRef.current = false;
               setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
             }
@@ -339,6 +369,8 @@ setResult({
             noteOnsetMsRef.current = 0;
             lastEmitMsRef.current = 0;
             strikeTimeRef.current = 0;
+            strikeArmedRef.current = true;
+            waitingForStabilizationRef.current = false;
             waitingForStabilizationRef.current = false;
             setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null, matchScore: 0 });
           }
