@@ -152,8 +152,16 @@ export function useStrobeTuner(
   const prevPhaseCFifthRef = useRef<Float64Array | null>(null);
   // AudioContext.currentTime of the previous tick, used to compute hop size.
   const prevTimeRef = useRef<number | null>(null);
+  // Target frequency refs – updated via a sync effect so the tick closure
+  // always reads the latest values without needing to be recreated.
+  const targetFundRef = useRef(targetFundamental);
+  const targetOctRef = useRef(targetOctave);
+  const targetCFifthRef = useRef(targetCompoundFifth);
+  // Re-entrancy guard: prevents startListening from running concurrently.
+  const isStartedRef = useRef(false);
 
   const stopListening = useCallback(() => {
+    isStartedRef.current = false;
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
@@ -177,9 +185,18 @@ export function useStrobeTuner(
 
   // Start listening as soon as the hook mounts.
   const startListening = useCallback(async () => {
+    if (isStartedRef.current) return;
+    isStartedRef.current = true;
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+      // Guard: stopListening may have been called while awaiting getUserMedia.
+      if (!isStartedRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
@@ -214,27 +231,32 @@ export function useStrobeTuner(
           : 0;
         prevTimeRef.current = currentTime;
 
+        // Read target frequencies from refs so this closure never goes stale.
+        const tFund = targetFundRef.current;
+        const tOct = targetOctRef.current;
+        const tCFifth = targetCFifthRef.current;
+
         // Narrow-band detection for each partial independently.
         const detectedFund = detectPitchInWindowPhaseDiff(
           buf, sr,
-          windowLo(targetFundamental, FUND_WINDOW_CENTS),
-          windowHi(targetFundamental, FUND_WINDOW_CENTS),
+          windowLo(tFund, FUND_WINDOW_CENTS),
+          windowHi(tFund, FUND_WINDOW_CENTS),
           prevPhaseFundRef.current,
           currPhaseFund,
           hopSize,
         );
         const detectedOctave = detectPitchInWindowPhaseDiff(
           buf, sr,
-          windowLo(targetOctave, OCTAVE_WINDOW_CENTS),
-          windowHi(targetOctave, OCTAVE_WINDOW_CENTS),
+          windowLo(tOct, OCTAVE_WINDOW_CENTS),
+          windowHi(tOct, OCTAVE_WINDOW_CENTS),
           prevPhaseOctRef.current,
           currPhaseOct,
           hopSize,
         );
         const detectedCFifth = detectPitchInWindowPhaseDiff(
           buf, sr,
-          windowLo(targetCompoundFifth, COMP_FIFTH_WINDOW_CENTS),
-          windowHi(targetCompoundFifth, COMP_FIFTH_WINDOW_CENTS),
+          windowLo(tCFifth, COMP_FIFTH_WINDOW_CENTS),
+          windowHi(tCFifth, COMP_FIFTH_WINDOW_CENTS),
           prevPhaseCFifthRef.current,
           currPhaseCFifth,
           hopSize,
@@ -272,9 +294,9 @@ export function useStrobeTuner(
         }
 
         // Cents deviations from each target.
-        const cFund = detectedFund !== null ? calcCents(detectedFund, targetFundamental) : null;
-        const cOct = detectedOctave !== null ? calcCents(detectedOctave, targetOctave) : null;
-        const cCFifth = detectedCFifth !== null ? calcCents(detectedCFifth, targetCompoundFifth) : null;
+        const cFund = detectedFund !== null ? calcCents(detectedFund, tFund) : null;
+        const cOct = detectedOctave !== null ? calcCents(detectedOctave, tOct) : null;
+        const cCFifth = detectedCFifth !== null ? calcCents(detectedCFifth, tCFifth) : null;
 
         // Stability frame counting.
         const stable = allPartialsStable(cFund, cOct, cCFifth);
@@ -297,14 +319,23 @@ export function useStrobeTuner(
 
       rafRef.current = requestAnimationFrame(tick);
     } catch (err) {
+      isStartedRef.current = false;
       setError(err instanceof Error ? err.message : 'Microphone access denied');
     }
+  }, []);
+
+  // Keep target frequency refs in sync when the caller's props change,
+  // without recreating startListening or restarting the audio pipeline.
+  useEffect(() => {
+    targetFundRef.current = targetFundamental;
+    targetOctRef.current = targetOctave;
+    targetCFifthRef.current = targetCompoundFifth;
   }, [targetFundamental, targetOctave, targetCompoundFifth]);
 
   useEffect(() => {
     startListening();
     return () => { stopListening(); };
-  }, [startListening, stopListening]);
+  }, []);
 
   return {
     frequency,
