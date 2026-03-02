@@ -26,11 +26,27 @@ export const useAudioProcessor = () => {
   const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(4096));
   // Frequency-domain buffer for FFT magnitude data (dB), used by validateFundamental
   const freqBufRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(2048));
+  // Re-entrancy guard: prevents duplicate audio streams from concurrent startListening calls
+  const isStartedRef = useRef(false);
+  // Consecutive silent/failed frames counter for silence grace logic
+  const silenceCountRef = useRef(0);
+
+  // Number of consecutive below-threshold frames before clearing the result to null.
+  // Prevents flicker when a handpan note's amplitude gradually decays through the RMS
+  // threshold, causing the display to oscillate between the note and "Listening…".
+  const SILENCE_GRACE_FRAMES = 5;
 
   const startListening = useCallback(async () => {
+    if (isStartedRef.current) return;
+    isStartedRef.current = true;
+    silenceCountRef.current = 0;
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      if (!isStartedRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
@@ -70,6 +86,7 @@ export const useAudioProcessor = () => {
             // QuickTuningPage does not see this false pick — the display and the counter
             // both stay at their current values, and the next valid frame updates them.
             if (freq !== null) {
+              silenceCountRef.current = 0;
               const noteInfo = frequencyToNote(freq);
               // Independently measure the 2nd and 3rd physical partials using the FFT.
               // Real handpan partials deviate from exact 2:1 and 3:1 ratios due to
@@ -90,12 +107,27 @@ export const useAudioProcessor = () => {
                 noteName: noteInfo.fullName,
                 cents: noteInfo.cents,
               });
+            } else {
+              // validateFundamental rejected this frame — count as a silent/failed frame
+              silenceCountRef.current += 1;
+              if (silenceCountRef.current >= SILENCE_GRACE_FRAMES) {
+                setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
+              }
+            }
+          } else {
+            // YIN found no pitch — count as a silent/failed frame
+            silenceCountRef.current += 1;
+            if (silenceCountRef.current >= SILENCE_GRACE_FRAMES) {
+              setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
             }
           }
         } else {
-          // Signal below noise floor — clear the result so the display shows "listening"
-          // rather than the last detected note, giving a clean visual cue to play next note.
-          setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
+          // Signal below noise floor — use silence grace to avoid flickering when the
+          // note's amplitude decays gradually through the RMS threshold.
+          silenceCountRef.current += 1;
+          if (silenceCountRef.current >= SILENCE_GRACE_FRAMES) {
+            setResult({ frequency: null, octaveFrequency: null, compoundFifthFrequency: null, noteName: null, cents: null });
+          }
         }
 
         rafRef.current = requestAnimationFrame(tick);
@@ -103,11 +135,14 @@ export const useAudioProcessor = () => {
 
       rafRef.current = requestAnimationFrame(tick);
     } catch (err) {
+      isStartedRef.current = false;
       setError(err instanceof Error ? err.message : 'Microphone access denied');
     }
   }, []);
 
   const stopListening = useCallback(() => {
+    isStartedRef.current = false;
+    silenceCountRef.current = 0;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
