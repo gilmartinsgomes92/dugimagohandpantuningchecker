@@ -21,12 +21,20 @@ export interface ContactInfo {
   message: string;
 }
 
+export interface DetectedNotePayload {
+  name: string;
+  frequency: number;
+  octaveFrequency?: number;
+  compoundFifthFrequency?: number;
+}
+
 interface AppState {
   selectedScale: string | null;
   tuningResults: TuningResult[];
   contactInfo: ContactInfo;
   currentNoteIndex: number;
   notesCount: number | null;
+  detectedNote: DetectedNotePayload | null;
 }
 
 type AppAction =
@@ -35,6 +43,7 @@ type AppAction =
   | { type: 'ADD_TUNING_RESULT'; payload: TuningResult }
   | { type: 'SET_CONTACT_INFO'; payload: Partial<ContactInfo> }
   | { type: 'SET_CURRENT_NOTE_INDEX'; payload: number }
+  | { type: 'SET_DETECTED_NOTE'; payload: DetectedNotePayload }
   | { type: 'RESET_EVALUATION' };
 
 const initialState: AppState = {
@@ -43,6 +52,7 @@ const initialState: AppState = {
   contactInfo: { name: '', email: '', phone: '', message: '' },
   currentNoteIndex: 0,
   notesCount: null,
+  detectedNote: null,
 };
 
 const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<AppAction> } | undefined>(undefined);
@@ -62,6 +72,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, contactInfo: { ...state.contactInfo, ...action.payload } };
     case 'SET_CURRENT_NOTE_INDEX':
       return { ...state, currentNoteIndex: action.payload };
+    case 'SET_DETECTED_NOTE':
+      return { ...state, detectedNote: action.payload };
     case 'RESET_EVALUATION':
       return { ...initialState };
     default:

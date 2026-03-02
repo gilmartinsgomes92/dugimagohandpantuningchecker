@@ -9,6 +9,7 @@ import ResultsDashboardPage from './pages/ResultsDashboardPage';
 import ContactFormPage from './pages/ContactFormPage';
 import ConfirmationPage from './pages/ConfirmationPage';
 import StrobeTuningPage from './pages/StrobeTuningPage';
+import IdentifyNotePage from './pages/IdentifyNotePage';
 import './App.css';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
           <Route path="/contact" element={<ContactFormPage />} />
           <Route path="/confirmation" element={<ConfirmationPage />} />
           <Route path="/strobe-tuning" element={<StrobeTuningPage />} />
+          <Route path="/identify-note" element={<IdentifyNotePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
