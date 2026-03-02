@@ -127,6 +127,8 @@ export const useAudioProcessor = () => {
   const lastNoteNameRef = useRef<string | null>(null);
   const lastRawFreqRef = useRef<number | null>(null);
 
+  const stablePitchFramesRef = useRef(0);
+
   // Strike handling: delay measurement until sustain phase
   const strikeTimeRef = useRef<number>(0);
   const waitingForStabilizationRef = useRef<boolean>(false);
@@ -240,53 +242,6 @@ export const useAudioProcessor = () => {
 
         rejectReasonRef.current = '';
 
-        // --- Strike re-arm + hysteresis (fixes iPhone pulsing) ---
-        if (rms < ARM_RMS_THRESHOLD) {
-          quietFramesRef.current += 1;
-        } else {
-          quietFramesRef.current = 0;
-        }
-
-        if (quietFramesRef.current >= REARM_QUIET_FRAMES) {
-          strikeArmedRef.current = true;
-        }
-
-        if (
-          strikeArmedRef.current &&
-          rms >= STRIKE_RMS_THRESHOLD &&
-          now - strikeTimeRef.current > STRIKE_COOLDOWN_MS
-        ) {
-          strikeTimeRef.current = now;
-          waitingForStabilizationRef.current = true;
-          strikeArmedRef.current = false;
-          quietFramesRef.current = 0;
-        }
-
-        if (waitingForStabilizationRef.current) {
-          if (now - strikeTimeRef.current < STABILIZATION_DELAY_MS) {
-            rejectReasonRef.current = 'waiting stabilization';
-
-            if (DEBUG_ENABLED) {
-              setDebugInfo({
-                audioState: audioCtxRef.current?.state ?? 'none',
-                rms,
-                rmsPeak: rmsPeakRef.current,
-                noiseFloor: noiseFloorRef.current,
-                waitingStabilization: true,
-                matchScore: lastMatchScoreRef.current,
-                noteName: lastNoteNameRef.current,
-                rawFreq: lastRawFreqRef.current,
-                smoothedFreq: smoothedFreqRef.current,
-                rejectReason: rejectReasonRef.current,
-              });
-            }
-
-            rafRef.current = requestAnimationFrame(tick);
-            return;
-          }
-          waitingForStabilizationRef.current = false;
-        }
-
         // Main gate
         if (rms >= SIGNAL_RMS_THRESHOLD) {
           const match = matchNote(
@@ -325,6 +280,27 @@ export const useAudioProcessor = () => {
             if (freq === null && octaveFreq !== null) {
               freq = octaveFreq / 2;
             }
+
+            if (lastRawFreqRef.current !== null) {
+  const centsDelta = Math.abs(
+    1200 * Math.log2(freq / lastRawFreqRef.current)
+  );
+
+  if (centsDelta < 3) {
+    stablePitchFramesRef.current++;
+  } else {
+    stablePitchFramesRef.current = 0;
+  }
+}
+
+lastRawFreqRef.current = freq;
+
+// Require ~120ms of stable pitch before reading
+if (stablePitchFramesRef.current < 6) {
+  rejectReasonRef.current = 'pitch not stable';
+  rafRef.current = requestAnimationFrame(tick);
+  return;
+}
 
             lastRawFreqRef.current = freq;
 
