@@ -4,11 +4,11 @@
  * in the existing Node (non-DOM) Jest environment.
  */
 
-/** Consecutive frames with the same pitch class required to accept a detection (~0.75s at 60fps). */
-export const IDENTIFY_STABLE_FRAMES_REQUIRED = 45;
+/** Consecutive frames with the same pitch class required to accept a detection (~0.33s at 60fps). */
+export const IDENTIFY_STABLE_FRAMES_REQUIRED = 20;
 
 /** Milliseconds to wait for audio before showing a "no sound" error. */
-export const IDENTIFY_LISTEN_TIMEOUT_MS = 5000;
+export const IDENTIFY_LISTEN_TIMEOUT_MS = 8000;
 
 /**
  * Converts a raw error message from getUserMedia / AudioContext into a

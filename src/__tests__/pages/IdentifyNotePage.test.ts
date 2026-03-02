@@ -88,11 +88,11 @@ describe('isStableDetection – stability threshold check', () => {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 describe('IdentifyNotePage constants', () => {
-  it('IDENTIFY_STABLE_FRAMES_REQUIRED is 45', () => {
-    expect(IDENTIFY_STABLE_FRAMES_REQUIRED).toBe(45);
+  it('IDENTIFY_STABLE_FRAMES_REQUIRED is 20', () => {
+    expect(IDENTIFY_STABLE_FRAMES_REQUIRED).toBe(20);
   });
 
-  it('IDENTIFY_LISTEN_TIMEOUT_MS is 5000', () => {
-    expect(IDENTIFY_LISTEN_TIMEOUT_MS).toBe(5000);
+  it('IDENTIFY_LISTEN_TIMEOUT_MS is 8000', () => {
+    expect(IDENTIFY_LISTEN_TIMEOUT_MS).toBe(8000);
   });
 });
