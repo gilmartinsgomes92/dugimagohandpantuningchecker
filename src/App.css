@@ -1479,3 +1479,4 @@
 @media (prefers-reduced-motion: reduce){
   .scaleid-matchgrid--highlight::before{ animation: none; }
 }
+
