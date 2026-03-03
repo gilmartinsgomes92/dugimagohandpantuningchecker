@@ -1414,48 +1414,56 @@
 .scaleid-altscore{font-weight:800;opacity:0.8;}
 .empty-hint{opacity:0.75;}
 
-/* ===========================
-   Neon flowing border
-   =========================== */
+/* ===== Scale Match Neon Border: static line + moving photon ===== */
 
 .scaleid-matchgrid--highlight{
   position: relative;
   overflow: hidden;
+
+  /* Always show a thin gold line */
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: 16px;
 }
 
-/* allow animating angle smoothly */
+/* Smoothly animatable angle for the moving photon */
 @property --neon-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
 }
 
+/* The moving photon lives in a ring ONLY (masked), so it never crosses text */
 .scaleid-matchgrid--highlight::before{
   content: "";
   position: absolute;
-  inset: -2px;
+  inset: -2px;              /* expands beyond border slightly */
   border-radius: 18px;
-  padding: 2px;
+  padding: 2px;             /* ring thickness */
 
   --neon-angle: 0deg;
 
+  /* Most of the ring is transparent, only a small segment is bright */
   background: conic-gradient(
     from var(--neon-angle),
+    rgba(255,215,0,0.00) 0deg,
+    rgba(255,215,0,0.00) 332deg,
 
-    /* dark base ring */
-    rgba(255,215,0,0.06) 0deg,
-    rgba(255,215,0,0.06) 340deg,
+    /* soft lead-in */
+    rgba(255,215,0,0.25) 336deg,
 
-    /* neon photon core */
-    rgba(255,255,220,0.0) 344deg,
-    rgba(255,255,200,1.0) 350deg,
-    rgba(255,200,0,0.9) 354deg,
-    rgba(255,255,220,0.0) 360deg
+    /* bright core (thin + sharp) */
+    rgba(255,255,220,1.00) 342deg,
+    rgba(255,210,70,0.90) 346deg,
+
+    /* soft fade-out */
+    rgba(255,215,0,0.18) 352deg,
+    rgba(255,215,0,0.00) 360deg
   );
 
-  animation: neonFlow 4.5s linear infinite;
+  /* slow travel */
+  animation: neonFlow 5.5s linear infinite;
 
-  /* keep it only in the border ring */
+  /* Keep ONLY the ring visible (no overlay on text) */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -1463,22 +1471,22 @@
           mask-composite: exclude;
 
   pointer-events: none;
+  z-index: 2;
 }
 
-/* outer glow halo */
+/* Subtle consistent glow around the whole box (separate from the photon) */
 .scaleid-matchgrid--highlight::after{
   content: "";
   position: absolute;
-  inset: -1px;
-  border-radius: 18px;
+  inset: 0;
+  border-radius: 16px;
   box-shadow:
-    0 0 6px rgba(255,215,0,0.4),
-    0 0 18px rgba(255,200,0,0.35),
-    0 0 32px rgba(255,180,0,0.25);
+    0 0 0 1px rgba(255, 215, 0, 0.10) inset,
+    0 0 16px rgba(255, 200, 60, 0.10);
   pointer-events: none;
+  z-index: 1;
 }
 
-/* slow smooth movement */
 @keyframes neonFlow{
   to { --neon-angle: 360deg; }
 }
