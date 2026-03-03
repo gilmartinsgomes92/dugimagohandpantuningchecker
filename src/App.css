@@ -1413,3 +1413,53 @@
 .scaleid-altname{font-weight:700;}
 .scaleid-altscore{font-weight:800;opacity:0.8;}
 .empty-hint{opacity:0.75;}
+
+
+/* Golden animated highlight around the scale match box */
+.scaleid-matchgrid--highlight{
+  position: relative;
+  overflow: hidden;
+}
+
+/* border ring via pseudo element */
+.scaleid-matchgrid--highlight::before{
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  padding: 2px;
+  background: conic-gradient(from 0deg,
+    rgba(255, 215, 0, 0.10),
+    rgba(255, 215, 0, 0.55),
+    rgba(255, 200, 60, 0.45),
+    rgba(255, 215, 0, 0.20),
+    rgba(255, 215, 0, 0.55)
+  );
+  animation: scaleid-goldspin 2.8s linear infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* subtle inner glow */
+.scaleid-matchgrid--highlight::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.22) inset,
+              0 0 18px rgba(255, 215, 0, 0.18);
+  pointer-events: none;
+}
+
+@keyframes scaleid-goldspin{
+  to { transform: rotate(360deg); }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .scaleid-matchgrid--highlight::before{ animation: none; }
+}
