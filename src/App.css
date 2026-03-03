@@ -1415,10 +1415,7 @@
 .empty-hint{opacity:0.75;}
 
 .scaleid-matchgrid--highlight {
-  border: 4px solid #ffd700;
+  border: 4px solid #c6a13a;  /* muted deep gold */
   border-radius: 18px;
   background: rgba(0,0,0,0.03);
-  box-shadow:
-    0 0 10px rgba(255,215,0,0.4),
-    0 0 20px rgba(255,215,0,0.2);
 }
