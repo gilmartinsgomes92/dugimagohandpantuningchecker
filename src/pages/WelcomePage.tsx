@@ -30,6 +30,13 @@ const WelcomePage: React.FC = () => {
 
           <button
             className="btn btn-secondary btn-large"
+            onClick={() => navigate('/scale-identify')}
+          >
+            🎼 Identify My Scale
+          </button>
+
+          <button
+            className="btn btn-secondary btn-large"
             disabled
           >
             🔒 Comprehensive Tuning Check
