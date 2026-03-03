@@ -1414,14 +1414,17 @@
 .scaleid-altscore{font-weight:800;opacity:0.8;}
 .empty-hint{opacity:0.75;}
 
+/* ===========================
+   Neon flowing border
+   =========================== */
 
-/* Golden flowing light border */
 .scaleid-matchgrid--highlight{
   position: relative;
   overflow: hidden;
 }
 
-@property --scaleid-gold-angle {
+/* allow animating angle smoothly */
+@property --neon-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
@@ -1434,24 +1437,25 @@
   border-radius: 18px;
   padding: 2px;
 
-  --scaleid-gold-angle: 0deg;
+  --neon-angle: 0deg;
 
   background: conic-gradient(
-    from var(--scaleid-gold-angle),
+    from var(--neon-angle),
 
-    /* dim base ring */
-    rgba(255,215,0,0.10) 0deg,
-    rgba(255,215,0,0.10) 350deg,
+    /* dark base ring */
+    rgba(255,215,0,0.06) 0deg,
+    rgba(255,215,0,0.06) 340deg,
 
-    /* sharp photon streak (10deg window) */
-    rgba(255,240,180,0.0) 351deg,
-    rgba(255,255,220,1.0) 354deg,
-    rgba(255,215,0,0.6) 357deg,
-    rgba(255,215,0,0.0) 360deg
+    /* neon photon core */
+    rgba(255,255,220,0.0) 344deg,
+    rgba(255,255,200,1.0) 350deg,
+    rgba(255,200,0,0.9) 354deg,
+    rgba(255,255,220,0.0) 360deg
   );
 
-  animation: scaleid-goldflow 2.2s linear infinite;
+  animation: neonFlow 4.5s linear infinite;
 
+  /* keep it only in the border ring */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -1461,22 +1465,24 @@
   pointer-events: none;
 }
 
+/* outer glow halo */
 .scaleid-matchgrid--highlight::after{
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 16px;
+  inset: -1px;
+  border-radius: 18px;
   box-shadow:
-    0 0 0 1px rgba(255,215,0,0.15) inset,
-    0 0 18px rgba(255,215,0,0.12);
+    0 0 6px rgba(255,215,0,0.4),
+    0 0 18px rgba(255,200,0,0.35),
+    0 0 32px rgba(255,180,0,0.25);
   pointer-events: none;
 }
 
-@keyframes scaleid-goldflow{
-  to { --scaleid-gold-angle: 360deg; }
+/* slow smooth movement */
+@keyframes neonFlow{
+  to { --neon-angle: 360deg; }
 }
 
 @media (prefers-reduced-motion: reduce){
   .scaleid-matchgrid--highlight::before{ animation: none; }
 }
-
