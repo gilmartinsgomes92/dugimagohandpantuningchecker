@@ -25,15 +25,35 @@ type RegisteredNote = {
   midi: number;
 };
 
+const ENHARMONIC_TO_FLAT: Record<string, string> = {
+  'A#': 'Bb',
+  'C#': 'Db',
+  'D#': 'Eb',
+  'F#': 'Gb',
+  'G#': 'Ab',
+};
+
+function canonicalPitchClass(pc: string): string {
+  return ENHARMONIC_TO_FLAT[pc] ?? pc;
+}
+
 function pitchClassOf(fullName: string): string {
-  return fullName.replace(/\d+$/, '');
+  const pc = fullName.replace(/\d+$/, '');
+  return canonicalPitchClass(pc);
+}
+
+function canonicalFullName(fullName: string): string {
+  const m = fullName.match(/^([A-G](?:#|b)?)(-?\d+)$/);
+  if (!m) return fullName;
+  return `${canonicalPitchClass(m[1])}${m[2]}`;
 }
 
 function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
 }
 
-function scoreScale(detectedPitchClasses: Set<string>, scalePitchClasses: string[]): { overlap: number; total: number; score: number; missing: string[]; extras: string[] } {
+function scoreScale(detectedPitchClasses: Set<string>, scalePitchClassesRaw: string[]): { overlap: number; total: number; score: number; missing: string[]; extras: string[] } {
+  const scalePitchClasses = scalePitchClassesRaw.map(canonicalPitchClass);
   const scaleSet = new Set(scalePitchClasses);
   let overlap = 0;
   for (const pc of detectedPitchClasses) {
@@ -86,7 +106,7 @@ const ScaleIdentifyPage: React.FC = () => {
     lastRegisteredAtRef.current = now;
 
     const note = frequencyToNote(result.frequency);
-    const fullName = note.fullName;
+    const fullName = canonicalFullName(note.fullName);
     if (registeredFullNamesRef.current.has(fullName)) return;
 
     registeredFullNamesRef.current.add(fullName);
@@ -156,11 +176,6 @@ const ScaleIdentifyPage: React.FC = () => {
       return copy;
     });
   }, []);
-
-  const goToScaleSelection = useCallback(() => {
-    stopListening();
-    navigate('/scale-selection');
-  }, [navigate, stopListening]);
 
   return (
     <div className="page scaleid-page">
@@ -247,15 +262,7 @@ const ScaleIdentifyPage: React.FC = () => {
               {best.extras.length > 0 ? ` · Extras: ${best.extras.slice(0, 6).join(', ')}${best.extras.length > 6 ? '…' : ''}` : ''}
             </div>
 
-            <div className="scaleid-matchactions">
-              <button className="btn btn-primary" onClick={goToScaleSelection}>
-                Confirm / Select scale
-              </button>
-              <button className="btn btn-secondary" onClick={goToScaleSelection}>
-                View all scales
-              </button>
             </div>
-          </div>
         )}
 
         {topMatches.length > 1 && (
