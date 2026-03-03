@@ -4,6 +4,7 @@ import WelcomePage from './pages/WelcomePage';
 import NotesCountSelectionPage from './pages/NotesCountSelectionPage';
 import QuickTuningPage from './pages/QuickTuningPage';
 import ScaleSelectionPage from './pages/ScaleSelectionPage';
+import ScaleIdentifyPage from './pages/ScaleIdentifyPage';
 import GuidedTuningPage from './pages/GuidedTuningPage';
 import ResultsDashboardPage from './pages/ResultsDashboardPage';
 import ContactFormPage from './pages/ContactFormPage';
@@ -22,6 +23,7 @@ function App() {
           <Route path="/notes-count-selection" element={<NotesCountSelectionPage />} />
           <Route path="/quick-tuning" element={<QuickTuningPage />} />
           <Route path="/scale-selection" element={<ScaleSelectionPage />} />
+          <Route path="/scale-identify" element={<ScaleIdentifyPage />} />
           <Route path="/guided-tuning" element={<GuidedTuningPage />} />
           <Route path="/results" element={<ResultsDashboardPage />} />
           <Route path="/contact" element={<ContactFormPage />} />
