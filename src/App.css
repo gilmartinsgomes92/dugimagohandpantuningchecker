@@ -1415,20 +1415,18 @@
 .empty-hint{opacity:0.75;}
 
 
-/* Golden animated highlight around the scale match box (flowing line, no rotation) */
+/* Golden flowing light border */
 .scaleid-matchgrid--highlight{
   position: relative;
   overflow: hidden;
 }
 
-/* Allow smooth animation of the angle variable (supported in modern Chrome/Safari) */
 @property --scaleid-gold-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
 }
 
-/* border ring via pseudo element */
 .scaleid-matchgrid--highlight::before{
   content: "";
   position: absolute;
@@ -1436,25 +1434,24 @@
   border-radius: 18px;
   padding: 2px;
 
-  /* animate the gradient angle instead of rotating the element */
   --scaleid-gold-angle: 0deg;
-  background: conic-gradient(from var(--scaleid-gold-angle),
-  /* mostly calm ring */
-  rgba(255, 215, 0, 0.08) 0deg,
-  rgba(255, 215, 0, 0.08) 345deg,
 
-  /* tight photon segment (~10–12 degrees wide) */
-  rgba(255, 215, 0, 0.20) 346deg,
-  rgba(255, 230, 170, 1.00) 350deg,  /* bright core */
-  rgba(255, 215, 0, 0.18) 356deg,
+  background: conic-gradient(
+    from var(--scaleid-gold-angle),
 
-  /* back to calm */
-  rgba(255, 215, 0, 0.08) 360deg
-);
+    /* dim base ring */
+    rgba(255,215,0,0.10) 0deg,
+    rgba(255,215,0,0.10) 350deg,
 
-  animation: scaleid-goldflow 2.6s linear infinite;
+    /* sharp photon streak (10deg window) */
+    rgba(255,240,180,0.0) 351deg,
+    rgba(255,255,220,1.0) 354deg,
+    rgba(255,215,0,0.6) 357deg,
+    rgba(255,215,0,0.0) 360deg
+  );
 
-  /* keep the effect ONLY in the border ring (never over the text) */
+  animation: scaleid-goldflow 2.2s linear infinite;
+
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -1464,15 +1461,14 @@
   pointer-events: none;
 }
 
-/* subtle inner glow */
 .scaleid-matchgrid--highlight::after{
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 16px;
   box-shadow:
-    0 0 0 1px rgba(255, 215, 0, 0.18) inset,
-    0 0 18px rgba(255, 215, 0, 0.12);
+    0 0 0 1px rgba(255,215,0,0.15) inset,
+    0 0 18px rgba(255,215,0,0.12);
   pointer-events: none;
 }
 
@@ -1480,7 +1476,6 @@
   to { --scaleid-gold-angle: 360deg; }
 }
 
-/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce){
   .scaleid-matchgrid--highlight::before{ animation: none; }
 }
