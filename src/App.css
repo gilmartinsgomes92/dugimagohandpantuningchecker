@@ -1414,83 +1414,39 @@
 .scaleid-altscore{font-weight:800;opacity:0.8;}
 .empty-hint{opacity:0.75;}
 
-/* ===== Scale Match Neon Border: static line + moving photon ===== */
-
+/* Golden animated highlight around the scale match box (no rotation / no overlay) */
 .scaleid-matchgrid--highlight{
-  position: relative;
-  overflow: hidden;
-
-  /* Always show a thin gold line */
-  border: 1px solid rgba(255, 215, 0, 0.35);
-  border-radius: 16px;
-}
-
-/* Smoothly animatable angle for the moving photon */
-@property --neon-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-/* The moving photon lives in a ring ONLY (masked), so it never crosses text */
-.scaleid-matchgrid--highlight::before{
-  content: "";
-  position: absolute;
-  inset: -2px;              /* expands beyond border slightly */
+  /* Use a 2-layer background so the border stays outside the content (no masking needed). */
+  border: 2px solid transparent;
   border-radius: 18px;
-  padding: 2px;             /* ring thickness */
 
-  --neon-angle: 0deg;
+  background:
+    /* inner surface */
+    linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)) padding-box,
+    /* border shimmer */
+    linear-gradient(90deg,
+      rgba(255, 215, 0, 0.10),
+      rgba(255, 215, 0, 0.55),
+      rgba(255, 200, 60, 0.45),
+      rgba(255, 215, 0, 0.20),
+      rgba(255, 215, 0, 0.55),
+      rgba(255, 215, 0, 0.10)
+    ) border-box;
 
-  /* Most of the ring is transparent, only a small segment is bright */
-  background: conic-gradient(
-    from var(--neon-angle),
-    rgba(255,215,0,0.00) 0deg,
-    rgba(255,215,0,0.00) 332deg,
+  background-size: 100% 100%, 240% 100%;
+  background-position: 0 0, 0 0;
 
-    /* soft lead-in */
-    rgba(255,215,0,0.25) 336deg,
-
-    /* bright core (thin + sharp) */
-    rgba(255,255,220,1.00) 342deg,
-    rgba(255,210,70,0.90) 346deg,
-
-    /* soft fade-out */
-    rgba(255,215,0,0.18) 352deg,
-    rgba(255,215,0,0.00) 360deg
-  );
-
-  /* slow travel */
-  animation: neonFlow 5.5s linear infinite;
-
-  /* Keep ONLY the ring visible (no overlay on text) */
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-
-  pointer-events: none;
-  z-index: 2;
+  animation: scaleid-goldshimmer 2.6s ease-in-out infinite;
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.14);
 }
 
-/* Subtle consistent glow around the whole box (separate from the photon) */
-.scaleid-matchgrid--highlight::after{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  box-shadow:
-    0 0 0 1px rgba(255, 215, 0, 0.10) inset,
-    0 0 16px rgba(255, 200, 60, 0.10);
-  pointer-events: none;
-  z-index: 1;
+@keyframes scaleid-goldshimmer{
+  0%   { background-position: 0 0,   0% 0;   box-shadow: 0 0 14px rgba(255, 215, 0, 0.10); }
+  50%  { background-position: 0 0, 100% 0;   box-shadow: 0 0 22px rgba(255, 215, 0, 0.20); }
+  100% { background-position: 0 0, 200% 0;   box-shadow: 0 0 14px rgba(255, 215, 0, 0.10); }
 }
 
-@keyframes neonFlow{
-  to { --neon-angle: 360deg; }
-}
-
+/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce){
-  .scaleid-matchgrid--highlight::before{ animation: none; }
+  .scaleid-matchgrid--highlight{ animation: none; }
 }
