@@ -1420,45 +1420,9 @@
 /* Golden highlight around the scale match box:
    - stationary gold border line
    - animated "photon" that travels around the border (no fill gradient) */
-.scaleid-matchgrid--highlight{
-  position: relative;
-  border: 2px solid rgba(255, 200, 60, 0.85);
-  border-radius: 18px;
-  box-shadow: 0 0 18px rgba(255, 200, 60, 0.10);
-}
 
 /* animated photon */
-.scaleid-matchgrid--highlight::after{
-  content: "";
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
 
-  /* bright core + soft halo */
-  background: radial-gradient(circle,
-    rgba(255, 245, 200, 1) 0%,
-    rgba(255, 215, 0, 1) 40%,
-    rgba(255, 200, 60, 0.0) 70%
-  );
-
-  /* halo */
-  box-shadow:
-    0 0 10px rgba(255, 215, 0, 0.65),
-    0 0 22px rgba(255, 200, 60, 0.35);
-
-  /* start position (top-left corner) */
-  top: 0%;
-  left: 0%;
-  transform: translate(-50%, -50%);
-
-  pointer-events: none;
-  animation: scaleid-photon-run 3.1s linear infinite;
-}
-
-@keyframes scaleid-photon-run{
-  /* top edge: left -> right */
-  0%   { top: 0%;   left: 0%;   transform: translate(-50%, -50%); }
   24%  { top: 0%;   left: 100%; transform: translate(-50%, -50%); }
 
   /* right edge: top -> bottom */
@@ -1477,5 +1441,42 @@
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce){
-  .scaleid-matchgrid--highlight::after{ animation: none; }
+  }
+
+
+/* Golden animated border around the scale match box:
+   - border itself stays in place (no rotating element)
+   - the light moves along the border via an animating conic-gradient angle
+   - inner content background is unchanged (no overlay / no fill gradient) */
+.scaleid-matchgrid--highlight{
+  --gold-angle: 0deg;
+
+  border: 2px solid transparent;
+  border-radius: 18px;
+
+  /* Two-layer background:
+     1) inner surface (padding-box) keeps the box interior consistent
+     2) animated conic-gradient (border-box) paints ONLY the border */
+  background:
+    linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)) padding-box,
+    conic-gradient(from var(--gold-angle),
+      rgba(255, 215, 0, 0.12),
+      rgba(255, 215, 0, 0.55),
+      rgba(255, 200, 60, 0.45),
+      rgba(255, 215, 0, 0.22),
+      rgba(255, 215, 0, 0.60),
+      rgba(255, 215, 0, 0.12)
+    ) border-box;
+
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.12);
+  animation: scaleid-goldflow 2.8s linear infinite;
+}
+
+@keyframes scaleid-goldflow{
+  to { --gold-angle: 360deg; }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .scaleid-matchgrid--highlight{ animation: none; }
 }
