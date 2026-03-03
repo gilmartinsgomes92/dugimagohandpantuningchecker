@@ -1415,10 +1415,17 @@
 .empty-hint{opacity:0.75;}
 
 
-/* Golden animated highlight around the scale match box */
+/* Golden animated highlight around the scale match box (flowing line, no rotation) */
 .scaleid-matchgrid--highlight{
   position: relative;
   overflow: hidden;
+}
+
+/* Allow smooth animation of the angle variable (supported in modern Chrome/Safari) */
+@property --scaleid-gold-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }
 
 /* border ring via pseudo element */
@@ -1428,19 +1435,32 @@
   inset: -2px;
   border-radius: 18px;
   padding: 2px;
-  background: conic-gradient(from 0deg,
-    rgba(255, 215, 0, 0.10),
-    rgba(255, 215, 0, 0.55),
-    rgba(255, 200, 60, 0.45),
-    rgba(255, 215, 0, 0.20),
-    rgba(255, 215, 0, 0.55)
-  );
-  animation: scaleid-goldspin 2.8s linear infinite;
+
+  /* animate the gradient angle instead of rotating the element */
+  --scaleid-gold-angle: 0deg;
+  background: conic-gradient(from var(--scaleid-gold-angle),
+  /* mostly calm ring */
+  rgba(255, 215, 0, 0.08) 0deg,
+  rgba(255, 215, 0, 0.08) 345deg,
+
+  /* tight photon segment (~10–12 degrees wide) */
+  rgba(255, 215, 0, 0.20) 346deg,
+  rgba(255, 230, 170, 1.00) 350deg,  /* bright core */
+  rgba(255, 215, 0, 0.18) 356deg,
+
+  /* back to calm */
+  rgba(255, 215, 0, 0.08) 360deg
+);
+
+  animation: scaleid-goldflow 2.6s linear infinite;
+
+  /* keep the effect ONLY in the border ring (never over the text) */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
+
   pointer-events: none;
 }
 
@@ -1450,9 +1470,14 @@
   position: absolute;
   inset: 0;
   border-radius: 16px;
-  box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.22) inset,
-              0 0 18px rgba(255, 215, 0, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(255, 215, 0, 0.18) inset,
+    0 0 18px rgba(255, 215, 0, 0.12);
   pointer-events: none;
+}
+
+@keyframes scaleid-goldflow{
+  to { --scaleid-gold-angle: 360deg; }
 }
 
 /* Respect reduced motion */
