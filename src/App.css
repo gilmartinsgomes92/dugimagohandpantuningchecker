@@ -1414,36 +1414,51 @@
 .scaleid-altscore{font-weight:800;opacity:0.8;}
 .empty-hint{opacity:0.75;}
 
-/* Golden animated highlight around the scale match box (no rotation / no overlay) */
+/* Neon-like flowing border around the scale match box */
 .scaleid-matchgrid--highlight{
-  /* Use a 2-layer background so the border stays outside the content (no masking needed). */
+  --ring-angle: 0deg;
+
   border: 2px solid transparent;
   border-radius: 18px;
 
   background:
     /* inner surface */
     linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)) padding-box,
-    /* border shimmer */
-    linear-gradient(90deg,
-      rgba(255, 215, 0, 0.10),
-      rgba(255, 215, 0, 0.55),
-      rgba(255, 200, 60, 0.45),
-      rgba(255, 215, 0, 0.20),
-      rgba(255, 215, 0, 0.55),
-      rgba(255, 215, 0, 0.10)
+
+    /* border: conic gradient so the highlight travels around the perimeter */
+    conic-gradient(
+      from var(--ring-angle),
+
+      /* most of the ring is subtle */
+      rgba(255, 215, 0, 0.12) 0deg,
+      rgba(255, 215, 0, 0.12) 320deg,
+
+      /* tight bright "photon" segment */
+      rgba(255, 215, 0, 0.25) 332deg,
+      rgba(255, 255, 220, 1.00) 340deg,
+      rgba(255, 210, 70, 0.85) 348deg,
+      rgba(255, 215, 0, 0.18) 356deg,
+
+      /* back to subtle */
+      rgba(255, 215, 0, 0.12) 360deg
     ) border-box;
 
-  background-size: 100% 100%, 240% 100%;
-  background-position: 0 0, 0 0;
+  animation: scaleid-ring-flow 5.5s linear infinite;
 
-  animation: scaleid-goldshimmer 2.6s ease-in-out infinite;
-  box-shadow: 0 0 18px rgba(255, 215, 0, 0.14);
+  box-shadow:
+    0 0 0 1px rgba(255, 215, 0, 0.10) inset,
+    0 0 18px rgba(255, 215, 0, 0.14);
 }
 
-@keyframes scaleid-goldshimmer{
-  0%   { background-position: 0 0,   0% 0;   box-shadow: 0 0 14px rgba(255, 215, 0, 0.10); }
-  50%  { background-position: 0 0, 100% 0;   box-shadow: 0 0 22px rgba(255, 215, 0, 0.20); }
-  100% { background-position: 0 0, 200% 0;   box-shadow: 0 0 14px rgba(255, 215, 0, 0.10); }
+/* Smooth angle animation (works best in modern Safari/Chrome) */
+@property --ring-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes scaleid-ring-flow{
+  to { --ring-angle: 360deg; }
 }
 
 /* Respect reduced motion */
