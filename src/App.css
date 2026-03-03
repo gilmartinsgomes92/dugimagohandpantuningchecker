@@ -1414,54 +1414,42 @@
 .scaleid-altscore{font-weight:800;opacity:0.8;}
 .empty-hint{opacity:0.75;}
 
-/* Neon-like flowing border around the scale match box */
-.scaleid-matchgrid--highlight{
-  --ring-angle: 0deg;
-
-  border: 2px solid transparent;
+.scaleid-matchgrid--highlight {
+  position: relative;
   border-radius: 18px;
-
-  background:
-    /* inner surface */
-    linear-gradient(rgba(0,0,0,0.03), rgba(0,0,0,0.03)) padding-box,
-
-    /* border: conic gradient so the highlight travels around the perimeter */
-    conic-gradient(
-      from var(--ring-angle),
-
-      /* most of the ring is subtle */
-      rgba(255, 215, 0, 0.12) 0deg,
-      rgba(255, 215, 0, 0.12) 320deg,
-
-      /* tight bright "photon" segment */
-      rgba(255, 215, 0, 0.25) 332deg,
-      rgba(255, 255, 220, 1.00) 340deg,
-      rgba(255, 210, 70, 0.85) 348deg,
-      rgba(255, 215, 0, 0.18) 356deg,
-
-      /* back to subtle */
-      rgba(255, 215, 0, 0.12) 360deg
-    ) border-box;
-
-  animation: scaleid-ring-flow 5.5s linear infinite;
-
-  box-shadow:
-    0 0 0 1px rgba(255, 215, 0, 0.10) inset,
-    0 0 18px rgba(255, 215, 0, 0.14);
+  background: rgba(0,0,0,0.03);
+  overflow: hidden;
 }
 
-/* Smooth angle animation (works best in modern Safari/Chrome) */
-@property --ring-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
+/* Animated border layer */
+.scaleid-matchgrid--highlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  padding: 2px; /* border thickness */
+
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 300deg,
+    rgba(255, 215, 0, 0.9) 320deg,
+    rgba(255, 230, 120, 1) 340deg,
+    rgba(255, 215, 0, 0.9) 360deg
+  );
+
+  animation: borderRotate 3s linear infinite;
+
+  /* mask to keep only border */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
 }
 
-@keyframes scaleid-ring-flow{
-  to { --ring-angle: 360deg; }
-}
-
-/* Respect reduced motion */
-@media (prefers-reduced-motion: reduce){
-  .scaleid-matchgrid--highlight{ animation: none; }
+@keyframes borderRotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
