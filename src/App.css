@@ -1415,41 +1415,10 @@
 .empty-hint{opacity:0.75;}
 
 .scaleid-matchgrid--highlight {
-  position: relative;
+  border: 4px solid #ffd700;
   border-radius: 18px;
   background: rgba(0,0,0,0.03);
-  overflow: hidden;
-}
-
-/* Animated border layer */
-.scaleid-matchgrid--highlight::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 18px;
-  padding: 2px; /* border thickness */
-
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    transparent 300deg,
-    rgba(255, 215, 0, 0.9) 320deg,
-    rgba(255, 230, 120, 1) 340deg,
-    rgba(255, 215, 0, 0.9) 360deg
-  );
-
-  animation: borderRotate 3s linear infinite;
-
-  /* mask to keep only border */
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-}
-
-@keyframes borderRotate {
-  to {
-    transform: rotate(360deg);
-  }
+  box-shadow:
+    0 0 10px rgba(255,215,0,0.4),
+    0 0 20px rgba(255,215,0,0.2);
 }
