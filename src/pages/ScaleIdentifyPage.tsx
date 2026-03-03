@@ -247,7 +247,7 @@ const ScaleIdentifyPage: React.FC = () => {
             Detect at least {MIN_UNIQUE_NOTES_TO_SUGGEST} different notes to get suggestions.
           </div>
         ) : (
-          <div className="scaleid-matchgrid">
+          <div className="scaleid-matchgrid scaleid-matchgrid--highlight">
             <div className="scaleid-matchcol">
               <div className="scaleid-matchlabel">Handpan Scene Name</div>
               <div className="scaleid-matchvalue">{best.sceneName}</div>
