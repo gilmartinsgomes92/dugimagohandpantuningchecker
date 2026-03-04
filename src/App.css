@@ -795,6 +795,19 @@
   margin: 0;
 }
 
+
+.verdict-subtitle {
+  margin: 0.5rem 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.verdict-hint {
+  opacity: 0.85;
+}
+
+
 .verdict-scale {
   color: #666;
   font-size: 0.85rem;
