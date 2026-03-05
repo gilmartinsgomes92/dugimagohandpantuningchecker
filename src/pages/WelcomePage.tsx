@@ -13,7 +13,7 @@ const WelcomePage: React.FC = () => {
             <div className="welcome-logo-wrap">
               <img className="welcome-logo-img" src={dugimagoLogo} alt="Dugimago" loading="eager" />
             </div>
-            <div className="welcome-brand-name">Dugimago</div>
+          
           </div>
 
           <h1 className="welcome-title">Handpan Tuning Check</h1>
