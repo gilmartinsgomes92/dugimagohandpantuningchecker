@@ -10,7 +10,9 @@ const WelcomePage: React.FC = () => {
       <div className="welcome-hero">
         <header className="welcome-header">
           <div className="welcome-brand">
-            <img className="welcome-logo-img" src={dugimagoLogo} alt="Dugimago" loading="eager" />
+            <div className="welcome-logo-wrap">
+              <img className="welcome-logo-img" src={dugimagoLogo} alt="Dugimago" loading="eager" />
+            </div>
             <div className="welcome-brand-name">Dugimago</div>
           </div>
 
