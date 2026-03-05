@@ -8,16 +8,21 @@ const WelcomePage: React.FC = () => {
     <div className="page welcome-page">
       <div className="welcome-hero">
         <div className="welcome-logo">
-          <span className="logo-icon">♪</span>
-          <span className="logo-text">HandPan<span className="logo-accent">Pro</span></span>
+          <img
+            className="welcome-logo-img"
+            src="/dugimago-logo.png"
+            alt="Dugimago"
+            loading="eager"
+          />
         </div>
-        <h1 className="welcome-title">Professional Handpan<br />Tuning Checker</h1>
-        <p className="welcome-subtitle">Evaluate your instrument in seconds</p>
+
+        <h1 className="welcome-title">Handpan Tuning Check</h1>
+        <p className="welcome-subtitle">Precision Harmonic Analysis</p>
 
         <ul className="welcome-features">
-          <li>✓ Real-time frequency detection with professional accuracy</li>
-          <li>✓ Step-by-step note-by-note guided evaluation</li>
-          <li>✓ Detailed results with cents deviation analysis</li>
+          <li>✓ Real-time frequency detection</li>
+          <li>✓ Guided note-by-note evaluation</li>
+          <li>✓ Detailed tuning analysis</li>
         </ul>
 
         <div className="welcome-cta-group">
@@ -25,37 +30,25 @@ const WelcomePage: React.FC = () => {
             className="btn btn-primary btn-large"
             onClick={() => navigate('/notes-count-selection')}
           >
-            🎵 Quick Tuning Check
+            Start Check
           </button>
 
           <button
             className="btn btn-secondary btn-large"
             onClick={() => navigate('/scale-identify')}
           >
-            🎼 Identify My Scale
+            Identify My Scale
           </button>
 
-          <button
-            className="btn btn-secondary btn-large"
-            disabled
-          >
-            🔒 Comprehensive Tuning Check
-            <span className="btn-coming-soon">Coming Soon</span>
+          <button className="btn btn-secondary btn-large" disabled>
+            Comprehensive Tuning Check
+            <span className="btn-coming-soon">Coming soon</span>
           </button>
         </div>
-
-        <p className="welcome-login-link">
-          Already a subscriber? <a href="#login" onClick={e => e.preventDefault()}>Log In</a>
-        </p>
       </div>
 
       <footer className="welcome-footer">
-        <div className="footer-features">
-          <span>🎵 YIN Algorithm</span>
-          <span>📊 Sub-cent accuracy</span>
-          <span>📱 Mobile friendly</span>
-        </div>
-        <p className="footer-copyright">© 2025 HandPanPro · Professional Tuning Tools</p>
+        <p className="footer-copyright">© {new Date().getFullYear()} Dugimago</p>
       </footer>
     </div>
   );
