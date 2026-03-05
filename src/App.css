@@ -494,22 +494,19 @@
 
 .welcome-logo {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
-  font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  margin-bottom: 6px;
 }
 
-.logo-icon {
-  color: #00d4ff;
-  font-size: 2rem;
+.welcome-logo-img {
+  height: 92px;
+  width: auto;
+  max-width: min(320px, 78vw);
+  object-fit: contain;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+  image-rendering: -webkit-optimize-contrast;
 }
-
-.logo-text { color: #fff; }
-
-.logo-accent { color: #00d4ff; }
-
 .welcome-title {
   font-size: 2rem;
   font-weight: 800;
