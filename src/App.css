@@ -480,23 +480,46 @@
    ============================================================ */
 .welcome-page {
   justify-content: space-between;
+  max-width: none;
+  margin: 0;
+  padding: 36px 18px 44px;
+  background: url('/assets/welcome-bg.png') center / cover no-repeat;
+  position: relative;
+  width: 100%;
+}
+
+/* Darken + vignette on top of the background image */
+.welcome-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(900px 520px at 50% 35%, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.82) 70%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.80));
+  pointer-events: none;
+}
+
+.welcome-page > * {
+  position: relative;
 }
 
 /* Card-like hero surface */
 .welcome-hero {
   width: 100%;
-  max-width: 420px;
-  margin-top: 18px;
-  padding: 34px 22px 26px;
-  border-radius: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: 720px;
+  margin-top: 10px;
+  padding: 46px 34px 32px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background:
-    radial-gradient(900px 360px at 50% -10%, rgba(0, 168, 204, 0.18), transparent 60%),
-    radial-gradient(700px 320px at 50% 120%, rgba(255, 255, 255, 0.06), transparent 55%),
-    linear-gradient(180deg, rgba(18, 18, 18, 0.92) 0%, rgba(14, 14, 14, 0.92) 100%);
+    radial-gradient(900px 360px at 50% -10%, rgba(0, 168, 204, 0.12), transparent 62%),
+    radial-gradient(700px 320px at 50% 120%, rgba(255, 255, 255, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(20, 20, 20, 0.62) 0%, rgba(12, 12, 12, 0.62) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   box-shadow:
-    0 18px 55px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 22px 70px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -515,49 +538,37 @@
 
 /* Brand lockup */
 .welcome-brand {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .welcome-logo-img {
-  height: 54px;
+  height: 64px;
   width: auto;
-  max-width: 54px;
+  max-width: 78px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+  filter:
+    drop-shadow(0 14px 28px rgba(0, 0, 0, 0.55))
+    sepia(0.95)
+    saturate(2.2)
+    hue-rotate(12deg)
+    brightness(1.08);
   image-rendering: -webkit-optimize-contrast;
 }
 
-.welcome-brand-text {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  opacity: 0.9;
-}
-
 .welcome-brand-name {
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.welcome-brand-divider {
-  width: 26px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.welcome-brand-tag {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: 2.05rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: rgba(219, 184, 122, 0.92);
+  text-shadow: 0 18px 38px rgba(0, 0, 0, 0.55);
+  font-family: ui-serif, Georgia, 'Times New Roman', Times, serif;
 }
 
 .welcome-title {
-  font-size: 2.35rem;
+  font-size: 3.05rem;
   font-weight: 850;
   color: #fff;
   line-height: 1.12;
@@ -567,31 +578,45 @@
 
 .welcome-subtitle {
   color: rgba(255, 255, 255, 0.62);
-  font-size: 1rem;
+  font-size: 1.18rem;
   line-height: 1.45;
   margin: 0;
   max-width: 32ch;
 }
 
-/* Feature chips (replaces bullet list) */
-.welcome-chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
+/* Feature list (with checks) */
+.welcome-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 10px;
   width: 100%;
-  margin-top: 2px;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
 }
 
-.welcome-chip {
-  padding: 10px 12px;
+.welcome-feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 1.14rem;
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.welcome-check {
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
-  font-size: 0.86rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 168, 204, 0.18);
+  border: 1px solid rgba(0, 168, 204, 0.25);
+  color: rgba(217, 248, 255, 0.86);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+  flex: 0 0 22px;
 }
 
 /* CTA group + helper text */
@@ -602,6 +627,49 @@
   gap: 14px;
   width: 100%;
   margin-top: 6px;
+}
+
+/* Make the welcome buttons feel more "app store" / premium */
+.welcome-cta-group .btn-large {
+  width: min(520px, 100%);
+  padding: 16px 34px;
+  font-size: 1.02rem;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.welcome-cta-group .btn-primary {
+  background: linear-gradient(180deg, rgba(56, 154, 210, 0.95), rgba(33, 110, 165, 0.95));
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.55),
+    0 8px 28px rgba(0, 168, 204, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.welcome-cta-group .btn-primary:hover {
+  transform: translateY(-1px);
+}
+
+.welcome-cta-group .btn-secondary {
+  background: rgba(30, 30, 30, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.welcome-cta-group .btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.welcome-cta-group .btn-secondary:disabled {
+  opacity: 0.6;
+}
+
+.btn-coming-soon {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.82rem;
+  opacity: 0.55;
+  font-weight: 600;
 }
 
 .welcome-helper {
@@ -619,7 +687,7 @@
 .welcome-footer {
   text-align: center;
   padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   width: 100%;
 }
 
@@ -641,9 +709,10 @@
 
 /* Small screens */
 @media (max-width: 420px) {
-  .welcome-hero { padding: 30px 18px 22px; border-radius: 22px; }
-  .welcome-title { font-size: 2.05rem; }
-  .welcome-chip { width: 100%; max-width: 340px; border-radius: 16px; text-align: center; }
+  .welcome-hero { padding: 34px 18px 24px; border-radius: 22px; }
+  .welcome-title { font-size: 2.25rem; }
+  .welcome-brand-name { font-size: 1.72rem; }
+  .welcome-feature-list li { font-size: 1.02rem; }
 }
 
 /* ============================================================
