@@ -553,23 +553,23 @@
 
 .welcome-footer {
   text-align: center;
-  padding-top: 20px;
-  border-top: 1px solid #1a1a1a;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   width: 100%;
 }
 
 .footer-features {
   display: flex;
-  gap: 20px;
+  gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
-  color: #555;
+  color: rgba(255, 255, 255, 0.45);
   font-size: 0.78rem;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .footer-copyright {
-  color: #333;
+  color: rgba(255, 255, 255, 0.28);
   font-size: 0.7rem;
   margin: 0;
 }
