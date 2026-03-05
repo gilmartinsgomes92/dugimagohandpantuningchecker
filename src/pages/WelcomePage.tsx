@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import dugimagoLogo from '../assets/dugimago-logo.png';
+import dugimagoLogo from '../assets/dugimago-logo-cropped.png';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
