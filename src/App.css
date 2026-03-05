@@ -556,7 +556,7 @@
 
 .welcome-logo-img{
   /* Use the cropped asset so the mark reads clearly */
-  height: 96px;
+  height: 200px;
   width: auto;
   max-width: min(260px, 80vw);
   object-fit: contain;
