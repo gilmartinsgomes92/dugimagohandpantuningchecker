@@ -567,8 +567,8 @@
   font-size: 1.9rem;
   font-weight: 650;
   letter-spacing: 0.02em;
-  color: rgba(219, 184, 122, 0.92);
-  text-shadow: 0 18px 38px rgba(0, 0, 0, 0.55);
+  color: #2EA7FF;
+  text-shadow: 0 0 10px rgba(46,167,255,0.35);
   font-family: ui-serif, Georgia, 'Times New Roman', Times, serif;
 }
 
