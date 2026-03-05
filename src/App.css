@@ -482,73 +482,138 @@
   justify-content: space-between;
 }
 
+/* Card-like hero surface */
 .welcome-hero {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 18px;
+  padding: 34px 22px 26px;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(900px 360px at 50% -10%, rgba(0, 168, 204, 0.18), transparent 60%),
+    radial-gradient(700px 320px at 50% 120%, rgba(255, 255, 255, 0.06), transparent 55%),
+    linear-gradient(180deg, rgba(18, 18, 18, 0.92) 0%, rgba(14, 14, 14, 0.92) 100%);
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   text-align: center;
   flex: 1;
-  padding-top: 40px;
 }
 
-.welcome-logo {
+.welcome-header {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: 6px;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Brand lockup */
+.welcome-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .welcome-logo-img {
-  height: 92px;
+  height: 54px;
   width: auto;
-  max-width: min(320px, 78vw);
+  max-width: 54px;
   object-fit: contain;
   filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
   image-rendering: -webkit-optimize-contrast;
 }
-.welcome-title {
-  font-size: 2rem;
+
+.welcome-brand-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.9;
+}
+
+.welcome-brand-name {
+  font-size: 0.95rem;
   font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.welcome-brand-divider {
+  width: 26px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.welcome-brand-tag {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.welcome-title {
+  font-size: 2.35rem;
+  font-weight: 850;
   color: #fff;
-  line-height: 1.2;
-  margin: 0;
-  letter-spacing: -0.01em;
+  line-height: 1.12;
+  margin: 2px 0 0;
+  letter-spacing: -0.02em;
 }
 
 .welcome-subtitle {
-  color: #888;
+  color: rgba(255, 255, 255, 0.62);
   font-size: 1rem;
+  line-height: 1.45;
   margin: 0;
+  max-width: 32ch;
 }
 
-.welcome-features {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+/* Feature chips (replaces bullet list) */
+.welcome-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.welcome-chip {
+  padding: 10px 12px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* CTA group + helper text */
+.welcome-cta-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  text-align: left;
-}
-
-.welcome-features li {
-  color: #aaa;
-  font-size: 0.9rem;
-  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
+  width: 100%;
+  margin-top: 6px;
 }
 
-.welcome-login-link {
-  color: #555;
-  font-size: 0.85rem;
-  margin: 0;
+.welcome-helper {
+  margin: -6px 0 4px;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
 }
 
-.welcome-login-link a {
-  color: #00a8cc;
-  text-decoration: none;
+.welcome-privacy {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .welcome-footer {
@@ -572,6 +637,13 @@
   color: rgba(255, 255, 255, 0.28);
   font-size: 0.7rem;
   margin: 0;
+}
+
+/* Small screens */
+@media (max-width: 420px) {
+  .welcome-hero { padding: 30px 18px 22px; border-radius: 22px; }
+  .welcome-title { font-size: 2.05rem; }
+  .welcome-chip { width: 100%; max-width: 340px; border-radius: 16px; text-align: center; }
 }
 
 /* ============================================================
