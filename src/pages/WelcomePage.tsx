@@ -8,23 +8,32 @@ const WelcomePage: React.FC = () => {
   return (
     <div className="page welcome-page">
       <div className="welcome-hero">
-        <div className="welcome-logo">
-          <img
-            className="welcome-logo-img"
-            src={dugimagoLogo}
-            alt="Dugimago"
-            loading="eager"
-          />
+        <header className="welcome-header">
+          <div className="welcome-brand">
+            <img
+              className="welcome-logo-img"
+              src={dugimagoLogo}
+              alt="Dugimago"
+              loading="eager"
+            />
+            <div className="welcome-brand-text">
+              <div className="welcome-brand-name">Dugimago</div>
+              <div className="welcome-brand-divider" />
+              <div className="welcome-brand-tag">Handpan Tools</div>
+            </div>
+          </div>
+
+          <h1 className="welcome-title">Handpan Tuning Check</h1>
+          <p className="welcome-subtitle">
+            Fast, reliable harmonic-aware feedback (fundamental + octave + fifth)
+          </p>
+        </header>
+
+        <div className="welcome-chips" aria-label="Key features">
+          <div className="welcome-chip">Live pitch detection</div>
+          <div className="welcome-chip">Harmonic check (8ve + 5th)</div>
+          <div className="welcome-chip">Guided note-by-note flow</div>
         </div>
-
-        <h1 className="welcome-title">Handpan Tuning Check</h1>
-        <p className="welcome-subtitle">Precision Harmonic Analysis</p>
-
-        <ul className="welcome-features">
-          <li>✓ Real-time frequency detection</li>
-          <li>✓ Guided note-by-note evaluation</li>
-          <li>✓ Detailed tuning analysis</li>
-        </ul>
 
         <div className="welcome-cta-group">
           <button
@@ -33,6 +42,7 @@ const WelcomePage: React.FC = () => {
           >
             Start Check
           </button>
+          <p className="welcome-helper">Takes ~2 minutes • Best in a quiet room</p>
 
           <button
             className="btn btn-secondary btn-large"
@@ -45,6 +55,10 @@ const WelcomePage: React.FC = () => {
             Comprehensive Tuning Check
             <span className="btn-coming-soon">Coming soon</span>
           </button>
+
+          <p className="welcome-privacy">
+            Mic permission required. Audio stays on your device.
+          </p>
         </div>
       </div>
 
