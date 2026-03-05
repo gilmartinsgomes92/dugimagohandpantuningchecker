@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import dugimagoLogo from '../assets/dugimago-logo.png';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ const WelcomePage: React.FC = () => {
         <div className="welcome-logo">
           <img
             className="welcome-logo-img"
-            src="/dugimago-logo.png"
+            src={dugimagoLogo}
             alt="Dugimago"
             loading="eager"
           />
@@ -48,6 +49,13 @@ const WelcomePage: React.FC = () => {
       </div>
 
       <footer className="welcome-footer">
+        <div className="footer-features">
+          <span>Harmonic-aware</span>
+          <span>•</span>
+          <span>Mobile-friendly</span>
+          <span>•</span>
+          <span>Fast tuning check</span>
+        </div>
         <p className="footer-copyright">© {new Date().getFullYear()} Dugimago</p>
       </footer>
     </div>
