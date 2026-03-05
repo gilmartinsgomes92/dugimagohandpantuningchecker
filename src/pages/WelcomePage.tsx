@@ -10,30 +10,30 @@ const WelcomePage: React.FC = () => {
       <div className="welcome-hero">
         <header className="welcome-header">
           <div className="welcome-brand">
-            <img
-              className="welcome-logo-img"
-              src={dugimagoLogo}
-              alt="Dugimago"
-              loading="eager"
-            />
-            <div className="welcome-brand-text">
-              <div className="welcome-brand-name">Dugimago</div>
-              <div className="welcome-brand-divider" />
-              <div className="welcome-brand-tag">Handpan Tools</div>
-            </div>
+            <img className="welcome-logo-img" src={dugimagoLogo} alt="Dugimago" loading="eager" />
+            <div className="welcome-brand-name">Dugimago</div>
           </div>
 
           <h1 className="welcome-title">Handpan Tuning Check</h1>
           <p className="welcome-subtitle">
-            Fast, reliable harmonic-aware feedback (fundamental + octave + fifth)
+            Precision Harmonic Analysis
           </p>
         </header>
 
-        <div className="welcome-chips" aria-label="Key features">
-          <div className="welcome-chip">Live pitch detection</div>
-          <div className="welcome-chip">Harmonic check (8ve + 5th)</div>
-          <div className="welcome-chip">Guided note-by-note flow</div>
-        </div>
+        <ul className="welcome-feature-list" aria-label="Key features">
+          <li>
+            <span className="welcome-check" aria-hidden="true">✓</span>
+            Real-time frequency detection
+          </li>
+          <li>
+            <span className="welcome-check" aria-hidden="true">✓</span>
+            Guided note-by-note evaluation
+          </li>
+          <li>
+            <span className="welcome-check" aria-hidden="true">✓</span>
+            Detailed tuning analysis
+          </li>
+        </ul>
 
         <div className="welcome-cta-group">
           <button
