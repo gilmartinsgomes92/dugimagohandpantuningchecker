@@ -42,8 +42,6 @@ const WelcomePage: React.FC = () => {
           >
             Start Check
           </button>
-          <p className="welcome-helper">Takes ~2 minutes • Best in a quiet room</p>
-
           <button
             className="btn btn-secondary btn-large"
             onClick={() => navigate('/scale-identify')}
