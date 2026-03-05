@@ -539,15 +539,16 @@
 /* Brand lockup */
 .welcome-brand {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 12px;
 }
 
 .welcome-logo-img {
-  height: 64px;
+  height: 52px;
   width: auto;
-  max-width: 78px;
+  max-width: 64px;
   object-fit: contain;
   filter:
     drop-shadow(0 14px 28px rgba(0, 0, 0, 0.55))
@@ -559,7 +560,7 @@
 }
 
 .welcome-brand-name {
-  font-size: 2.05rem;
+  font-size: 1.75rem;
   font-weight: 650;
   letter-spacing: 0.02em;
   color: rgba(219, 184, 122, 0.92);
@@ -630,14 +631,6 @@
 }
 
 /* Make the welcome buttons feel more "app store" / premium */
-.welcome-cta-group .btn-large {
-  width: min(520px, 100%);
-  padding: 16px 34px;
-  font-size: 1.02rem;
-  text-transform: none;
-  letter-spacing: 0.01em;
-}
-
 .welcome-cta-group .btn-primary {
   background: linear-gradient(180deg, rgba(56, 154, 210, 0.95), rgba(33, 110, 165, 0.95));
   box-shadow:
@@ -711,7 +704,8 @@
 @media (max-width: 420px) {
   .welcome-hero { padding: 34px 18px 24px; border-radius: 22px; }
   .welcome-title { font-size: 2.25rem; }
-  .welcome-brand-name { font-size: 1.72rem; }
+  .welcome-brand-name { font-size: 1.55rem; }
+  .welcome-logo-img { height: 44px; max-width: 54px; }
   .welcome-feature-list li { font-size: 1.02rem; }
 }
 
