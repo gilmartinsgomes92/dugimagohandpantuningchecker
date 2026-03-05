@@ -539,28 +539,40 @@
 /* Brand lockup */
 .welcome-brand {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+/* Logo as a hero element */
+.welcome-logo-wrap {
+  padding: 10px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(140px 90px at 50% 20%, rgba(219, 184, 122, 0.16), transparent 65%),
+    radial-gradient(140px 90px at 50% 120%, rgba(0, 168, 204, 0.14), transparent 62%),
+    linear-gradient(180deg, rgba(26, 26, 26, 0.62), rgba(14, 14, 14, 0.62));
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .welcome-logo-img {
-  height: 52px;
+  height: 72px;
   width: auto;
-  max-width: 64px;
+  max-width: 140px;
   object-fit: contain;
   filter:
-    drop-shadow(0 14px 28px rgba(0, 0, 0, 0.55))
-    sepia(0.95)
-    saturate(2.2)
-    hue-rotate(12deg)
-    brightness(1.08);
+    drop-shadow(0 16px 34px rgba(0, 0, 0, 0.62))
+    contrast(1.05)
+    brightness(1.12);
   image-rendering: -webkit-optimize-contrast;
 }
 
 .welcome-brand-name {
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   font-weight: 650;
   letter-spacing: 0.02em;
   color: rgba(219, 184, 122, 0.92);
@@ -704,8 +716,9 @@
 @media (max-width: 420px) {
   .welcome-hero { padding: 34px 18px 24px; border-radius: 22px; }
   .welcome-title { font-size: 2.25rem; }
-  .welcome-brand-name { font-size: 1.55rem; }
-  .welcome-logo-img { height: 44px; max-width: 54px; }
+  .welcome-brand-name { font-size: 1.62rem; }
+  .welcome-logo-wrap { padding: 9px 12px; border-radius: 20px; }
+  .welcome-logo-img { height: 62px; max-width: 130px; }
   .welcome-feature-list li { font-size: 1.02rem; }
 }
 
