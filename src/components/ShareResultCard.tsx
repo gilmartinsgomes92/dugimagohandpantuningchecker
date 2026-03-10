@@ -1,5 +1,4 @@
 
-import React from "react";
 import type { TuningResult } from "../contexts/AppContext";
 
 type Props = {
