@@ -1,4 +1,4 @@
-import type { TuningResult } from '../utils/pitch-utils';
+import type { TuningResult } from '../contexts/AppContext';
 
 type ShareResultCardProps = {
   selectedScale: string | null;
