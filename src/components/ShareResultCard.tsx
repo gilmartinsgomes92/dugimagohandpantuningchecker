@@ -1,4 +1,4 @@
-import type { TuningResult } from '../types/tuning';
+import type { TuningResult } from '../utils/pitch-utils';
 
 type ShareResultCardProps = {
   selectedScale: string | null;
