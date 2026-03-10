@@ -248,9 +248,18 @@ const ResultsDashboardPage: React.FC = () => {
         </table>
       </div>
 
-   <div style={{ position: "fixed", left: "-9999px", top: 0 }}>
+   <div
+  style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    opacity: 0,
+    pointerEvents: 'none',
+    zIndex: -1,
+  }}
+>
   <ShareResultCard
-    selectedScale={selectedScale ?? "Unknown"}
+    selectedScale={selectedScale ?? 'Unknown'}
     tuningResults={tuningResults}
   />
 </div>
