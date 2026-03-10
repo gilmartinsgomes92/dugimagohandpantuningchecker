@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCents, centsToColor } from '../utils/musicUtils';
 import ShareResultCard from '../components/ShareResultCard';
+import { exportShareCard } from '../utils/exportShareCard';
 
 type PartialBand = 'aligned' | 'character' | 'funky' | 'retune' | 'unknown';
 
@@ -164,7 +165,7 @@ const ResultsDashboardPage: React.FC = () => {
   };
 
   const shareResult = async () => {
-  window.alert('Share export coming next. For now, this is the share card preview.');
+  await exportShareCard();
 };
 
   return (
@@ -247,10 +248,9 @@ const ResultsDashboardPage: React.FC = () => {
         </table>
       </div>
 
-      {/* Share Result Card */}
-<div className="share-result-container">
+   <div style={{ position: "fixed", left: "-9999px", top: 0 }}>
   <ShareResultCard
-    scaleName={selectedScale ?? "Unknown"}
+    selectedScale={selectedScale ?? "Unknown"}
     tuningResults={tuningResults}
   />
 </div>
