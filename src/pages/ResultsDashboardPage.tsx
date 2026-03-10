@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCents, centsToColor } from '../utils/musicUtils';
-import ShareResultCard from "@/components/ShareResultCard";
+import ShareResultCard from '../components/ShareResultCard';
 
 type PartialBand = 'aligned' | 'character' | 'funky' | 'retune' | 'unknown';
 
@@ -163,6 +163,10 @@ const ResultsDashboardPage: React.FC = () => {
     navigate('/');
   };
 
+  const shareResult = async () => {
+  window.alert('Share export coming next. For now, this is the share card preview.');
+};
+
   return (
     <div className="page results-page">
       <div className="results-verdict">
@@ -251,10 +255,9 @@ const ResultsDashboardPage: React.FC = () => {
   />
 </div>
 
-      <Button
-  title="Share Result"
-  onPress={shareResult}
-/>
+    <button className="btn btn-secondary" onClick={shareResult}>
+  Share Result
+</button>
 
       <div className="page-actions results-actions">
         <button className="btn btn-primary" onClick={() => navigate('/contact')}>
