@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import type { TuningResult } from '../contexts/AppContext';
 
 type ShareResultCardProps = {
-  selectedScale: string | null;
+  scaleName: string | null;
   tuningResults: TuningResult[];
   appUrl?: string;
   brandName?: string;
@@ -123,7 +123,7 @@ const paletteByTone: Record<ShareTone, { border: string; glow: string; chip: str
 };
 
 const ShareResultCard: React.FC<ShareResultCardProps> = ({
-  selectedScale,
+  scaleName,
   tuningResults,
   appUrl = 'tuner.dugimago.com',
   brandName = 'Dugimago Handpan Tuning Check',
@@ -156,7 +156,7 @@ const ShareResultCard: React.FC<ShareResultCardProps> = ({
       </div>
 
       <div style={gridStyle}>
-        <MetricCard label="Scale" value={selectedScale ?? 'Unknown'} />
+        <MetricCard label="Scale" value={scaleName ?? 'Unknown'} />
         <MetricCard label="Average deviation" value={formatAverage(summary.averageDeviation)} />
         <MetricCard label="Health score" value={`${summary.healthScore}%`} />
         <MetricCard label="Checked notes" value={String(summary.checkedCount)} />
