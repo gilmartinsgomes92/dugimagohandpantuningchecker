@@ -14,7 +14,7 @@ export async function exportShareCard() {
       backgroundColor: null,
       scale: 2,
       useCORS: true,
-      logging: false,
+      logging: true,
     });
 
     const blob: Blob | null = await new Promise((resolve) =>
