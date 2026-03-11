@@ -9,7 +9,7 @@ type PartialBand = 'aligned' | 'character' | 'funky' | 'retune' | 'unknown';
 
 function bandForPartial(absCents: number): PartialBand {
   if (!Number.isFinite(absCents)) return 'unknown';
-  if (absCents <= 10) return 'aligned';
+  if (absCents <= 12) return 'aligned';
   if (absCents <= 15) return 'character';
   if (absCents <= 20) return 'funky';
   return 'retune';
