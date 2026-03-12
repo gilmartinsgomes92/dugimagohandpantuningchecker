@@ -284,12 +284,11 @@ export default function ShareResultCard({
             }}
           >
             {[
-              ['Scale', selectedScale ?? 'Quick Tuning Check'],
-              ['Checked Notes', String(total)],
-              ['Notes Needing Work', `${needsAttention}`],
-              ['Health Score', `${healthScore}%`],
-              ['App', appUrl],
-            ].map(([label, value]) => (
+  ['Scale', selectedScale ?? 'Quick Tuning Check'],
+  ['Checked Notes', String(total)],
+  ['Notes Needing Work', `${needsAttention}`],
+  ['Health Score', `${healthScore}%`],
+].map(([label, value]) => (
               <div
                 key={label}
                 style={{
@@ -323,6 +322,39 @@ export default function ShareResultCard({
                 </div>
               </div>
             ))}
+            </div>
+        </div>
+
+<div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: 8,
+            paddingTop: 22,
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            fontSize: 18,
+            color: 'rgba(248,250,252,0.78)',
+            gap: 24,
+          }}
+        >
+          <div
+            style={{
+              lineHeight: 1.4,
+            }}
+          >
+            Checked with Dugimago Handpan Tuning Check
+          </div>
+
+          <div
+            style={{
+              color: '#caa85e',
+              fontWeight: 700,
+              fontSize: 18,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {appUrl}
           </div>
         </div>
       </div>
