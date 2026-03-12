@@ -125,14 +125,14 @@ function getDetailedIssueSummary(results: TuningResult[]) {
       if (!parts.length) return null;
 
       if (parts.length === 1) {
-        return `${r.note} is reading ${parts[0]}, which may make the note sound out of tune.`;
+        return `${r.noteName} is reading ${parts[0]}, which may make the note sound out of tune.`;
       }
 
       if (parts.length === 2) {
-        return `${r.note} is reading ${parts[0]} and ${parts[1]}, which is likely to make the note sound noticeably out of tune.`;
+        return `${r.noteName} is reading ${parts[0]} and ${parts[1]}, which is likely to make the note sound noticeably out of tune.`;
       }
 
-      return `${r.note} is reading ${parts[0]}, ${parts[1]}, and ${parts[2]}, which indicates a clear tuning issue.`;
+      return `${r.noteName} is reading ${parts[0]}, ${parts[1]}, and ${parts[2]}, which indicates a clear tuning issue.`;
     })
     .filter((value): value is string => Boolean(value));
 
