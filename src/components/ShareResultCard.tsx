@@ -55,34 +55,105 @@ function getNeedsAttentionCount(results: TuningResult[]) {
 }
 
 function getVerdict(results: TuningResult[]): Verdict {
-  const avgAbs = getAverageAbsCents(results);
-  const needsAttention = getNeedsAttentionCount(results);
-  const healthScore = getHealthScore(results);
+  const checked = results.filter(
+    (r) => r.status !== 'pending' && r.status !== 'skipped'
+  );
 
-  if (needsAttention === 0 && healthScore === 100) {
+  const hasSeriousIssue = checked.some((r) => {
+    const values = [r.cents, r.octaveCents, r.compoundFifthCents]
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+
+    return values.some((value) => Math.abs(value) > 17);
+  });
+
+  const hasModerateIssue = checked.some((r) => {
+    const values = [r.cents, r.octaveCents, r.compoundFifthCents]
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+
+    return values.some((value) => Math.abs(value) > 12);
+  });
+
+  if (!hasModerateIssue) {
     return {
       label: 'In Tune',
-      summary: 'All checked notes and partials are within 12 cents.',
+      summary: 'All checked notes and partials are within the preferred tuning range.',
       accent: '#4fd1a5',
       glow: 'rgba(79, 209, 165, 0.22)',
     };
   }
 
-  if (needsAttention <= 2 && avgAbs <= 12 && healthScore >= 78) {
+  if (hasSeriousIssue) {
     return {
-      label: 'Sounds Good',
-      summary: 'Your handpan sounds good with some room for fine tuning.',
-      accent: '#d4af37',
-      glow: 'rgba(212, 175, 55, 0.20)',
+      label: 'Needs Tuning Attention',
+      summary: 'One or more notes are clearly outside the preferred tuning range.',
+      accent: '#f6ad55',
+      glow: 'rgba(246, 173, 85, 0.22)',
     };
   }
 
   return {
-    label: 'Needs Attention',
-    summary: 'One or more notes or partials are outside the preferred tuning range.',
-    accent: '#f6ad55',
-    glow: 'rgba(246, 173, 85, 0.22)',
+    label: 'Sounds Good',
+    summary: 'Your handpan sounds good with some room for fine tuning.',
+    accent: '#d4af37',
+    glow: 'rgba(212, 175, 55, 0.20)',
   };
+}
+
+function formatSignedCents(value: number) {
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)} cents`;
+}
+
+function getDetailedIssueSummary(results: TuningResult[]) {
+  const checked = results.filter(
+    (r) => r.status !== 'pending' && r.status !== 'skipped'
+  );
+
+  const issues = checked
+    .map((r) => {
+      const parts: string[] = [];
+
+      if (typeof r.cents === 'number' && Number.isFinite(r.cents) && Math.abs(r.cents) > 12) {
+        parts.push(`fundamental ${formatSignedCents(r.cents)}`);
+      }
+
+      if (
+        typeof r.octaveCents === 'number' &&
+        Number.isFinite(r.octaveCents) &&
+        Math.abs(r.octaveCents) > 12
+      ) {
+        parts.push(`octave ${formatSignedCents(r.octaveCents)}`);
+      }
+
+      if (
+        typeof r.compoundFifthCents === 'number' &&
+        Number.isFinite(r.compoundFifthCents) &&
+        Math.abs(r.compoundFifthCents) > 12
+      ) {
+        parts.push(`compound fifth ${formatSignedCents(r.compoundFifthCents)}`);
+      }
+
+      if (!parts.length) return null;
+
+      if (parts.length === 1) {
+        return `${r.note} is reading ${parts[0]}, which may make the note sound out of tune.`;
+      }
+
+      if (parts.length === 2) {
+        return `${r.note} is reading ${parts[0]} and ${parts[1]}, which is likely to make the note sound noticeably out of tune.`;
+      }
+
+      return `${r.note} is reading ${parts[0]}, ${parts[1]}, and ${parts[2]}, which indicates a clear tuning issue.`;
+    })
+    .filter((value): value is string => Boolean(value));
+
+  if (!issues.length) {
+    return 'All checked notes and partials are within the preferred tuning range.';
+  }
+
+  if (issues.length === 1) return issues[0];
+  if (issues.length === 2) return `${issues[0]} ${issues[1]}`;
+
+  return `${issues[0]} ${issues[1]} ${issues.length - 2} more note${issues.length - 2 === 1 ? '' : 's'} also show tuning deviation.`;
 }
 
 export default function ShareResultCard({
@@ -95,6 +166,7 @@ export default function ShareResultCard({
   const needsAttention = getNeedsAttentionCount(tuningResults);
   const healthScore = getHealthScore(tuningResults);
   const verdict = getVerdict(tuningResults);
+  const detailedIssueSummary = getDetailedIssueSummary(tuningResults);
 
   const summaryLine =
     needsAttention === 0
@@ -283,7 +355,7 @@ export default function ShareResultCard({
               {verdict.summary}
             </div>
 
-            <div
+                        <div
               style={{
                 fontSize: 22,
                 lineHeight: 1.65,
@@ -291,7 +363,7 @@ export default function ShareResultCard({
                 maxWidth: 620,
               }}
             >
-              Measured components are classified as <strong>in tune</strong> up to 12 cents, <strong>slightly out</strong> from 12–17 cents, and <strong>out of tune</strong> above 17 cents.
+              {detailedIssueSummary}
             </div>
           </div>
 
