@@ -88,6 +88,20 @@ const initialState: AppState = {
 
 const AppContext = createContext<{ state: AppState; dispatch: React.Dispatch<AppAction> } | undefined>(undefined);
 
+function getComponentStatusFromAbs(absCents: number): TuningResult['status'] {
+  if (!Number.isFinite(absCents)) return 'out-of-tune';
+  if (absCents <= 12) return 'in-tune';
+  if (absCents <= 17) return 'slightly-out-of-tune';
+  return 'out-of-tune';
+}
+
+function getWorstStatus(statuses: TuningResult['status'][]): TuningResult['status'] {
+  if (statuses.includes('out-of-tune')) return 'out-of-tune';
+  if (statuses.includes('slightly-out-of-tune')) return 'slightly-out-of-tune';
+  if (statuses.includes('in-tune')) return 'in-tune';
+  return 'pending';
+}
+
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case 'SET_SCALE':
@@ -140,11 +154,20 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         compoundFifthCents,
         noteName,
       } = action.payload;
-      const absCents = fundamentalCents !== null ? Math.abs(fundamentalCents) : Infinity;
-      const status: TuningResult['status'] =
-        absCents <= 12 ? 'in-tune' :
-        absCents <= 17.5 ? 'slightly-out-of-tune' :
-        'out-of-tune';
+
+      const componentStatuses: TuningResult['status'][] = [];
+
+      if (fundamentalCents !== null) {
+        componentStatuses.push(getComponentStatusFromAbs(Math.abs(fundamentalCents)));
+      }
+      if (octaveCents !== null) {
+        componentStatuses.push(getComponentStatusFromAbs(Math.abs(octaveCents)));
+      }
+      if (compoundFifthCents !== null) {
+        componentStatuses.push(getComponentStatusFromAbs(Math.abs(compoundFifthCents)));
+      }
+
+      const status = getWorstStatus(componentStatuses);
       const results = [...state.tuningResults];
       results[state.currentNoteIndex] = {
         noteName,
