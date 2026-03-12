@@ -142,7 +142,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       } = action.payload;
       const absCents = fundamentalCents !== null ? Math.abs(fundamentalCents) : Infinity;
       const status: TuningResult['status'] =
-        absCents <= 5 ? 'in-tune' :
+        absCents <= 12 ? 'in-tune' :
         absCents <= 17.5 ? 'slightly-out-of-tune' :
         'out-of-tune';
       const results = [...state.tuningResults];
