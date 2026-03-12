@@ -14,16 +14,6 @@ type Verdict = {
   glow: string;
 };
 
-function getAverageAbsCents(results: TuningResult[]) {
-  const values = results
-    .map((r) => r.cents)
-    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-    .map((v) => Math.abs(v));
-
-  if (!values.length) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function getMeasuredComponentValues(results: TuningResult[]) {
   return results
     .flatMap((r) => [r.cents, r.octaveCents, r.compoundFifthCents])
