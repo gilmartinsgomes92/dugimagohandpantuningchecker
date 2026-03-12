@@ -156,7 +156,7 @@ export default function ShareResultCard({
             gap: 24,
           }}
         >
-          <div>
+                    <div>
             <div
               style={{
                 fontSize: 28,
@@ -169,20 +169,38 @@ export default function ShareResultCard({
             >
               {brandName}
             </div>
+
             <div
               style={{
                 fontSize: 52,
                 lineHeight: 1.05,
                 fontWeight: 800,
                 letterSpacing: '-0.03em',
-                maxWidth: 580,
+                maxWidth: 760,
               }}
             >
               Handpan Check Result
             </div>
+
             <div
               style={{
-                marginTop: 20,
+                marginTop: 16,
+                fontSize: 22,
+                lineHeight: 1.5,
+                color: '#f8fafc',
+                maxWidth: 760,
+                fontWeight: 600,
+              }}
+            >
+              <span style={{ color: 'rgba(248,250,252,0.64)', fontWeight: 700 }}>
+                Scale:{' '}
+              </span>
+              {selectedScale ?? 'Quick Tuning Check'}
+            </div>
+
+            <div
+              style={{
+                marginTop: 18,
                 fontSize: 26,
                 color: 'rgba(248,250,252,0.72)',
                 maxWidth: 620,
@@ -284,7 +302,6 @@ export default function ShareResultCard({
             }}
           >
             {[
-  ['Scale', selectedScale ?? 'Quick Tuning Check'],
   ['Checked Notes', String(total)],
   ['Notes Needing Work', `${needsAttention}`],
   ['Health Score', `${healthScore}%`],
