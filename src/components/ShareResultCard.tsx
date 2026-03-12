@@ -29,15 +29,14 @@ function getAverageAbsCents(results: TuningResult[]) {
 }
 
 function getHealthScore(results: TuningResult[]) {
-  const values = results
-    .map((r) => r.cents)
-    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-    .map((v) => Math.abs(v));
+  const scored = results.filter(
+    (r) => r.status !== 'pending' && r.status !== 'skipped'
+  );
 
-  if (!values.length) return 0;
+  if (!scored.length) return 0;
 
-  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-  return clamp(Math.round(100 - avg * 4), 0, 100);
+  const inTune = scored.filter((r) => r.status === 'in-tune').length;
+  return Math.round((inTune / scored.length) * 100);
 }
 
 function getNeedsAttentionCount(results: TuningResult[]) {
