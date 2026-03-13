@@ -335,25 +335,19 @@ export function useStrobeTuner(
   useEffect(() => {
   let cancelled = false;
 
-  const syncListeningState = async () => {
-    if (isEnabled) {
-      if (!cancelled) {
-        await startListening();
-      }
-      return;
-    }
-
+  const start = async () => {
     if (!cancelled) {
-      stopListening();
+      await startListening();
     }
   };
 
-  void syncListeningState();
+  void start();
 
   return () => {
     cancelled = true;
+    stopListening();
   };
-}, [isEnabled, startListening, stopListening]);
+}, []);
 
   return {
     frequency,
