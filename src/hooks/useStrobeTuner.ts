@@ -333,9 +333,27 @@ export function useStrobeTuner(
   }, [targetFundamental, targetOctave, targetCompoundFifth]);
 
   useEffect(() => {
-    startListening();
-    return () => { stopListening(); };
-  }, []);
+  let cancelled = false;
+
+  const syncListeningState = async () => {
+    if (isEnabled) {
+      if (!cancelled) {
+        await startListening();
+      }
+      return;
+    }
+
+    if (!cancelled) {
+      stopListening();
+    }
+  };
+
+  void syncListeningState();
+
+  return () => {
+    cancelled = true;
+  };
+}, [isEnabled, startListening, stopListening]);
 
   return {
     frequency,
