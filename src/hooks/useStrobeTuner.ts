@@ -347,7 +347,7 @@ export function useStrobeTuner(
     cancelled = true;
     stopListening();
   };
-}, []);
+}, [startListening, stopListening]);
 
   return {
     frequency,
