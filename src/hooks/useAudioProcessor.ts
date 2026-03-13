@@ -4,6 +4,10 @@ import { findHarmonicFrequency } from '../utils/harmonicAnalyzer';
 import { detectPitchInWindow } from '../utils/pitchInWindow';
 import { matchNote } from '../utils/spectralMatcher';
 
+type WebkitWindow = Window & typeof globalThis & {
+  webkitAudioContext?: typeof AudioContext;
+};
+
 interface AudioResult {
   frequency: number | null;
   // Independently measured 2nd partial (physical octave) — may differ from 2×frequency
@@ -213,7 +217,12 @@ function mad(nums: number[], med: number): number {
     try {
       setError(null);
 
-            const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+const audioWindow = window as WebkitWindow;
+const AudioCtx = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+
+if (!AudioCtx) {
+  throw new Error('Web Audio API is not supported in this browser');
+}
 
 // ✅ iOS-safe: create AudioContext inside the user-gesture call stack (before awaiting)
 const audioCtx = new AudioCtx({ latencyHint: 'interactive' });
