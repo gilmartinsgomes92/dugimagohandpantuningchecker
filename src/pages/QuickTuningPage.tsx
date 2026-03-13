@@ -207,6 +207,12 @@ useEffect(() => {
     }, REGISTRATION_COOLDOWN_MS);
   }, [result, noteIndex, dispatch, resetStabilityState]);
 
+    // Stability ring shows the audio lock quality (0–100%)
+  const lockQuality = result.lockQuality ?? 0;
+  const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
+  const isLockedForRegister = lockQuality >= LOCK_THRESHOLD_REGISTER;
+  const shouldRegister = stabilityPct >= 98 || isLockedForRegister;
+
   // Fast lock flow: use lockQuality from the audio hook.
   // Collect immediately when lock is decent; register when lock is strong.
   useEffect(() => {
@@ -235,12 +241,6 @@ useEffect(() => {
       registerNote();
     }
   }, [result, isListening, shouldRegister, registerNote, resetStabilityState]);
-
-    // Stability ring shows the audio lock quality (0–100%)
-  const lockQuality = result.lockQuality ?? 0;
-  const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
-  const isLockedForRegister = lockQuality >= LOCK_THRESHOLD_REGISTER;
-  const shouldRegister = stabilityPct >= 98 || isLockedForRegister;
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
