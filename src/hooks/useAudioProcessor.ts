@@ -82,6 +82,37 @@ function clamp(val: number, lo: number, hi: number): number {
 const DEBUG_ENABLED =
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
+const IS_IOS =
+  typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+const SILENCE_GRACE_FRAMES = 5;
+
+// Main audio gate (keeps CPU down)
+const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
+
+// UI / cents behavior
+const EMIT_INTERVAL_MS = 70; // ~14 Hz
+const CENTS_SMOOTH_ALPHA = 0.18;
+
+/** Strike-window parameters for “one hit lock” (GuitarApp-like behaviour). */
+const IGNORE_AFTER_STRIKE_MS = 110; // skip attack transient
+const MEASURE_WINDOW_MS = 180; // short sustain sampling
+const MIN_WINDOW_FRAMES = 6;
+const MAX_WINDOW_FRAMES = 14;
+
+type WindowFrame = { freq: number; cents: number; quality: number };
+
+function median(nums: number[]): number {
+  const a = [...nums].sort((x, y) => x - y);
+  const mid = Math.floor(a.length / 2);
+  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+}
+
+function mad(nums: number[], med: number): number {
+  const dev = nums.map((v) => Math.abs(v - med));
+  return median(dev);
+}
+
 export const useAudioProcessor = () => {
   const [isListening, setIsListening] = useState(false);
   const [result, setResult] = useState<AudioResult>({
@@ -149,39 +180,6 @@ export const useAudioProcessor = () => {
   // Strike re-arm hysteresis (fix iOS pulsing)
   const strikeArmedRef = useRef<boolean>(true);
   const quietFramesRef = useRef<number>(999);
-
-  // Platform tuning
-  const IS_IOS =
-    typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-  const SILENCE_GRACE_FRAMES = 5;
-
-  // Main audio gate (keeps CPU down)
-  const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
-  // (Strike hysteresis thresholds removed: not used in this build)
-
-  // UI / cents behavior
-  const EMIT_INTERVAL_MS = 70; // ~14 Hz
-  const CENTS_SMOOTH_ALPHA = 0.18;
-
-/** Strike-window parameters for “one hit lock” (GuitarApp-like behaviour). */
-const IGNORE_AFTER_STRIKE_MS = 110; // skip attack transient
-const MEASURE_WINDOW_MS = 180;      // short sustain sampling
-const MIN_WINDOW_FRAMES = 6;
-const MAX_WINDOW_FRAMES = 14;
-
-type WindowFrame = { freq: number; cents: number; quality: number };
-
-function median(nums: number[]): number {
-  const a = [...nums].sort((x, y) => x - y);
-  const mid = Math.floor(a.length / 2);
-  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
-}
-
-function mad(nums: number[], med: number): number {
-  const dev = nums.map(v => Math.abs(v - med));
-  return median(dev);
-}
 
   const resetState = useCallback(() => {
     silenceCountRef.current = 0;
