@@ -77,8 +77,18 @@ export function detectPitchInWindow(
     }
   }
 
-  // Reject if peak is below noise floor
+    // Reject if peak is below noise floor
   if (peakMag < NOISE_FLOOR_DB) return null;
+
+  // Guard against false positives caused by FFT leakage from outside the
+  // search window. If the "peak" sits exactly on the window edge and the
+  // spectrum continues rising into the window from that edge, treat it as
+  // an unreliable boundary hit and reject it.
+  const atLowEdge = peakBin === lowBin;
+  const atHighEdge = peakBin === highBin;
+
+  if (atLowEdge && magDB[peakBin] <= magDB[peakBin + 1]) return null;
+  if (atHighEdge && magDB[peakBin] <= magDB[peakBin - 1]) return null;
 
   // Parabolic interpolation for sub-bin accuracy
   const prevMag = magDB[peakBin - 1];
@@ -163,9 +173,19 @@ export function detectPitchInWindowPhaseDiff(
     }
   }
 
-  // Reject if peak is below noise floor
+    // Reject if peak is below noise floor
   if (peakMag < NOISE_FLOOR_DB) return null;
 
+  // Guard against false positives caused by FFT leakage from outside the
+  // search window. If the "peak" sits exactly on the window edge and the
+  // spectrum continues rising into the window from that edge, treat it as
+  // an unreliable boundary hit and reject it.
+  const atLowEdge = peakBin === lowBin;
+  const atHighEdge = peakBin === highBin;
+
+  if (atLowEdge && magDB[peakBin] <= magDB[peakBin + 1]) return null;
+  if (atHighEdge && magDB[peakBin] <= magDB[peakBin - 1]) return null;
+  
   // First frame or unusably small hop: fall back to parabolic interpolation
   if (prevPhase === null || hopSize < 16) {
     const prevMag = magDB[peakBin - 1];
