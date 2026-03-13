@@ -99,10 +99,11 @@ const QuickTuningPage: React.FC = () => {
   useEffect(() => () => { stopListening(); }, [stopListening]);
 
   // Auto-start listening when the page loads
-  useEffect(() => {
-    if (!isListening) startListening();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+useEffect(() => {
+  if (!isListening) {
+    void startListening();
+  }
+}, [isListening, startListening]);
 
   // Navigate to results when all notes are registered
   useEffect(() => {
