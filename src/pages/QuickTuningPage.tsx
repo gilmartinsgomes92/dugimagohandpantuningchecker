@@ -234,18 +234,18 @@ useEffect(() => {
     ) {
       registerNote();
     }
-  }, [result, isListening, registerNote, resetStabilityState]);
+  }, [result, isListening, shouldRegister, registerNote, resetStabilityState]);
+
+    // Stability ring shows the audio lock quality (0–100%)
+  const lockQuality = result.lockQuality ?? 0;
+  const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
+  const isLockedForRegister = lockQuality >= LOCK_THRESHOLD_REGISTER;
+  const shouldRegister = stabilityPct >= 98 || isLockedForRegister;
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
   const absCents = result.cents !== null ? Math.abs(result.cents) : null;
   const currentStatus = absCents !== null ? getTuningStatus(absCents) : null;
-
-  // Stability ring shows the audio lock quality (0–100%)
-  const lockQuality = result.lockQuality ?? 0;
-  const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
-  const isLockedForRegister = lockQuality >= LOCK_THRESHOLD_REGISTER;
-  const shouldRegister = stabilityPct >= 98 || isLockedForRegister;
 
   return (
     <>
