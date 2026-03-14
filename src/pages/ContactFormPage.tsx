@@ -57,7 +57,7 @@ function getOrderedScaleText(noteNames: string[]): string {
 const ContactFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, dispatch } = useAppContext();
-  const { tuningResults, selectedScale, contactInfo } = state;
+  const { tuningResults, contactInfo } = state;
 
   const orderedScaleText = getOrderedScaleText(
   tuningResults
