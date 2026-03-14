@@ -10,21 +10,14 @@ const ContactFormPage: React.FC = () => {
   const { state, dispatch } = useAppContext();
   const { tuningResults, selectedScale, contactInfo } = state;
 
-  const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [formData, setFormData] = useState(() => {
-    const message = `Scale: ${selectedScale || 'Unknown'}\n` +
-      tuningResults.map(r =>
-        `${r.noteName}: ${r.status === 'skipped' ? 'Skipped' : r.cents !== null ? formatCents(r.cents) : 'No data'}`
-      ).join('\n');
-    return {
-      name: contactInfo.name,
-      email: contactInfo.email,
-      phone: contactInfo.phone,
-      message: contactInfo.message || message,
-    };
-  });
+  const [formData, setFormData] = useState(() => ({
+    name: contactInfo.name,
+    email: contactInfo.email,
+    phone: contactInfo.phone,
+    message: contactInfo.message || '',
+  }));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -38,15 +31,22 @@ const ContactFormPage: React.FC = () => {
 
   dispatch({ type: 'SET_CONTACT_INFO', payload: formData });
 
-  const summaryLines = tuningResults.map((r) => {
-    const value =
-      r.status === 'skipped'
-        ? 'Skipped'
-        : r.cents !== null
-          ? formatCents(r.cents)
-          : 'No data';
+    const summaryLines = tuningResults.map((r) => {
+    if (r.status === 'skipped') {
+      return `${r.noteName}: Skipped`;
+    }
 
-    return `${r.noteName}: ${value}`;
+    const fundamental = r.cents !== null ? formatCents(r.cents) : '—';
+    const octave =
+      r.octaveCents !== null && r.octaveCents !== undefined
+        ? formatCents(r.octaveCents)
+        : '—';
+    const compoundFifth =
+      r.compoundFifthCents !== null && r.compoundFifthCents !== undefined
+        ? formatCents(r.compoundFifthCents)
+        : '—';
+
+    return `${r.noteName}: F ${fundamental} | O ${octave} | C5 ${compoundFifth}`;
   });
 
   const payload = {
@@ -72,8 +72,7 @@ const ContactFormPage: React.FC = () => {
       throw new Error('Submission failed');
     }
 
-    setSubmitted(true);
-    setTimeout(() => navigate('/confirmation'), 1000);
+    navigate('/confirmation');
 
   } catch (err) {
     setSubmitError('Could not send your request. Please try again.');
@@ -81,18 +80,6 @@ const ContactFormPage: React.FC = () => {
     setIsSubmitting(false);
   }
 };
-
-  if (submitted) {
-    return (
-      <div className="page contact-page">
-        <div className="submission-success">
-          <div className="success-icon">✅</div>
-          <h2>Request Submitted!</h2>
-          <p>We'll be in touch shortly with your professional evaluation.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="page contact-page">
@@ -150,17 +137,34 @@ const ContactFormPage: React.FC = () => {
         </div>
 
         <div className="tuning-summary-display">
-          <h4>Tuning Summary (attached)</h4>
-          <div className="summary-scale">{selectedScale || 'Scale not selected'}</div>
-          <div className="summary-notes">
-            {tuningResults.map((r, i) => (
-              <div key={i} className="summary-note-row">
-                <span>{r.noteName}</span>
-                <span>{r.status === 'skipped' ? '—' : r.cents !== null ? formatCents(r.cents) : '—'}</span>
-              </div>
-            ))}
-          </div>
+  <h4>Tuning Summary (attached)</h4>
+  <div className="summary-scale">{selectedScale || 'Scale not selected'}</div>
+
+  <div className="summary-notes">
+    {tuningResults.map((r, i) => {
+      const fundamental = r.cents !== null ? formatCents(r.cents) : '—';
+      const octave =
+        r.octaveCents !== null && r.octaveCents !== undefined
+          ? formatCents(r.octaveCents)
+          : '—';
+      const compoundFifth =
+        r.compoundFifthCents !== null && r.compoundFifthCents !== undefined
+          ? formatCents(r.compoundFifthCents)
+          : '—';
+
+      return (
+        <div key={i} className="summary-note-row">
+          <span>{r.noteName}</span>
+          <span>
+            {r.status === 'skipped'
+              ? 'Skipped'
+              : `F ${fundamental} | O ${octave} | C5 ${compoundFifth}`}
+          </span>
         </div>
+      );
+    })}
+  </div>
+</div>
 
         {submitError && <div className="error-banner">{submitError}</div>}
         
