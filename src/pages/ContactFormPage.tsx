@@ -109,8 +109,6 @@ const ContactFormPage: React.FC = () => {
   email: formData.email,
   phone: formData.phone || '',
   message: formData.message || '',
-  scaleName: selectedScale || 'Unknown',
-  scaleOrdered: orderedScaleText || 'Unknown',
   tuningSummary:
     `Scale: ${orderedScaleText || 'Unknown'}\n` +
     `Values = Fundamental | Octave | Compound Fifth\n\n` +
