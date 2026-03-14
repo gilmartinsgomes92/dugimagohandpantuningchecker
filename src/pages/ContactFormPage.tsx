@@ -3,12 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
 
+const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mzdjvwnn';
+
 const ContactFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, dispatch } = useAppContext();
   const { tuningResults, selectedScale, contactInfo } = state;
 
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState(() => {
     const message = `Scale: ${selectedScale || 'Unknown'}\n` +
       tuningResults.map(r =>
@@ -26,13 +30,57 @@ const ContactFormPage: React.FC = () => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    dispatch({ type: 'SET_CONTACT_INFO', payload: formData });
-    console.log('Contact form submitted:', formData, 'Tuning results:', tuningResults);
-    setSubmitted(true);
-    setTimeout(() => navigate('/confirmation'), 1500);
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  setSubmitError(null);
+  setIsSubmitting(true);
+
+  dispatch({ type: 'SET_CONTACT_INFO', payload: formData });
+
+  const summaryLines = tuningResults.map((r) => {
+    const value =
+      r.status === 'skipped'
+        ? 'Skipped'
+        : r.cents !== null
+          ? formatCents(r.cents)
+          : 'No data';
+
+    return `${r.noteName}: ${value}`;
+  });
+
+  const payload = {
+    name: formData.name,
+    email: formData.email,
+    phone: formData.phone || '',
+    message: formData.message || '',
+    scale: selectedScale || 'Unknown',
+    tuningSummary: summaryLines.join('\n')
   };
+
+  try {
+    const response = await fetch(FORMSPREE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error('Submission failed');
+    }
+
+    setSubmitted(true);
+    setTimeout(() => navigate('/confirmation'), 1000);
+
+  } catch (err) {
+    setSubmitError('Could not send your request. Please try again.');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   if (submitted) {
     return (
@@ -114,12 +162,14 @@ const ContactFormPage: React.FC = () => {
           </div>
         </div>
 
+        {submitError && <div className="error-banner">{submitError}</div>}
+        
         <div className="page-actions">
           <button type="button" className="btn btn-secondary" onClick={() => navigate('/results')}>
             ← Back
           </button>
-          <button type="submit" className="btn btn-primary">
-            Request Professional Evaluation
+          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+           {isSubmitting ? 'Sending...' : 'Request Professional Evaluation'}
           </button>
         </div>
       </form>
