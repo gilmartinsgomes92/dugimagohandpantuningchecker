@@ -46,7 +46,7 @@ const ContactFormPage: React.FC = () => {
         ? formatCents(r.compoundFifthCents)
         : '—';
 
-    return `${r.noteName}: F ${fundamental} | O ${octave} | C5 ${compoundFifth}`;
+    return `${r.noteName}: ${fundamental} | ${octave} | ${compoundFifth}`;
   });
 
   const payload = {
@@ -158,7 +158,7 @@ const ContactFormPage: React.FC = () => {
           <span>
             {r.status === 'skipped'
               ? 'Skipped'
-              : `F ${fundamental} | O ${octave} | C5 ${compoundFifth}`}
+              : `${fundamental} | ${octave} | ${compoundFifth}`}
           </span>
         </div>
       );
