@@ -4,11 +4,66 @@ import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
 
 const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mzdjvwnn';
+const NOTE_INDEX: Record<string, number> = {
+  C: 0,
+  'C#': 1,
+  Db: 1,
+  D: 2,
+  'D#': 3,
+  Eb: 3,
+  E: 4,
+  F: 5,
+  'F#': 6,
+  Gb: 6,
+  G: 7,
+  'G#': 8,
+  Ab: 8,
+  A: 9,
+  'A#': 10,
+  Bb: 10,
+  B: 11,
+};
+
+function noteToMidi(noteName: string): number | null {
+  const match = noteName.match(/^([A-G](?:#|b)?)(-?\d+)$/);
+  if (!match) return null;
+
+  const [, pitchClass, octaveText] = match;
+  const pitchIndex = NOTE_INDEX[pitchClass];
+  if (pitchIndex === undefined) return null;
+
+  const octave = Number(octaveText);
+  if (!Number.isFinite(octave)) return null;
+
+  return (octave + 1) * 12 + pitchIndex;
+}
+
+function getOrderedScaleText(noteNames: string[]): string {
+  return [...noteNames]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const midiA = noteToMidi(a);
+      const midiB = noteToMidi(b);
+
+      if (midiA === null && midiB === null) return a.localeCompare(b);
+      if (midiA === null) return 1;
+      if (midiB === null) return -1;
+
+      return midiA - midiB;
+    })
+    .join(' ');
+}
 
 const ContactFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, dispatch } = useAppContext();
   const { tuningResults, selectedScale, contactInfo } = state;
+
+  const orderedScaleText = getOrderedScaleText(
+  tuningResults
+    .map((r) => r.noteName)
+    .filter((noteName): noteName is string => Boolean(noteName))
+);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -50,13 +105,17 @@ const ContactFormPage: React.FC = () => {
   });
 
   const payload = {
-    name: formData.name,
-    email: formData.email,
-    phone: formData.phone || '',
-    message: formData.message || '',
-    scale: selectedScale || 'Unknown',
-    tuningSummary: summaryLines.join('\n')
-  };
+  name: formData.name,
+  email: formData.email,
+  phone: formData.phone || '',
+  message: formData.message || '',
+  scaleName: selectedScale || 'Unknown',
+  scaleOrdered: orderedScaleText || 'Unknown',
+  tuningSummary:
+    `Scale: ${orderedScaleText || 'Unknown'}\n` +
+    `Values = Fundamental | Octave | Compound Fifth\n\n` +
+    summaryLines.join('\n')
+};
 
   try {
     const response = await fetch(FORMSPREE_ENDPOINT, {
@@ -138,7 +197,7 @@ const ContactFormPage: React.FC = () => {
 
         <div className="tuning-summary-display">
   <h4>Tuning Summary (attached)</h4>
-  <div className="summary-scale">{selectedScale || 'Scale not selected'}</div>
+  <div className="summary-scale">{orderedScaleText || 'Scale not available'}</div>
 
   <div className="summary-notes">
     {tuningResults.map((r, i) => {
