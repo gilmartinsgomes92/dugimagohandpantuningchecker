@@ -24,6 +24,17 @@ export const COMP_FIFTH_TOLERANCE_CENTS = 5;
  */
 export const STABLE_FRAME_THRESHOLD = 30;
 
+// ── Smoothing / stability-improvement constants ──────────────────────────────
+
+/** EMA decay factor: smoothed = EMA_ALPHA * prev + (1 - EMA_ALPHA) * current.
+ *  0.7 keeps ≈70% of the prior estimate, giving a good balance between
+ *  responsiveness to genuine pitch shifts and rejection of frame-to-frame noise. */
+const EMA_ALPHA = 0.7;
+/** Number of consecutive null frames before a smoothed value is cleared. */
+const NULL_GRACE_FRAMES = 3;
+/** Minimum milliseconds between React state updates (~20 Hz). */
+const STATE_UPDATE_INTERVAL_MS = 50;
+
 // ── Search-window widths (cents either side of target) ───────────────────────
 
 const FUND_WINDOW_CENTS = 20;
@@ -98,14 +109,10 @@ export function allPartialsStable(
   octaveCents: number | null,
   compFifthCents: number | null,
 ): boolean {
-  return (
-    fundCents !== null &&
-    octaveCents !== null &&
-    compFifthCents !== null &&
-    Math.abs(fundCents) <= FUND_TOLERANCE_CENTS &&
-    Math.abs(octaveCents) <= OCTAVE_TOLERANCE_CENTS &&
-    Math.abs(compFifthCents) <= COMP_FIFTH_TOLERANCE_CENTS
-  );
+  if (fundCents === null || Math.abs(fundCents) > FUND_TOLERANCE_CENTS) return false;
+  if (octaveCents !== null && Math.abs(octaveCents) > OCTAVE_TOLERANCE_CENTS) return false;
+  if (compFifthCents !== null && Math.abs(compFifthCents) > COMP_FIFTH_TOLERANCE_CENTS) return false;
+  return true;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -159,6 +166,20 @@ export function useStrobeTuner(
   const targetCFifthRef = useRef(targetCompoundFifth);
   // Re-entrancy guard: prevents startListening from running concurrently.
   const isStartedRef = useRef(false);
+  // EMA-smoothed cents values for stability logic and display.
+  const smoothedCentsFundRef = useRef<number | null>(null);
+  const smoothedCentsOctRef = useRef<number | null>(null);
+  const smoothedCentsCFifthRef = useRef<number | null>(null);
+  // EMA-smoothed frequency values for display.
+  const smoothedFreqFundRef = useRef<number | null>(null);
+  const smoothedFreqOctRef = useRef<number | null>(null);
+  const smoothedFreqCFifthRef = useRef<number | null>(null);
+  // Consecutive-null frame counters for the grace-window logic.
+  const nullCountFundRef = useRef(0);
+  const nullCountOctRef = useRef(0);
+  const nullCountCFifthRef = useRef(0);
+  // Timestamp of the last React state update (used for throttling).
+  const lastUpdateTimeRef = useRef<number | null>(null);
 
   const stopListening = useCallback(() => {
     isStartedRef.current = false;
@@ -174,6 +195,16 @@ export function useStrobeTuner(
     prevPhaseOctRef.current = null;
     prevPhaseCFifthRef.current = null;
     prevTimeRef.current = null;
+    smoothedCentsFundRef.current = null;
+    smoothedCentsOctRef.current = null;
+    smoothedCentsCFifthRef.current = null;
+    smoothedFreqFundRef.current = null;
+    smoothedFreqOctRef.current = null;
+    smoothedFreqCFifthRef.current = null;
+    nullCountFundRef.current = 0;
+    nullCountOctRef.current = 0;
+    nullCountCFifthRef.current = 0;
+    lastUpdateTimeRef.current = null;
     setIsListening(false);
     setFrequency(null);
     setOctaveFrequency(null);
@@ -293,26 +324,95 @@ export function useStrobeTuner(
           prevPhaseCFifthRef.current = null;
         }
 
-        // Cents deviations from each target.
-        const cFund = detectedFund !== null ? calcCents(detectedFund, tFund) : null;
-        const cOct = detectedOctave !== null ? calcCents(detectedOctave, tOct) : null;
-        const cCFifth = detectedCFifth !== null ? calcCents(detectedCFifth, tCFifth) : null;
+        // EMA smoothing + null-grace window for each partial.
+        // Fundamental
+        if (detectedFund !== null) {
+          nullCountFundRef.current = 0;
+          smoothedFreqFundRef.current = smoothedFreqFundRef.current === null
+            ? detectedFund
+            : EMA_ALPHA * smoothedFreqFundRef.current + (1 - EMA_ALPHA) * detectedFund;
+          const rawCentsFund = calcCents(detectedFund, tFund);
+          smoothedCentsFundRef.current = smoothedCentsFundRef.current === null
+            ? rawCentsFund
+            : EMA_ALPHA * smoothedCentsFundRef.current + (1 - EMA_ALPHA) * rawCentsFund;
+        } else {
+          nullCountFundRef.current += 1;
+          if (nullCountFundRef.current >= NULL_GRACE_FRAMES) {
+            smoothedFreqFundRef.current = null;
+            smoothedCentsFundRef.current = null;
+          }
+        }
+        // Octave
+        if (detectedOctave !== null) {
+          nullCountOctRef.current = 0;
+          smoothedFreqOctRef.current = smoothedFreqOctRef.current === null
+            ? detectedOctave
+            : EMA_ALPHA * smoothedFreqOctRef.current + (1 - EMA_ALPHA) * detectedOctave;
+          const rawCentsOct = calcCents(detectedOctave, tOct);
+          smoothedCentsOctRef.current = smoothedCentsOctRef.current === null
+            ? rawCentsOct
+            : EMA_ALPHA * smoothedCentsOctRef.current + (1 - EMA_ALPHA) * rawCentsOct;
+        } else {
+          nullCountOctRef.current += 1;
+          if (nullCountOctRef.current >= NULL_GRACE_FRAMES) {
+            smoothedFreqOctRef.current = null;
+            smoothedCentsOctRef.current = null;
+          }
+        }
+        // Compound fifth
+        if (detectedCFifth !== null) {
+          nullCountCFifthRef.current = 0;
+          smoothedFreqCFifthRef.current = smoothedFreqCFifthRef.current === null
+            ? detectedCFifth
+            : EMA_ALPHA * smoothedFreqCFifthRef.current + (1 - EMA_ALPHA) * detectedCFifth;
+          const rawCentsCFifth = calcCents(detectedCFifth, tCFifth);
+          smoothedCentsCFifthRef.current = smoothedCentsCFifthRef.current === null
+            ? rawCentsCFifth
+            : EMA_ALPHA * smoothedCentsCFifthRef.current + (1 - EMA_ALPHA) * rawCentsCFifth;
+        } else {
+          nullCountCFifthRef.current += 1;
+          if (nullCountCFifthRef.current >= NULL_GRACE_FRAMES) {
+            smoothedFreqCFifthRef.current = null;
+            smoothedCentsCFifthRef.current = null;
+          }
+        }
 
-        // Stability frame counting.
-        const stable = allPartialsStable(cFund, cOct, cCFifth);
+        // Stability frame counting using smoothed values.
+        const stable = allPartialsStable(
+          smoothedCentsFundRef.current,
+          smoothedCentsOctRef.current,
+          smoothedCentsCFifthRef.current,
+        );
         if (stable) {
           stabilityFramesRef.current += 1;
         } else {
-          stabilityFramesRef.current = 0;
+          // Decrement by 2 rather than resetting to 0: a single glitch costs only
+          // 2 frames of progress, so brief drop-outs don't erase the accumulated
+          // count, yet sustained instability still drives the counter down quickly.
+          stabilityFramesRef.current = Math.max(0, stabilityFramesRef.current - 2);
         }
         const frames = stabilityFramesRef.current;
+        const isStableNow = frames >= STABLE_FRAME_THRESHOLD;
 
-        setFrequency(detectedFund);
-        setOctaveFrequency(detectedOctave);
-        setCompoundFifthFrequency(detectedCFifth);
-        setCents({ fundamental: cFund, octave: cOct, compoundFifth: cCFifth });
-        setStabilityFrames(frames);
-        setIsStable(frames >= STABLE_FRAME_THRESHOLD);
+        // Throttle React state updates to ~20 Hz; always update on lock.
+        const now = performance.now();
+        const shouldUpdate =
+          lastUpdateTimeRef.current === null ||
+          (now - lastUpdateTimeRef.current) >= STATE_UPDATE_INTERVAL_MS ||
+          isStableNow;
+        if (shouldUpdate) {
+          lastUpdateTimeRef.current = now;
+          setFrequency(smoothedFreqFundRef.current);
+          setOctaveFrequency(smoothedFreqOctRef.current);
+          setCompoundFifthFrequency(smoothedFreqCFifthRef.current);
+          setCents({
+            fundamental: smoothedCentsFundRef.current,
+            octave: smoothedCentsOctRef.current,
+            compoundFifth: smoothedCentsCFifthRef.current,
+          });
+          setStabilityFrames(frames);
+          setIsStable(isStableNow);
+        }
 
         rafRef.current = requestAnimationFrame(tick);
       };
