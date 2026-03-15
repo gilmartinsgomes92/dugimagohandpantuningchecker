@@ -12,6 +12,8 @@ export interface TuningResult {
   compoundFifthCents?: number;
   octaveFreq?: number;
   octaveCents?: number;
+  octaveSource?: 'measured' | 'estimated';
+  compoundFifthSource?: 'measured' | 'estimated';
 }
 
 export interface ContactInfo {
