@@ -42,8 +42,6 @@ const PRECISION_WINDOW_CENTS = 40;
 /** Wider fallback measurement window used only when the strict window misses a very detuned note. */
 const FALLBACK_PRECISION_WINDOW_CENTS = 85;
 
-const CFIFTH_FALLBACK_WINDOW_CENTS = 450;
-
 /** EMA smoothing factor for frequency output (0–1). Lower = more smoothing. */
 const FREQ_SMOOTH_ALPHA = 0.15;
 
@@ -485,19 +483,18 @@ if (rms >= dynamicGate) {
               const showCents = true;
 
               const compFifthNominal = nominalFreq * 3;
-const cfWin = precisionWindow(compFifthNominal);
-const wideCfWin = precisionWindow(compFifthNominal, CFIFTH_FALLBACK_WINDOW_CENTS);
-
-const compFifthFreq =
-  compFifthNominal <= sampleRate / 2
-    ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi) ??
-      detectPitchInWindow(buf, sampleRate, wideCfWin.lo, wideCfWin.hi)
-    : findHarmonicFrequency(
-        freqBufRef.current,
-        compFifthNominal,
-        sampleRate,
-        analyserRef.current.fftSize,
-      );
+              const cfWin = precisionWindow(compFifthNominal);
+              const wideCfWin = precisionWindow(compFifthNominal, FALLBACK_PRECISION_WINDOW_CENTS);
+              const compFifthFreq =
+                compFifthNominal <= sampleRate / 2
+                  ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi) ??
+                    detectPitchInWindow(buf, sampleRate, wideCfWin.lo, wideCfWin.hi)
+                  : findHarmonicFrequency(
+                      freqBufRef.current,
+                      compFifthNominal,
+                      sampleRate,
+                      analyserRef.current.fftSize,
+                    );
 
               smoothedOctaveRef.current =
                 octaveFreq === null
