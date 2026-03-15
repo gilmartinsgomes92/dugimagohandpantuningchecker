@@ -173,13 +173,33 @@ useEffect(() => {
     const octaveFreq = useMeasuredOctave ? rawOctave : detectedFreq * 2;
     const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
 
-    const rawCFifth = trimmedMean(stableCFifthFreqs.current);
-    const rawCFifthCents =
-      rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
-    const useMeasuredCFifth =
-      rawCFifth !== null && rawCFifthCents !== null && Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
-    const compoundFifthFreq = useMeasuredCFifth ? rawCFifth : detectedFreq * 3;
-    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
+const rawCFifth = trimmedMean(stableCFifthFreqs.current);
+const rawCFifthCents =
+  rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
+
+// Normal measured CFifth range for well-behaved handpans.
+const CFIFTH_NORMAL_MAX_CENTS = 220;
+
+// If a measured CFifth is *very* far away, it may still be a real extreme case
+// (for example a displaced upper partial), so we should not hide it by replacing
+// it with fundamental * 3.
+const CFIFTH_EXTREME_MIN_CENTS = 300;
+
+const useMeasuredCFifth =
+  rawCFifth !== null &&
+  rawCFifthCents !== null &&
+  (
+    Math.abs(rawCFifthCents) <= CFIFTH_NORMAL_MAX_CENTS ||
+    Math.abs(rawCFifthCents) >= CFIFTH_EXTREME_MIN_CENTS
+  );
+
+// Hybrid behavior:
+// - use measured CFifth if it is normally close
+// - also use measured CFifth if it is extremely far (real extreme case)
+// - otherwise fall back to estimated CFifth from the locked fundamental
+const compoundFifthFreq = useMeasuredCFifth ? rawCFifth : detectedFreq * 3;
+const compoundFifthCents =
+  1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
