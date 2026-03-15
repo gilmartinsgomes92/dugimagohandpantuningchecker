@@ -172,6 +172,7 @@ useEffect(() => {
       rawOctave !== null && rawOctaveCents !== null && Math.abs(rawOctaveCents) <= OCTAVE_MAX_TARGET_CENTS;
     const octaveFreq = useMeasuredOctave ? rawOctave : detectedFreq * 2;
     const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
+    const octaveSource: 'measured' | 'estimated' = useMeasuredOctave ? 'measured' : 'estimated';
 
     const rawCFifth = trimmedMean(stableCFifthFreqs.current);
     const rawCFifthCents =
@@ -180,6 +181,7 @@ useEffect(() => {
       rawCFifth !== null && rawCFifthCents !== null && Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
     const compoundFifthFreq = useMeasuredCFifth ? rawCFifth : detectedFreq * 3;
     const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
+    const compoundFifthSource: 'measured' | 'estimated' = useMeasuredCFifth ? 'measured' : 'estimated';
 
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
@@ -194,6 +196,8 @@ useEffect(() => {
       compoundFifthCents,
       octaveFreq,
       octaveCents,
+      octaveSource,
+      compoundFifthSource,
     };
 
     dispatch({ type: 'ADD_TUNING_RESULT', payload });
