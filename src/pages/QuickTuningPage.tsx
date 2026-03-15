@@ -160,6 +160,7 @@ useEffect(() => {
     // - Clamp only absurd outliers; do not force the partials to mirror the
     //   snapped fundamental cents.
     const OCTAVE_MAX_TARGET_CENTS = 180;
+    const CFIFTH_MAX_TARGET_CENTS = 220;
 
     const targetOctaveFreq = midiToFrequency(midiNote + 12);
     const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
@@ -173,26 +174,27 @@ useEffect(() => {
     const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
 
     const rawCFifth = trimmedMean(stableCFifthFreqs.current);
-const compoundFifthFreq = rawCFifth;
-const compoundFifthCents =
-  compoundFifthFreq !== null
-    ? 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq)
-    : null;
+    const rawCFifthCents =
+      rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
+    const useMeasuredCFifth =
+      rawCFifth !== null && rawCFifthCents !== null && Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
+    const compoundFifthFreq = useMeasuredCFifth ? rawCFifth : detectedFreq * 3;
+    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
 
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
 
     const payload: TuningResult = {
-  noteName,
-  targetFrequency,
-  detectedFrequency: detectedFreq,
-  cents,
-  status,
-  compoundFifthFreq: compoundFifthFreq ?? undefined,
-  compoundFifthCents: compoundFifthCents ?? undefined,
-  octaveFreq: octaveFreq ?? undefined,
-  octaveCents: octaveCents ?? undefined,
-};
+      noteName,
+      targetFrequency,
+      detectedFrequency: detectedFreq,
+      cents,
+      status,
+      compoundFifthFreq,
+      compoundFifthCents,
+      octaveFreq,
+      octaveCents,
+    };
 
     dispatch({ type: 'ADD_TUNING_RESULT', payload });
     dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: noteIndex + 1 });
