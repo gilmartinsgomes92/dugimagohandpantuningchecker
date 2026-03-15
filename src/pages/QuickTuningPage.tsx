@@ -159,8 +159,8 @@ useEffect(() => {
     // - Only synthesize from detectedFreq when we truly have no measurement.
     // - Clamp only absurd outliers; do not force the partials to mirror the
     //   snapped fundamental cents.
-    const OCTAVE_MAX_TARGET_CENTS = 460;
-    const CFIFTH_MAX_TARGET_CENTS = 500;
+    const OCTAVE_MAX_TARGET_CENTS = 180;
+    const CFIFTH_MAX_TARGET_CENTS = 220;
 
     const targetOctaveFreq = midiToFrequency(midiNote + 12);
     const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
