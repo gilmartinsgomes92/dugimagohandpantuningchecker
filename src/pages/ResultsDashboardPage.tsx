@@ -306,11 +306,15 @@ const ResultsDashboardPage: React.FC = () => {
                   <td>{statusLabel}</td>
                   <td style={{ color }}>{r.cents !== null ? formatCents(r.cents) : '—'}</td>
                   <td style={{ color: octaveColor }}>
-                    {r.octaveCents !== undefined ? formatCents(r.octaveCents) : '—'}
-                  </td>
+  {r.octaveCents !== undefined
+    ? `${formatCents(r.octaveCents)} ${r.octaveSource === 'estimated' ? 'E' : 'M'}`
+    : '—'}
+</td>
                   <td style={{ color: fifthColor }}>
-                    {r.compoundFifthCents !== undefined ? formatCents(r.compoundFifthCents) : '—'}
-                  </td>
+  {r.compoundFifthCents !== undefined
+    ? `${formatCents(r.compoundFifthCents)} ${r.compoundFifthSource === 'estimated' ? 'E' : 'M'}`
+    : '—'}
+</td>
                   <td>
                     <span
                       className="result-dot"
