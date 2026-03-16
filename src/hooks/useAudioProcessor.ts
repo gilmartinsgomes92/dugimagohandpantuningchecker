@@ -13,8 +13,12 @@ interface AudioResult {
   // Independently measured 2nd partial (physical octave) — may differ from 2×frequency
   // on real handpans due to inharmonicity in the metal geometry.
   octaveFrequency: number | null;
+  // Wide diagnostic octave candidate used only when the normal octave lock misses.
+  octaveDiagnosticFrequency: number | null;
   // Independently measured 3rd partial (compound fifth) — may differ from 3×frequency.
   compoundFifthFrequency: number | null;
+  // Wide diagnostic compound-fifth candidate used only when the normal lock misses.
+  compoundFifthDiagnosticFrequency: number | null;
   noteName: string | null;
   cents: number | null;
   // Template match confidence (0–1); higher = more certain note identification.
@@ -41,6 +45,12 @@ const PRECISION_WINDOW_CENTS = 40;
 
 /** Wider fallback measurement window used only when the strict window misses a very detuned note. */
 const FALLBACK_PRECISION_WINDOW_CENTS = 85;
+
+/** Diagnostic half-width used only when the normal octave / fifth measurements are missing. */
+const PARTIAL_DIAGNOSTIC_WINDOW_CENTS = 650;
+
+/** Minimum deviation required before a diagnostic partial is considered a real extreme displacement. */
+const PARTIAL_DIAGNOSTIC_EXTREME_MIN_CENTS = 100;
 
 /** EMA smoothing factor for frequency output (0–1). Lower = more smoothing. */
 const FREQ_SMOOTH_ALPHA = 0.15;
@@ -118,7 +128,9 @@ export const useAudioProcessor = () => {
   const [result, setResult] = useState<AudioResult>({
     frequency: null,
     octaveFrequency: null,
+    octaveDiagnosticFrequency: null,
     compoundFifthFrequency: null,
+    compoundFifthDiagnosticFrequency: null,
     noteName: null,
     cents: null,
     matchScore: 0,
@@ -158,7 +170,9 @@ export const useAudioProcessor = () => {
   const smoothedFreqRef = useRef<number | null>(null);
   const smoothedMidiRef = useRef<number | null>(null);
   const smoothedOctaveRef = useRef<number | null>(null);
+  const smoothedOctaveDiagnosticRef = useRef<number | null>(null);
   const smoothedCFifthRef = useRef<number | null>(null);
+  const smoothedCFifthDiagnosticRef = useRef<number | null>(null);
   const smoothedCentsRef = useRef<number | null>(null);
   const noteOnsetMsRef = useRef<number>(0);
   const strikeAtMsRef = useRef<number>(0);
@@ -186,7 +200,9 @@ export const useAudioProcessor = () => {
     smoothedFreqRef.current = null;
     smoothedMidiRef.current = null;
     smoothedOctaveRef.current = null;
+    smoothedOctaveDiagnosticRef.current = null;
     smoothedCFifthRef.current = null;
+    smoothedCFifthDiagnosticRef.current = null;
     smoothedCentsRef.current = null;
     noteOnsetMsRef.current = 0;
     lastEmitMsRef.current = 0;
@@ -319,7 +335,9 @@ if (rms >= dynamicGate) {
             if (smoothedMidiRef.current !== null && smoothedMidiRef.current !== midiNote) {
               smoothedFreqRef.current = null;
               smoothedOctaveRef.current = null;
+              smoothedOctaveDiagnosticRef.current = null;
               smoothedCFifthRef.current = null;
+              smoothedCFifthDiagnosticRef.current = null;
               smoothedCentsRef.current = null;
               noteOnsetMsRef.current = performance.now();
               strikeAtMsRef.current = performance.now();
@@ -342,6 +360,7 @@ if (rms >= dynamicGate) {
             const octaveNominal = nominalFreq * 2;
             const octWin = precisionWindow(octaveNominal);
             let octaveFreq = detectPitchInWindow(buf, sampleRate, octWin.lo, octWin.hi);
+            let diagnosticOctaveFreq: number | null = null;
 
             if (freq === null || octaveFreq === null) {
               const wideFundWin = precisionWindow(nominalFreq, FALLBACK_PRECISION_WINDOW_CENTS);
@@ -353,6 +372,16 @@ if (rms >= dynamicGate) {
               if (octaveFreq === null) {
                 octaveFreq = detectPitchInWindow(buf, sampleRate, wideOctWin.lo, wideOctWin.hi);
               }
+            }
+
+            if (octaveFreq === null) {
+              const diagnosticOctWin = precisionWindow(octaveNominal, PARTIAL_DIAGNOSTIC_WINDOW_CENTS);
+              const rawDiagnosticOctave = detectPitchInWindow(buf, sampleRate, diagnosticOctWin.lo, diagnosticOctWin.hi);
+              diagnosticOctaveFreq =
+                rawDiagnosticOctave !== null &&
+                Math.abs(centsFromNominal(rawDiagnosticOctave, octaveNominal)) >= PARTIAL_DIAGNOSTIC_EXTREME_MIN_CENTS
+                  ? rawDiagnosticOctave
+                  : null;
             }
 
             if (freq === null && octaveFreq !== null) {
@@ -496,12 +525,30 @@ if (rms >= dynamicGate) {
                       analyserRef.current.fftSize,
                     );
 
+              let diagnosticCFifthFreq: number | null = null;
+              if (compFifthFreq === null && compFifthNominal <= sampleRate / 2) {
+                const diagnosticCfWin = precisionWindow(compFifthNominal, PARTIAL_DIAGNOSTIC_WINDOW_CENTS);
+                const rawDiagnosticCFifth = detectPitchInWindow(buf, sampleRate, diagnosticCfWin.lo, diagnosticCfWin.hi);
+                diagnosticCFifthFreq =
+                  rawDiagnosticCFifth !== null &&
+                  Math.abs(centsFromNominal(rawDiagnosticCFifth, compFifthNominal)) >= PARTIAL_DIAGNOSTIC_EXTREME_MIN_CENTS
+                    ? rawDiagnosticCFifth
+                    : null;
+              }
+
               smoothedOctaveRef.current =
                 octaveFreq === null
                   ? smoothedOctaveRef.current
                   : smoothedOctaveRef.current === null
                     ? octaveFreq
                     : FREQ_SMOOTH_ALPHA * octaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
+
+              smoothedOctaveDiagnosticRef.current =
+                diagnosticOctaveFreq === null
+                  ? smoothedOctaveDiagnosticRef.current
+                  : smoothedOctaveDiagnosticRef.current === null
+                    ? diagnosticOctaveFreq
+                    : FREQ_SMOOTH_ALPHA * diagnosticOctaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveDiagnosticRef.current;
 
               smoothedCFifthRef.current =
                 compFifthFreq === null
@@ -510,10 +557,19 @@ if (rms >= dynamicGate) {
                     ? compFifthFreq
                     : FREQ_SMOOTH_ALPHA * compFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
 
+              smoothedCFifthDiagnosticRef.current =
+                diagnosticCFifthFreq === null
+                  ? smoothedCFifthDiagnosticRef.current
+                  : smoothedCFifthDiagnosticRef.current === null
+                    ? diagnosticCFifthFreq
+                    : FREQ_SMOOTH_ALPHA * diagnosticCFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthDiagnosticRef.current;
+
               setResult({
                 frequency: smoothedFreq,
                 octaveFrequency: smoothedOctaveRef.current,
+                octaveDiagnosticFrequency: smoothedOctaveDiagnosticRef.current,
                 compoundFifthFrequency: smoothedCFifthRef.current,
+                compoundFifthDiagnosticFrequency: smoothedCFifthDiagnosticRef.current,
                 noteName,
                 cents: showCents ? smoothedCentsRef.current : null,
                 matchScore: score,
@@ -527,7 +583,9 @@ if (rms >= dynamicGate) {
                 setResult({
                   frequency: null,
                   octaveFrequency: null,
+                  octaveDiagnosticFrequency: null,
                   compoundFifthFrequency: null,
+                  compoundFifthDiagnosticFrequency: null,
                   noteName: null,
                   cents: null,
                   matchScore: 0,
@@ -543,7 +601,9 @@ if (rms >= dynamicGate) {
               setResult({
                 frequency: null,
                 octaveFrequency: null,
+                octaveDiagnosticFrequency: null,
                 compoundFifthFrequency: null,
+                compoundFifthDiagnosticFrequency: null,
                 noteName: null,
                 cents: null,
                 matchScore: 0,
@@ -559,7 +619,9 @@ if (rms >= dynamicGate) {
             setResult({
               frequency: null,
               octaveFrequency: null,
+              octaveDiagnosticFrequency: null,
               compoundFifthFrequency: null,
+              compoundFifthDiagnosticFrequency: null,
               noteName: null,
               cents: null,
               matchScore: 0,
@@ -606,7 +668,9 @@ if (rms >= dynamicGate) {
     setResult({
       frequency: null,
       octaveFrequency: null,
+      octaveDiagnosticFrequency: null,
       compoundFifthFrequency: null,
+      compoundFifthDiagnosticFrequency: null,
       noteName: null,
       cents: null,
       matchScore: 0,
