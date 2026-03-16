@@ -10,10 +10,10 @@ export interface TuningResult {
   status: 'in-tune' | 'slightly-out-of-tune' | 'out-of-tune' | 'skipped' | 'pending';
   compoundFifthFreq?: number;
   compoundFifthCents?: number;
+  compoundFifthSource?: 'measured' | 'diagnostic-extreme' | 'estimated';
   octaveFreq?: number;
   octaveCents?: number;
-  octaveSource?: 'measured' | 'estimated';
-  compoundFifthSource?: 'measured' | 'estimated';
+  octaveSource?: 'measured' | 'diagnostic-extreme' | 'estimated';
 }
 
 export interface ContactInfo {
