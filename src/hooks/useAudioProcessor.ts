@@ -105,10 +105,10 @@ const EMIT_INTERVAL_MS = 70; // ~14 Hz
 const CENTS_SMOOTH_ALPHA = 0.18;
 
 /** Strike-window parameters for “one hit lock” (GuitarApp-like behaviour). */
-const IGNORE_AFTER_STRIKE_MS = 110; // skip attack transient
-const MEASURE_WINDOW_MS = 180; // short sustain sampling
-const MIN_WINDOW_FRAMES = 6;
-const MAX_WINDOW_FRAMES = 14;
+const IGNORE_AFTER_STRIKE_MS = 140; // skip attack transient
+const MEASURE_WINDOW_MS = 320; // short sustain sampling
+const MIN_WINDOW_FRAMES = 8;
+const MAX_WINDOW_FRAMES = 20;
 
 type WindowFrame = { freq: number; cents: number; quality: number };
 
