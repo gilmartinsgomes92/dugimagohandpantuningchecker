@@ -306,14 +306,26 @@ const ResultsDashboardPage: React.FC = () => {
                   <td>{statusLabel}</td>
                   <td style={{ color }}>{r.cents !== null ? formatCents(r.cents) : '—'}</td>
                   <td style={{ color: octaveColor }}>
-  {r.octaveCents !== undefined
-    ? `${formatCents(r.octaveCents)} ${r.octaveSource === 'estimated' ? 'E' : 'M'}`
-    : '—'}
+  {r.octaveCents !== undefined ? (
+    r.octaveSource === 'estimated' &&
+    typeof r.cents === 'number' &&
+    Number.isFinite(r.cents) &&
+    Math.abs(r.cents) <= 15 &&
+    (r.compoundFifthSource === 'measured' || r.compoundFifthCents === undefined)
+      ? 'ED'
+      : `${formatCents(r.octaveCents)}${r.octaveSource === 'estimated' ? ' E' : ''}`
+  ) : '—'}
 </td>
-                  <td style={{ color: fifthColor }}>
-  {r.compoundFifthCents !== undefined
-    ? `${formatCents(r.compoundFifthCents)} ${r.compoundFifthSource === 'estimated' ? 'E' : 'M'}`
-    : '—'}
+<td style={{ color: fifthColor }}>
+  {r.compoundFifthCents !== undefined ? (
+    r.compoundFifthSource === 'estimated' &&
+    typeof r.cents === 'number' &&
+    Number.isFinite(r.cents) &&
+    Math.abs(r.cents) <= 15 &&
+    (r.octaveSource === 'measured' || r.octaveCents === undefined)
+      ? 'ED'
+      : `${formatCents(r.compoundFifthCents)}${r.compoundFifthSource === 'estimated' ? ' E' : ''}`
+  ) : '—'}
 </td>
                   <td>
                     <span
