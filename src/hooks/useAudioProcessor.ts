@@ -54,7 +54,7 @@ const FREQ_SMOOTH_ALPHA = 0.15;
  * Frames where the raw frequency jumps more than this from the smoothed value
  * are treated as spectral glitches and skipped entirely.
  */
-const MAX_CENTS_JUMP = 45;
+const MAX_CENTS_JUMP = 85;
 
 /**
  * Returns the Hz search bounds for a ±PRECISION_WINDOW_CENTS window around targetFreq.
@@ -89,7 +89,7 @@ const DEBUG_ENABLED =
 const IS_IOS =
   typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-const SILENCE_GRACE_FRAMES = 5;
+const SILENCE_GRACE_FRAMES = 12;
 
 // Main audio gate (keeps CPU down)
 const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
@@ -100,14 +100,14 @@ const CENTS_SMOOTH_ALPHA = 0.18;
 
 /** Strike-window parameters for “one hit lock” (GuitarApp-like behaviour). */
 const IGNORE_AFTER_STRIKE_MS = 140; // skip attack transient
-const LOCK_WINDOW_MS = 320; // fast fundamental lock
-const REFINE_WINDOW_MS = 1100; // longer partial capture / refinement
-const MIN_LOCK_FRAMES = 5;
-const MAX_LOCK_FRAMES = 16;
-const MIN_PARTIAL_FRAMES = 5;
-const MAX_PARTIAL_FRAMES = 18;
+const LOCK_WINDOW_MS = 420; // fast fundamental lock
+const REFINE_WINDOW_MS = 1600; // longer partial capture / refinement
+const MIN_LOCK_FRAMES = 4;
+const MAX_LOCK_FRAMES = 22;
+const MIN_PARTIAL_FRAMES = 4;
+const MAX_PARTIAL_FRAMES = 24;
 const PARTIAL_CLEAR_MISSES = 4;
-const REFINEMENT_READY_MS = 520;
+const REFINEMENT_READY_MS = 320;
 
 const WIDE_OCTAVE_WINDOW_CENTS = 180;
 const WIDE_CFIFTH_WINDOW_CENTS = 260;
