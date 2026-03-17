@@ -53,6 +53,7 @@ type AppAction =
   | { type: 'ADD_TUNING_RESULT'; payload: TuningResult }
   | { type: 'SET_CONTACT_INFO'; payload: Partial<ContactInfo> }
   | { type: 'SET_CURRENT_NOTE_INDEX'; payload: number }
+  | { type: 'UPDATE_TUNING_RESULT_BY_NOTE_NAME'; payload: { noteName: string; patch: Partial<TuningResult> } }
   | { type: 'SET_DETECTED_NOTE'; payload: DetectedNotePayload }
   | { type: 'RESET_EVALUATION' }
   // ── 2-step tuning workflow ──────────────────────────────────────────────────
@@ -117,6 +118,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, contactInfo: { ...state.contactInfo, ...action.payload } };
     case 'SET_CURRENT_NOTE_INDEX':
       return { ...state, currentNoteIndex: action.payload };
+    case 'UPDATE_TUNING_RESULT_BY_NOTE_NAME': {
+      const results = state.tuningResults.map((result) =>
+        result.noteName === action.payload.noteName ? { ...result, ...action.payload.patch } : result,
+      );
+      return { ...state, tuningResults: results };
+    }
     case 'SET_DETECTED_NOTE':
       return { ...state, detectedNote: action.payload };
     case 'RESET_EVALUATION':
