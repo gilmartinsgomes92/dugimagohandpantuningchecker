@@ -193,16 +193,16 @@ useEffect(() => {
     const status = getTuningStatus(absCents);
 
     const payload: TuningResult = {
-      noteName,
-      targetFrequency,
-      detectedFrequency: detectedFreq,
-      cents,
-      status,
-      compoundFifthFreq,
-      compoundFifthCents,
-      octaveFreq,
-      octaveCents,
-    };
+  noteName,
+  targetFrequency,
+  detectedFrequency: detectedFreq,
+  cents,
+  status,
+  compoundFifthFreq: compoundFifthFreq ?? undefined,
+  compoundFifthCents: compoundFifthCents ?? undefined,
+  octaveFreq: octaveFreq ?? undefined,
+  octaveCents: octaveCents ?? undefined,
+};
 
     dispatch({ type: 'ADD_TUNING_RESULT', payload });
     dispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: noteIndex + 1 });
