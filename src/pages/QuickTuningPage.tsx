@@ -224,31 +224,30 @@ useEffect(() => {
   // Fast lock flow: use lockQuality from the audio hook.
   // Collect immediately when lock is decent; register when lock is strong.
   useEffect(() => {
-    if (!isListening || justRegistered.current) {
-      resetStabilityState();
-      return;
+  if (!isListening || justRegistered.current) {
+    resetStabilityState();
+    return;
+  }
+
+  if (result.frequency === null || result.noteName === null) return;
+
+  const isAlreadyRegistered = registeredNoteNames.current.has(result.noteName);
+  const lockQ = result.lockQuality ?? 0;
+
+  if (lockQ >= 0.55) {
+    stableFrequencies.current.push(result.frequency);
+    if (result.octaveFrequency !== null) {
+      stableOctaveFreqs.current.push(result.octaveFrequency);
     }
-
-    if (result.frequency === null || result.noteName === null) return;
-
-    // Skip frames for notes already registered (prevents ring-out from blocking new notes)
-    if (registeredNoteNames.current.has(result.noteName)) return;
-
-    const lockQ = result.lockQuality ?? 0;
-
-    if (lockQ >= 0.55) {
-      stableFrequencies.current.push(result.frequency);
-      if (result.octaveFrequency !== null) stableOctaveFreqs.current.push(result.octaveFrequency);
-      if (result.compoundFifthFrequency !== null)
-        stableCFifthFreqs.current.push(result.compoundFifthFrequency);
+    if (result.compoundFifthFrequency !== null) {
+      stableCFifthFreqs.current.push(result.compoundFifthFrequency);
     }
+  }
 
-    if (
-      shouldRegister &&      !justRegistered.current
-    ) {
-      registerNote();
-    }
-  }, [result, isListening, shouldRegister, registerNote, resetStabilityState]);
+  if (!isAlreadyRegistered && shouldRegister && !justRegistered.current) {
+    registerNote();
+  }
+}, [result, isListening, shouldRegister, registerNote, resetStabilityState]);
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
