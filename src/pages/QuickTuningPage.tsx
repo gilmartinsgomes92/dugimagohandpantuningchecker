@@ -260,18 +260,19 @@ useEffect(() => {
 
     const lockQ = result.lockQuality ?? 0;
 
-// Keep the fundamental strict, but allow partials to accumulate with a looser gate.
-// This helps notes whose octave / compound fifth are clear even when the main lock
-// quality is a bit lower on some frames.
+// Keep the fundamental strict.
 if (lockQ >= 0.55) {
   stableFrequencies.current.push(result.frequency);
 }
 
-if (result.octaveFrequency !== null && lockQ >= 0.35) {
+// Do NOT gate partial accumulation by the same fundamental lock threshold.
+// The hook already validates octave / compound fifth candidates before exposing them.
+// Let the page collect any non-null partials and let the trimmed mean decide later.
+if (result.octaveFrequency !== null) {
   stableOctaveFreqs.current.push(result.octaveFrequency);
 }
 
-if (result.compoundFifthFrequency !== null && lockQ >= 0.35) {
+if (result.compoundFifthFrequency !== null) {
   stableCFifthFreqs.current.push(result.compoundFifthFrequency);
 }
 
