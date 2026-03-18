@@ -102,14 +102,14 @@ const MAX_WINDOW_FRAMES = 14;
 
 /** Partial-only lock/refinement windows (do not affect fundamental behaviour). */
 const PARTIAL_IGNORE_AFTER_STRIKE_MS = 120;
-const PARTIAL_DISPLAY_DELAY_MS = 900;
+const PARTIAL_DISPLAY_DELAY_MS = 550;
 const PARTIAL_TRACK_WINDOW_MS = 3000;
-const PARTIAL_STABLE_WINDOW_MS = 1400;
+const PARTIAL_STABLE_WINDOW_MS = 900;
 const PARTIAL_HOLD_MS = 450;
 
-const MIN_OCTAVE_FRAMES = 5;
+const MIN_OCTAVE_FRAMES = 3;
 const MAX_OCTAVE_FRAMES = 48;
-const MIN_CFIFTH_FRAMES = 5;
+const MIN_CFIFTH_FRAMES = 3;
 const MAX_CFIFTH_FRAMES = 48;
 
 const OCTAVE_MAX_MAD_CENTS = 16;
