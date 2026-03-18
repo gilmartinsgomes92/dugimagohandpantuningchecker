@@ -113,7 +113,7 @@ useEffect(() => {
     const timeout = setTimeout(() => {
       stopListening();
       navigate('/results');
-    }, 3000);
+    }, 1000);
 
     return () => clearTimeout(timeout);
   }
