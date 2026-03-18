@@ -260,15 +260,20 @@ useEffect(() => {
 
     const lockQ = result.lockQuality ?? 0;
 
-    if (lockQ >= 0.55) {
-      stableFrequencies.current.push(result.frequency);
-      if (result.octaveFrequency !== null) {
-        stableOctaveFreqs.current.push(result.octaveFrequency);
-      }
-      if (result.compoundFifthFrequency !== null) {
-        stableCFifthFreqs.current.push(result.compoundFifthFrequency);
-      }
-    }
+// Keep the fundamental strict, but allow partials to accumulate with a looser gate.
+// This helps notes whose octave / compound fifth are clear even when the main lock
+// quality is a bit lower on some frames.
+if (lockQ >= 0.55) {
+  stableFrequencies.current.push(result.frequency);
+}
+
+if (result.octaveFrequency !== null && lockQ >= 0.35) {
+  stableOctaveFreqs.current.push(result.octaveFrequency);
+}
+
+if (result.compoundFifthFrequency !== null && lockQ >= 0.35) {
+  stableCFifthFreqs.current.push(result.compoundFifthFrequency);
+}
 
     if (isAlreadyRegistered) {
       const trimmedMean = (freqs: number[]): number | null => {
