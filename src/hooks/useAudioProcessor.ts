@@ -85,7 +85,7 @@ const DEBUG_ENABLED =
 const IS_IOS =
   typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-const SILENCE_GRACE_FRAMES = 5;
+const SILENCE_GRACE_FRAMES = 10;
 
 // Main audio gate (keeps CPU down)
 const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
