@@ -244,6 +244,59 @@ useEffect(() => {
     }
   }
 
+  if (isAlreadyRegistered) {
+    const trimmedMean = (freqs: number[]): number | null => {
+      if (freqs.length === 0) return null;
+      const sorted = [...freqs].sort((a, b) => a - b);
+      const trimCount = Math.floor(sorted.length * 0.25);
+      const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+      return trimmed.length > 0
+        ? trimmed.reduce((sum, f) => sum + f, 0) / trimmed.length
+        : sorted[Math.floor((sorted.length - 1) / 2)];
+    };
+
+    const parsedDetectedNote = parseFullNoteName(result.noteName);
+    if (!parsedDetectedNote) return;
+
+    const midiNote = parsedDetectedNote.midiNote;
+    const targetOctaveFreq = midiToFrequency(midiNote + 12);
+    const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
+
+    const OCTAVE_MAX_TARGET_CENTS = 180;
+    const CFIFTH_MAX_TARGET_CENTS = 220;
+
+    const rawOctave = trimmedMean(stableOctaveFreqs.current);
+    const rawOctaveCents =
+      rawOctave !== null ? 1200 * Math.log2(rawOctave / targetOctaveFreq) : null;
+    const useMeasuredOctave =
+      rawOctave !== null &&
+      rawOctaveCents !== null &&
+      Math.abs(rawOctaveCents) <= OCTAVE_MAX_TARGET_CENTS;
+
+    const rawCFifth = trimmedMean(stableCFifthFreqs.current);
+    const rawCFifthCents =
+      rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
+    const useMeasuredCFifth =
+      rawCFifth !== null &&
+      rawCFifthCents !== null &&
+      Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
+
+    if (useMeasuredOctave || useMeasuredCFifth) {
+      dispatch({
+        type: 'UPDATE_TUNING_RESULT_PARTIALS',
+        payload: {
+          noteName: result.noteName,
+          octaveFreq: useMeasuredOctave ? rawOctave ?? undefined : undefined,
+          octaveCents: useMeasuredOctave ? rawOctaveCents ?? undefined : undefined,
+          compoundFifthFreq: useMeasuredCFifth ? rawCFifth ?? undefined : undefined,
+          compoundFifthCents: useMeasuredCFifth ? rawCFifthCents ?? undefined : undefined,
+        },
+      });
+    }
+
+    return;
+  }
+    
   if (!isAlreadyRegistered && shouldRegister && !justRegistered.current) {
     registerNote();
   }
