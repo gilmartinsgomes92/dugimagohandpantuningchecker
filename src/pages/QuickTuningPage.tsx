@@ -108,12 +108,16 @@ useEffect(() => {
 }, [isListening, startListening]);
 
   // Navigate to results when all notes are registered
-  useEffect(() => {
-    if (notesCount > 0 && registeredCount >= notesCount) {
+useEffect(() => {
+  if (notesCount > 0 && registeredCount >= notesCount) {
+    const timeout = setTimeout(() => {
       stopListening();
       navigate('/results');
-    }
-  }, [registeredCount, notesCount, stopListening, navigate]);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }
+}, [registeredCount, notesCount, stopListening, navigate]);
 
   const registerNote = useCallback(() => {
     if (justRegistered.current) return;
