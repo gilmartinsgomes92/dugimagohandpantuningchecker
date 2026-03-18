@@ -169,17 +169,25 @@ useEffect(() => {
     const rawOctaveCents =
       rawOctave !== null ? 1200 * Math.log2(rawOctave / targetOctaveFreq) : null;
     const useMeasuredOctave =
-      rawOctave !== null && rawOctaveCents !== null && Math.abs(rawOctaveCents) <= OCTAVE_MAX_TARGET_CENTS;
-    const octaveFreq = useMeasuredOctave ? rawOctave : detectedFreq * 2;
-    const octaveCents = 1200 * Math.log2(octaveFreq / targetOctaveFreq);
+      rawOctave !== null &&
+      rawOctaveCents !== null &&
+      Math.abs(rawOctaveCents) <= OCTAVE_MAX_TARGET_CENTS;
+    const octaveFreq = useMeasuredOctave ? rawOctave : null;
+    const octaveCents =
+      octaveFreq !== null ? 1200 * Math.log2(octaveFreq / targetOctaveFreq) : null;
 
     const rawCFifth = trimmedMean(stableCFifthFreqs.current);
     const rawCFifthCents =
       rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
     const useMeasuredCFifth =
-      rawCFifth !== null && rawCFifthCents !== null && Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
-    const compoundFifthFreq = useMeasuredCFifth ? rawCFifth : detectedFreq * 3;
-    const compoundFifthCents = 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq);
+      rawCFifth !== null &&
+      rawCFifthCents !== null &&
+      Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
+    const compoundFifthFreq = useMeasuredCFifth ? rawCFifth : null;
+    const compoundFifthCents =
+      compoundFifthFreq !== null
+        ? 1200 * Math.log2(compoundFifthFreq / targetCompoundFifthFreq)
+        : null;
 
     const absCents = Math.abs(cents);
     const status = getTuningStatus(absCents);
