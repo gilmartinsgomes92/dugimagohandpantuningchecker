@@ -100,6 +100,29 @@ const MEASURE_WINDOW_MS = 180; // short sustain sampling
 const MIN_WINDOW_FRAMES = 6;
 const MAX_WINDOW_FRAMES = 14;
 
+/** Partial-only lock/refinement windows (do not affect fundamental behaviour). */
+const PARTIAL_IGNORE_AFTER_STRIKE_MS = 120;
+const PARTIAL_LOCK_WINDOW_MS = 280;
+const PARTIAL_REFINE_WINDOW_MS = 900;
+
+const MIN_OCTAVE_FRAMES = 4;
+const MAX_OCTAVE_FRAMES = 14;
+const MIN_CFIFTH_FRAMES = 4;
+const MAX_CFIFTH_FRAMES = 14;
+
+const OCTAVE_MAX_MAD_CENTS = 10;
+const CFIFTH_MAX_MAD_CENTS = 14;
+
+const PARTIAL_CLEAR_MISSES = 4;
+
+const WIDE_OCTAVE_WINDOW_CENTS = 120;
+const WIDE_CFIFTH_WINDOW_CENTS = 220;
+
+const OCTAVE_MIN_RATIO = 1.72;
+const OCTAVE_MAX_RATIO = 2.42;
+const CFIFTH_MIN_RATIO = 2.38;
+const CFIFTH_MAX_RATIO = 3.72;
+
 type WindowFrame = { freq: number; cents: number; quality: number };
 
 function median(nums: number[]): number {
@@ -111,6 +134,63 @@ function median(nums: number[]): number {
 function mad(nums: number[], med: number): number {
   const dev = nums.map((v) => Math.abs(v - med));
   return median(dev);
+}
+
+function pushFrame(list: WindowFrame[], frame: WindowFrame, maxFrames: number): void {
+  list.push(frame);
+  if (list.length > maxFrames) list.shift();
+}
+
+function finalizeStableFrequency(
+  frames: WindowFrame[],
+  minFrames: number,
+  maxMadCents: number,
+): number | null {
+  if (frames.length < minFrames) return null;
+
+  const centsArr = frames.map((f) => f.cents);
+  const centsMed = median(centsArr);
+  const centsMad = mad(centsArr, centsMed);
+  if (centsMad > maxMadCents) return null;
+
+  const selected = frames
+    .filter((f) => Math.abs(f.cents - centsMed) <= Math.max(maxMadCents * 1.8, 18))
+    .map((f) => f.freq);
+
+  if (selected.length < minFrames) return null;
+  return median(selected);
+}
+
+function detectPartialCandidate(
+  buffer: Float32Array,
+  sampleRate: number,
+  targetFreq: number,
+  lockedFundamental: number,
+  harmonicType: 'octave' | 'compoundFifth',
+): number | null {
+  const strictWin = precisionWindow(targetFreq);
+  const fallbackWin = precisionWindow(targetFreq, FALLBACK_PRECISION_WINDOW_CENTS);
+  const wideWin =
+    harmonicType === 'octave'
+      ? precisionWindow(targetFreq, WIDE_OCTAVE_WINDOW_CENTS)
+      : precisionWindow(targetFreq, WIDE_CFIFTH_WINDOW_CENTS);
+
+  const candidate =
+    detectPitchInWindow(buffer, sampleRate, strictWin.lo, strictWin.hi) ??
+    detectPitchInWindow(buffer, sampleRate, fallbackWin.lo, fallbackWin.hi) ??
+    detectPitchInWindow(buffer, sampleRate, wideWin.lo, wideWin.hi);
+
+  if (candidate === null || lockedFundamental <= 0) return null;
+
+  const ratio = candidate / lockedFundamental;
+
+  if (harmonicType === 'octave') {
+    if (ratio < OCTAVE_MIN_RATIO || ratio > OCTAVE_MAX_RATIO) return null;
+  } else {
+    if (ratio < CFIFTH_MIN_RATIO || ratio > CFIFTH_MAX_RATIO) return null;
+  }
+
+  return candidate;
 }
 
 export const useAudioProcessor = () => {
@@ -163,6 +243,10 @@ export const useAudioProcessor = () => {
   const noteOnsetMsRef = useRef<number>(0);
   const strikeAtMsRef = useRef<number>(0);
   const windowFramesRef = useRef<WindowFrame[]>([]);
+  const octaveFramesRef = useRef<WindowFrame[]>([]);
+  const cFifthFramesRef = useRef<WindowFrame[]>([]);
+  const octaveMissesRef = useRef<number>(0);
+  const cFifthMissesRef = useRef<number>(0);
   const lastLockQualityRef = useRef<number>(0);
   const lastEmitMsRef = useRef<number>(0);
 
@@ -200,6 +284,10 @@ export const useAudioProcessor = () => {
 
     strikeAtMsRef.current = 0;
     windowFramesRef.current = [];
+    octaveFramesRef.current = [];
+    cFifthFramesRef.current = [];
+    octaveMissesRef.current = 0;
+    cFifthMissesRef.current = 0;
     lastLockQualityRef.current = 0;
 
     waitingForStabilizationRef.current = false;
@@ -324,6 +412,10 @@ if (rms >= dynamicGate) {
               noteOnsetMsRef.current = performance.now();
               strikeAtMsRef.current = performance.now();
               windowFramesRef.current = [];
+              octaveFramesRef.current = [];
+              cFifthFramesRef.current = [];
+              octaveMissesRef.current = 0;
+              cFifthMissesRef.current = 0;
               lastLockQualityRef.current = 0;
               lastEmitMsRef.current = 0;
             }
@@ -333,6 +425,10 @@ if (rms >= dynamicGate) {
               noteOnsetMsRef.current = performance.now();
               strikeAtMsRef.current = noteOnsetMsRef.current;
               windowFramesRef.current = [];
+              octaveFramesRef.current = [];
+              cFifthFramesRef.current = [];
+              octaveMissesRef.current = 0;
+              cFifthMissesRef.current = 0;
               lastLockQualityRef.current = 0;
             }
 
@@ -482,33 +578,117 @@ if (rms >= dynamicGate) {
 
               const showCents = true;
 
+              const octaveNominal = nominalFreq * 2;
               const compFifthNominal = nominalFreq * 3;
-              const cfWin = precisionWindow(compFifthNominal);
-              const wideCfWin = precisionWindow(compFifthNominal, FALLBACK_PRECISION_WINDOW_CENTS);
-              const compFifthFreq =
-                compFifthNominal <= sampleRate / 2
-                  ? detectPitchInWindow(buf, sampleRate, cfWin.lo, cfWin.hi) ??
-                    detectPitchInWindow(buf, sampleRate, wideCfWin.lo, wideCfWin.hi)
-                  : findHarmonicFrequency(
-                      freqBufRef.current,
-                      compFifthNominal,
-                      sampleRate,
-                      analyserRef.current.fftSize,
-                    );
+
+              const partialDt = nowMs - strikeAtMsRef.current;
+              const partialStartMs = PARTIAL_IGNORE_AFTER_STRIKE_MS;
+              const partialEndMs =
+                PARTIAL_IGNORE_AFTER_STRIKE_MS + PARTIAL_LOCK_WINDOW_MS + PARTIAL_REFINE_WINDOW_MS;
+
+              if (
+                partialDt >= partialStartMs &&
+                partialDt <= partialEndMs &&
+                smoothedFreq > 0
+              ) {
+                const refinedOctave = detectPartialCandidate(
+                  buf,
+                  sampleRate,
+                  octaveNominal,
+                  smoothedFreq,
+                  'octave',
+                );
+
+                if (refinedOctave !== null) {
+                  pushFrame(
+                    octaveFramesRef.current,
+                    {
+                      freq: refinedOctave,
+                      cents: centsFromNominal(refinedOctave, octaveNominal),
+                      quality: score,
+                    },
+                    MAX_OCTAVE_FRAMES,
+                  );
+                  octaveMissesRef.current = 0;
+                } else {
+                  octaveMissesRef.current += 1;
+                  if (octaveMissesRef.current >= PARTIAL_CLEAR_MISSES) {
+                    octaveFramesRef.current = [];
+                    smoothedOctaveRef.current = null;
+                  }
+                }
+
+                let refinedCFifth: number | null = findHarmonicFrequency(
+                  freqBufRef.current,
+                  compFifthNominal,
+                  sampleRate,
+                  analyserRef.current.fftSize,
+                );
+
+                if (refinedCFifth !== null) {
+                  const ratio = refinedCFifth / smoothedFreq;
+                  if (ratio < CFIFTH_MIN_RATIO || ratio > CFIFTH_MAX_RATIO) {
+                    refinedCFifth = null;
+                  }
+                }
+
+                if (refinedCFifth === null && compFifthNominal <= sampleRate / 2) {
+                  refinedCFifth = detectPartialCandidate(
+                    buf,
+                    sampleRate,
+                    compFifthNominal,
+                    smoothedFreq,
+                    'compoundFifth',
+                  );
+                }
+
+                if (refinedCFifth !== null) {
+                  pushFrame(
+                    cFifthFramesRef.current,
+                    {
+                      freq: refinedCFifth,
+                      cents: centsFromNominal(refinedCFifth, compFifthNominal),
+                      quality: score,
+                    },
+                    MAX_CFIFTH_FRAMES,
+                  );
+                  cFifthMissesRef.current = 0;
+                } else {
+                  cFifthMissesRef.current += 1;
+                  if (cFifthMissesRef.current >= PARTIAL_CLEAR_MISSES) {
+                    cFifthFramesRef.current = [];
+                    smoothedCFifthRef.current = null;
+                  }
+                }
+              }
+
+              const stableOctave = finalizeStableFrequency(
+                octaveFramesRef.current,
+                MIN_OCTAVE_FRAMES,
+                OCTAVE_MAX_MAD_CENTS,
+              );
+
+              const stableCFifth = finalizeStableFrequency(
+                cFifthFramesRef.current,
+                MIN_CFIFTH_FRAMES,
+                CFIFTH_MAX_MAD_CENTS,
+              );
 
               smoothedOctaveRef.current =
-                octaveFreq === null
+                stableOctave === null
                   ? smoothedOctaveRef.current
                   : smoothedOctaveRef.current === null
-                    ? octaveFreq
-                    : FREQ_SMOOTH_ALPHA * octaveFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
+                    ? stableOctave
+                    : FREQ_SMOOTH_ALPHA * stableOctave +
+                      (1 - FREQ_SMOOTH_ALPHA) * smoothedOctaveRef.current;
 
               smoothedCFifthRef.current =
-                compFifthFreq === null
+                stableCFifth === null
                   ? smoothedCFifthRef.current
                   : smoothedCFifthRef.current === null
-                    ? compFifthFreq
-                    : FREQ_SMOOTH_ALPHA * compFifthFreq + (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
+                    ? stableCFifth
+                    : FREQ_SMOOTH_ALPHA * stableCFifth +
+                      (1 - FREQ_SMOOTH_ALPHA) * smoothedCFifthRef.current;
 
               setResult({
                 frequency: smoothedFreq,
