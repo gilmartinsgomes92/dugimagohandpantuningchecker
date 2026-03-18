@@ -300,7 +300,7 @@ useEffect(() => {
   if (!isAlreadyRegistered && shouldRegister && !justRegistered.current) {
     registerNote();
   }
-}, [result, isListening, shouldRegister, registerNote, resetStabilityState]);
+}, [result, isListening, shouldRegister, registerNote, resetStabilityState, dispatch]);
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
