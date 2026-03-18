@@ -51,6 +51,16 @@ type AppAction =
   | { type: 'SET_SCALE'; payload: string }
   | { type: 'SET_NOTES_COUNT'; payload: number }
   | { type: 'ADD_TUNING_RESULT'; payload: TuningResult }
+  | {
+      type: 'UPDATE_TUNING_RESULT_PARTIALS';
+      payload: {
+        noteName: string;
+        octaveFreq?: number;
+        octaveCents?: number;
+        compoundFifthFreq?: number;
+        compoundFifthCents?: number;
+      };
+    }
   | { type: 'SET_CONTACT_INFO'; payload: Partial<ContactInfo> }
   | { type: 'SET_CURRENT_NOTE_INDEX'; payload: number }
   | { type: 'SET_DETECTED_NOTE'; payload: DetectedNotePayload }
@@ -112,6 +122,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       const results = [...state.tuningResults];
       results[state.currentNoteIndex] = action.payload;
       return { ...state, tuningResults: results };
+    }
+    case 'UPDATE_TUNING_RESULT_PARTIALS': {
+      return {
+        ...state,
+        tuningResults: state.tuningResults.map((r) => {
+          if (r.noteName !== action.payload.noteName) return r;
+
+          return {
+            ...r,
+            octaveFreq: r.octaveFreq ?? action.payload.octaveFreq,
+            octaveCents: r.octaveCents ?? action.payload.octaveCents,
+            compoundFifthFreq: r.compoundFifthFreq ?? action.payload.compoundFifthFreq,
+            compoundFifthCents: r.compoundFifthCents ?? action.payload.compoundFifthCents,
+          };
+        }),
+      };
     }
     case 'SET_CONTACT_INFO':
       return { ...state, contactInfo: { ...state.contactInfo, ...action.payload } };
