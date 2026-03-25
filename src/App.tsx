@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './contexts/AppContext';
+import { CertificationProvider } from './contexts/CertificationContext';
 import WelcomePage from './pages/WelcomePage';
 import NotesCountSelectionPage from './pages/NotesCountSelectionPage';
 import QuickTuningPage from './pages/QuickTuningPage';
@@ -12,11 +13,15 @@ import ConfirmationPage from './pages/ConfirmationPage';
 import StrobeTuningPage from './pages/StrobeTuningPage';
 import IdentifyNotePage from './pages/IdentifyNotePage';
 import TuningStartPage from './pages/TuningStartPage';
+import CertificationStartPage from './pages/CertificationStartPage';
+import CertificationCheckPage from './pages/CertificationCheckPage';
+import CertificationResultsPage from './pages/CertificationResultsPage';
 import './App.css';
 
 function App() {
   return (
     <AppProvider>
+      <CertificationProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<WelcomePage />} />
@@ -36,9 +41,13 @@ function App() {
           <Route path="/tuning/identify-note" element={<IdentifyNotePage />} />
           <Route path="/tuning/strobe-measurement" element={<StrobeTuningPage />} />
           <Route path="/tuning/results" element={<ResultsDashboardPage />} />
+          <Route path="/certification/start" element={<CertificationStartPage />} />
+          <Route path="/certification/check" element={<CertificationCheckPage />} />
+          <Route path="/certification/results" element={<CertificationResultsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </CertificationProvider>
     </AppProvider>
   );
 }
