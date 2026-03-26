@@ -1379,6 +1379,19 @@
    ============================================================ */
 .status-slightly-out { background: #221a00; color: #ffaa00; }
 .status-out-of-tune { background: #220000; color: #ff4444; }
+.status-pending { background: #1b1b1b; color: #b5b5b5; }
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
 
 /* ============================================================
    Verdict variants
