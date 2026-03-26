@@ -154,11 +154,11 @@ const CertificationResultsPage: React.FC = () => {
       </div>
 
       <div
+        aria-hidden="true"
         style={{
           position: 'fixed',
           top: 0,
-          left: 0,
-          opacity: 0,
+          left: '-200vw',
           pointerEvents: 'none',
           zIndex: -1,
         }}
