@@ -7,6 +7,7 @@ import { aggregateCertificationNote } from '../utils/certificationAggregation';
 interface CertificationState {
   notesCount: number | null;
   verificationId: string | null;
+  finalizedAt: string | null;
   currentNoteIndex: number;
   strikesByNote: CertificationStrike[][];
   expectationsByNote: Record<number, ExpectedPartials>;
@@ -14,7 +15,8 @@ interface CertificationState {
 }
 
 type CertificationAction =
-  | { type: 'START_CERTIFICATION_SESSION'; payload: { notesCount: number; verificationId: string } }
+  | { type: 'START_CERTIFICATION_SESSION'; payload: { notesCount: number } }
+  | { type: 'FINALIZE_CERTIFICATION_REPORT'; payload: { verificationId: string; finalizedAt: string } }
   | { type: 'RECORD_STRIKE'; payload: { noteIndex: number; strike: CertificationStrike } }
   | { type: 'REMOVE_LAST_STRIKE'; payload: { noteIndex: number } }
   | { type: 'ADVANCE_TO_NEXT_NOTE' }
@@ -31,6 +33,7 @@ const defaultExpectedPartials: ExpectedPartials = {
 const initialState: CertificationState = {
   notesCount: null,
   verificationId: null,
+  finalizedAt: null,
   currentNoteIndex: 0,
   strikesByNote: [],
   expectationsByNote: {},
@@ -56,13 +59,20 @@ function certificationReducer(state: CertificationState, action: CertificationAc
 
       return {
         notesCount: action.payload.notesCount,
-        verificationId: action.payload.verificationId,
+        verificationId: null,
+        finalizedAt: null,
         currentNoteIndex: 0,
         strikesByNote,
         expectationsByNote,
         lockedNoteNames,
       };
     }
+    case 'FINALIZE_CERTIFICATION_REPORT':
+      return {
+        ...state,
+        verificationId: action.payload.verificationId,
+        finalizedAt: action.payload.finalizedAt,
+      };
     case 'RECORD_STRIKE': {
       const next = state.strikesByNote.map((strikes) => [...strikes]);
       next[action.payload.noteIndex].push(action.payload.strike);
