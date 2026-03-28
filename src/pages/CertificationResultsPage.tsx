@@ -86,13 +86,6 @@ const CertificationResultsPage: React.FC = () => {
     navigate('/');
   };
 
-  const toggleCompoundExpectation = (noteIndex: number, current: boolean) => {
-    dispatch({
-      type: 'SET_NOTE_EXPECTATIONS',
-      payload: { noteIndex, expectations: { compoundFifth: !current } },
-    });
-  };
-
   const shareCertifiedReport = async () => {
     const safeVerificationId = verificationId.replace(/[^A-Z0-9-]/gi, '-').toLowerCase();
     await exportShareCard('certification-share-card', `dugimago-certified-tuning-report-${safeVerificationId}.png`);
