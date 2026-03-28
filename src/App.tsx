@@ -15,6 +15,7 @@ import IdentifyNotePage from './pages/IdentifyNotePage';
 import TuningStartPage from './pages/TuningStartPage';
 import CertificationStartPage from './pages/CertificationStartPage';
 import CertificationCheckPage from './pages/CertificationCheckPage';
+import CertificationReviewPage from './pages/CertificationReviewPage';
 import CertificationResultsPage from './pages/CertificationResultsPage';
 import VerifyReportPage from './pages/VerifyReportPage';
 import './App.css';
@@ -44,6 +45,7 @@ function App() {
           <Route path="/tuning/results" element={<ResultsDashboardPage />} />
           <Route path="/certification/start" element={<CertificationStartPage />} />
           <Route path="/certification/check" element={<CertificationCheckPage />} />
+          <Route path="/certification/review" element={<CertificationReviewPage />} />
           <Route path="/certification/results" element={<CertificationResultsPage />} />
           <Route path="/verify" element={<VerifyReportPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
