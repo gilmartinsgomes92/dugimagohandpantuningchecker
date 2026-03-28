@@ -163,17 +163,20 @@ const CertificationResultsPage: React.FC = () => {
       </div>
 
       <div
-        aria-hidden="true"
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: '-200vw',
-          pointerEvents: 'none',
-          zIndex: -1,
-        }}
-      >
-        <CertificationShareCard aggregates={aggregates} verificationId={verificationId} />
-      </div>
+  aria-hidden="true"
+  style={{
+    position: 'fixed',
+    top: 0,
+    left: '-20000px',
+    width: '1200px',
+    maxWidth: '1200px',
+    pointerEvents: 'none',
+    zIndex: -1,
+    overflow: 'hidden',
+  }}
+>
+  <CertificationShareCard aggregates={aggregates} verificationId={verificationId} />
+</div>
 
       <button className="btn btn-secondary" onClick={shareCertifiedReport}>
         Download PNG Certificate
