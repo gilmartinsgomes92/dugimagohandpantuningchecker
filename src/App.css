@@ -401,15 +401,14 @@
 
 .btn-premium {
   color: #ffffff;
-  border: 1px solid #c39a3e;
-  background: #c39a3e;
-  box-shadow: 0 6px 16px rgba(195, 154, 62, 0.14);
+  border: none;
+  background: linear-gradient(135deg, #c7a043, #b8872f);
+  box-shadow: 0 2px 16px rgba(184, 135, 47, 0.30);
 }
 
 .btn-premium:hover:not(:disabled) {
-  background: #cda64a;
-  border-color: #cda64a;
-  box-shadow: 0 10px 24px rgba(195, 154, 62, 0.24);
+  background: linear-gradient(135deg, #d2ac4d, #c19236);
+  box-shadow: 0 4px 24px rgba(184, 135, 47, 0.42);
 }
 
 .btn-premium:active:not(:disabled) {
@@ -679,7 +678,7 @@
 .welcome-cta-group .btn-premium {
   position: relative;
   overflow: hidden;
-  box-shadow: 0 6px 16px rgba(195, 154, 62, 0.14);
+  box-shadow: 0 2px 16px rgba(184, 135, 47, 0.30);
 }
 
 .welcome-cta-group .btn-premium::before,
