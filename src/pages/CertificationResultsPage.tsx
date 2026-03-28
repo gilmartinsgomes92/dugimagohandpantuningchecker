@@ -55,31 +55,32 @@ const CertificationResultsPage: React.FC = () => {
   const reportSignature = useMemo(() => (reportRecord ? JSON.stringify(reportRecord) : null), [reportRecord]);
 
   useEffect(() => {
-    if (!reportRecord || !reportSignature || saveState === 'saving' || lastSavedSignatureRef.current === reportSignature) {
-      return;
+  if (!reportRecord || !reportSignature || lastSavedSignatureRef.current === reportSignature) {
+    return;
+  }
+
+  let cancelled = false;
+
+  setSaveState('saving');
+  setSaveMessage('Saving original report to the verification registry…');
+
+  saveCertificationReport(reportRecord).then((result) => {
+    if (cancelled) return;
+
+    if (result.ok) {
+      lastSavedSignatureRef.current = reportSignature;
+      setSaveState('saved');
+      setSaveMessage('Original report saved. This verification ID can now be checked on the Verify page.');
+    } else {
+      setSaveState('error');
+      setSaveMessage(result.error ?? 'Could not save this report to the verification registry.');
     }
+  });
 
-    let cancelled = false;
-    setSaveState('saving');
-    setSaveMessage('Saving original report to the verification registry…');
-
-    saveCertificationReport(reportRecord).then((result) => {
-      if (cancelled) return;
-
-      if (result.ok) {
-        lastSavedSignatureRef.current = reportSignature;
-        setSaveState('saved');
-        setSaveMessage('Original report saved. This verification ID can now be checked on the Verify page.');
-      } else {
-        setSaveState('error');
-        setSaveMessage(result.error ?? 'Could not save this report to the verification registry.');
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [reportRecord, reportSignature, saveState]);
+  return () => {
+    cancelled = true;
+  };
+}, [reportRecord, reportSignature]);
 
   const handleStartOver = () => {
     dispatch({ type: 'RESET_CERTIFICATION_SESSION' });
