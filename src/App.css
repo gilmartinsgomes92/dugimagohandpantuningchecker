@@ -401,18 +401,14 @@
 
 .btn-premium {
   color: #ffffff;
-  border: 1px solid rgba(255, 220, 140, 0.22);
-  background: linear-gradient(135deg, #b88e36 0%, #c79d45 50%, #a97b2c 100%);
-  box-shadow:
-    0 10px 24px rgba(199, 154, 59, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(214, 175, 76, 0.32);
+  background: linear-gradient(180deg, #c9a246 0%, #bb9136 100%);
+  box-shadow: 0 8px 20px rgba(187, 145, 54, 0.18);
 }
 
 .btn-premium:hover:not(:disabled) {
-  background: linear-gradient(135deg, #c79a3b 0%, #d7af53 50%, #b7862f 100%);
-  box-shadow:
-    0 12px 28px rgba(199, 154, 59, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, #d2ab50 0%, #c1973b 100%);
+  box-shadow: 0 10px 24px rgba(187, 145, 54, 0.24);
 }
 
 .btn-premium:active:not(:disabled) {
