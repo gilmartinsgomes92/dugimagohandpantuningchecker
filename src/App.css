@@ -400,23 +400,19 @@
 .btn-primary:active:not(:disabled) { transform: scale(0.97); }
 
 .btn-premium {
-  color: #1d1404;
-  border: 1px solid rgba(243, 211, 122, 0.52);
-  background:
-    linear-gradient(180deg, rgba(246, 220, 137, 0.98) 0%, rgba(214, 169, 79, 0.98) 54%, rgba(154, 106, 31, 0.98) 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 220, 140, 0.22);
+  background: linear-gradient(135deg, #be9338 0%, #cea64a 50%, #ad7f2d 100%);
   box-shadow:
-    0 2px 16px rgba(212, 169, 79, 0.32),
-    inset 0 1px 0 rgba(255, 248, 220, 0.65),
-    inset 0 -10px 24px rgba(120, 76, 10, 0.12);
+    0 10px 24px rgba(199, 154, 59, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .btn-premium:hover:not(:disabled) {
-  background:
-    linear-gradient(180deg, rgba(252, 229, 154, 1) 0%, rgba(224, 183, 96, 1) 52%, rgba(170, 118, 36, 1) 100%);
+  background: linear-gradient(135deg, #c79a3b 0%, #d7af53 50%, #b7862f 100%);
   box-shadow:
-    0 4px 24px rgba(212, 169, 79, 0.42),
-    inset 0 1px 0 rgba(255, 250, 228, 0.72),
-    inset 0 -12px 26px rgba(120, 76, 10, 0.16);
+    0 12px 28px rgba(199, 154, 59, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .btn-premium:active:not(:disabled) {
