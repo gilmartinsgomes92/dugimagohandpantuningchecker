@@ -18,6 +18,9 @@ const MIN_UNIQUE_NOTES_TO_SUGGEST = 4;
 // Small cooldown so a single strike doesn't double-register.
 const REGISTRATION_COOLDOWN_MS = 850;
 
+// Prefer scales whose root matches the instrument's lowest registered note.
+const LOWEST_NOTE_ROOT_BONUS = 0.2;
+
 type RegisteredNote = {
   fullName: string;   // e.g. "A3"
   pitchClass: string; // e.g. "A", "Bb", "C#"
@@ -61,9 +64,22 @@ function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
 }
 
-function scoreScale(detectedPitchClasses: Set<string>, scalePitchClassesRaw: string[]): { overlap: number; total: number; score: number; missing: string[]; extras: string[] } {
+function scoreScale(
+  detectedPitchClasses: Set<string>,
+  scalePitchClassesRaw: string[],
+  preferredRootPitchClass?: string | null,
+): {
+  overlap: number;
+  total: number;
+  score: number;
+  missing: string[];
+  extras: string[];
+  rootPitchClass: string | null;
+  rootMatchedLowest: boolean;
+} {
   const scalePitchClasses = scalePitchClassesRaw.map(canonicalPitchClass);
   const scaleSet = new Set(scalePitchClasses);
+  const rootPitchClass = scalePitchClasses[0] ?? null;
   let overlap = 0;
   for (const pc of detectedPitchClasses) {
     if (scaleSet.has(pc)) overlap += 1;
@@ -75,9 +91,13 @@ function scoreScale(detectedPitchClasses: Set<string>, scalePitchClassesRaw: str
   // Base score is coverage of the scale; lightly penalize extras.
   const base = total === 0 ? 0 : overlap / total;
   const penalty = Math.min(0.35, extras.length * 0.06);
-  const score = Math.max(0, base - penalty);
+  const rootMatchedLowest = Boolean(
+    preferredRootPitchClass && rootPitchClass && canonicalPitchClass(preferredRootPitchClass) === canonicalPitchClass(rootPitchClass),
+  );
+  const rootBonus = rootMatchedLowest ? LOWEST_NOTE_ROOT_BONUS : 0;
+  const score = Math.max(0, base - penalty + rootBonus);
 
-  return { overlap, total, score, missing, extras };
+  return { overlap, total, score, missing, extras, rootPitchClass, rootMatchedLowest };
 }
 
 const ScaleIdentifyPage: React.FC = () => {
@@ -148,12 +168,17 @@ const ScaleIdentifyPage: React.FC = () => {
     return new Set(registered.map((n) => n.pitchClass));
   }, [registered]);
 
+  const preferredRootPitchClass = useMemo(() => {
+    if (registeredSorted.length === 0) return null;
+    return registeredSorted[0].pitchClass;
+  }, [registeredSorted]);
+
   const topMatches = useMemo(() => {
     if (detectedPitchClasses.size < MIN_UNIQUE_NOTES_TO_SUGGEST) return [];
 
     const rows = HANDPAN_SCALE_LIBRARY.map((s) => {
       const scalePitchClasses = uniq(s.notes.map(pitchClassOf));
-      const scored = scoreScale(detectedPitchClasses, scalePitchClasses);
+      const scored = scoreScale(detectedPitchClasses, scalePitchClasses, preferredRootPitchClass);
       return {
         sceneName: s.sceneName,
         theoreticalName: s.theoreticalName,
@@ -161,10 +186,15 @@ const ScaleIdentifyPage: React.FC = () => {
         scalePitchClasses,
         ...scored,
       };
-    }).sort((a, b) => b.score - a.score || b.overlap - a.overlap);
+    }).sort((a, b) =>
+      b.score - a.score
+      || Number(b.rootMatchedLowest) - Number(a.rootMatchedLowest)
+      || b.overlap - a.overlap
+      || a.total - b.total
+    );
 
     return rows.slice(0, 3);
-  }, [detectedPitchClasses]);
+  }, [detectedPitchClasses, preferredRootPitchClass]);
 
   const best = topMatches[0] ?? null;
 
@@ -266,7 +296,10 @@ const ScaleIdentifyPage: React.FC = () => {
               <div className="scaleid-matchvalue">{best.theoreticalName}</div>
             </div>
             <div className="scaleid-matchmeta">
-              Confidence: <strong>{Math.round(best.score * 100)}%</strong> · Matched {best.overlap}/{best.total}
+              Confidence: <strong>{Math.round(Math.min(1, best.score) * 100)}%</strong> · Matched {best.overlap}/{best.total}
+              {best.rootMatchedLowest && preferredRootPitchClass ? (
+                <> · Root matched to lowest note <strong>{preferredRootPitchClass}</strong></>
+              ) : null}
               {best.missing.length > 0 ? ` · Missing: ${best.missing.slice(0, 6).join(', ')}${best.missing.length > 6 ? '…' : ''}` : ''}
               {best.extras.length > 0 ? ` · Extras: ${best.extras.slice(0, 6).join(', ')}${best.extras.length > 6 ? '…' : ''}` : ''}
             </div>
