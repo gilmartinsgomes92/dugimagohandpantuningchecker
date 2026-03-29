@@ -2,8 +2,42 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import dugimagoLogo from '../assets/dugimago-logo-cropped.png';
 
+type WelcomeAction = {
+  title: string;
+  description: string;
+  variant: 'primary' | 'secondary' | 'premium';
+  onClick: () => void;
+};
+
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
+
+  const actions: WelcomeAction[] = [
+    {
+      title: 'Quick Tuning Check',
+      description: 'Fast live tuning check',
+      variant: 'primary',
+      onClick: () => navigate('/notes-count-selection'),
+    },
+    {
+      title: 'Identify My Scale',
+      description: 'Find your handpan scale family',
+      variant: 'secondary',
+      onClick: () => navigate('/scale-identify'),
+    },
+    {
+      title: 'Certified Tuning Report',
+      description: 'Formal report for buying, selling, and tuning verification',
+      variant: 'premium',
+      onClick: () => navigate('/certification/start'),
+    },
+    {
+      title: 'Verify Report ID',
+      description: "Check a report's authenticity",
+      variant: 'premium',
+      onClick: () => navigate('/verify'),
+    },
+  ];
 
   return (
     <div className="page welcome-page">
@@ -13,13 +47,10 @@ const WelcomePage: React.FC = () => {
             <div className="welcome-logo-wrap">
               <img className="welcome-logo-img" src={dugimagoLogo} alt="Dugimago" loading="eager" />
             </div>
-          
           </div>
 
           <h1 className="welcome-title">Handpan Tuning Check</h1>
-          <p className="welcome-subtitle">
-            Precision Harmonic Analysis
-          </p>
+          <p className="welcome-subtitle">Precision Harmonic Analysis</p>
         </header>
 
         <ul className="welcome-feature-list" aria-label="Key features">
@@ -37,41 +68,20 @@ const WelcomePage: React.FC = () => {
           </li>
         </ul>
 
-        <div className="welcome-cta-group">
-          <button
-            className="btn btn-primary btn-large welcome-action-card"
-            onClick={() => navigate('/notes-count-selection')}
-          >
-            <span className="welcome-action-title">Quick Tuning Check</span>
-            <span className="welcome-action-subtitle">Fast live tuning check</span>
-          </button>
-          <button
-            className="btn btn-secondary btn-large welcome-action-card"
-            onClick={() => navigate('/scale-identify')}
-          >
-            <span className="welcome-action-title">Identify My Scale</span>
-            <span className="welcome-action-subtitle">Find your handpan scale family</span>
-          </button>
+        <div className="welcome-cta-group" aria-label="Main app actions">
+          {actions.map((action) => (
+            <div key={action.title} className="welcome-action-item">
+              <button
+                className={`btn btn-${action.variant} btn-large welcome-action-card`}
+                onClick={action.onClick}
+              >
+                <span className="welcome-action-title">{action.title}</span>
+              </button>
+              <p className="welcome-action-description">{action.description}</p>
+            </div>
+          ))}
 
-          <button
-            className="btn btn-premium btn-large welcome-action-card"
-            onClick={() => navigate('/certification/start')}
-          >
-            <span className="welcome-action-title">Certified Tuning Report</span>
-            <span className="welcome-action-subtitle">Formal report for buying, selling, and tuning verification</span>
-          </button>
-
-          <button
-            className="btn btn-premium btn-large welcome-action-card"
-            onClick={() => navigate('/verify')}
-          >
-            <span className="welcome-action-title">Verify Report ID</span>
-            <span className="welcome-action-subtitle">Check a report’s authenticity</span>
-          </button>
-
-          <p className="welcome-privacy">
-            Mic permission required. Audio stays on your device.
-          </p>
+          <p className="welcome-privacy">Mic permission required. Audio stays on your device.</p>
         </div>
       </div>
 
