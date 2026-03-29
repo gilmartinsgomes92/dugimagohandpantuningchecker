@@ -10,7 +10,6 @@ import {
 import { fetchCertificationReport } from '../utils/reportRegistry';
 import { orderCertificationAggregates } from '../utils/certificationOrder';
 import type { CertificationReportRecord } from '../types/reportRegistry';
-import InlineLegalNotice from '../components/InlineLegalNotice';
 
 function formatCreatedAt(value: string) {
   const date = new Date(value);
@@ -103,8 +102,6 @@ const VerifyReportPage: React.FC = () => {
           </div>
         ) : null}
       </form>
-
-      <InlineLegalNotice variant="verification" />
 
       {report ? (
         <>
