@@ -25,16 +25,25 @@ type RegisteredNote = {
   midi: number;
 };
 
-const ENHARMONIC_TO_FLAT: Record<string, string> = {
+const ENHARMONIC_TO_PREFERRED: Record<string, string> = {
   'A#': 'Bb',
+  Bb: 'Bb',
   'C#': 'Db',
+  Db: 'Db',
   'D#': 'Eb',
-  'F#': 'Gb',
+  Eb: 'Eb',
+  'F#': 'F#',
+  Gb: 'F#',
   'G#': 'Ab',
+  Ab: 'Ab',
+  'B#': 'C',
+  Cb: 'B',
+  'E#': 'F',
+  Fb: 'E',
 };
 
 function canonicalPitchClass(pc: string): string {
-  return ENHARMONIC_TO_FLAT[pc] ?? pc;
+  return ENHARMONIC_TO_PREFERRED[pc] ?? pc;
 }
 
 function pitchClassOf(fullName: string): string {
