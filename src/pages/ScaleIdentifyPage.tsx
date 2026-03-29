@@ -18,35 +18,39 @@ const MIN_UNIQUE_NOTES_TO_SUGGEST = 4;
 // Small cooldown so a single strike doesn't double-register.
 const REGISTRATION_COOLDOWN_MS = 850;
 
-// Prefer scales whose root matches the instrument's lowest registered note.
-const LOWEST_NOTE_ROOT_BONUS = 0.2;
-
 type RegisteredNote = {
   fullName: string;   // e.g. "A3"
-  pitchClass: string; // e.g. "A", "Bb", "C#"
+  pitchClass: string; // e.g. "A", "Bb", "Db"
   octave: number;
   midi: number;
 };
 
-const ENHARMONIC_TO_PREFERRED: Record<string, string> = {
-  'A#': 'Bb',
-  Bb: 'Bb',
-  'C#': 'Db',
+const TO_PREFERRED_PITCH_CLASS: Record<string, string> = {
+  C: 'C',
+  'B#': 'C',
   Db: 'Db',
-  'D#': 'Eb',
+  'C#': 'Db',
+  D: 'D',
   Eb: 'Eb',
+  'D#': 'Eb',
+  E: 'E',
+  Fb: 'E',
+  F: 'F',
+  'E#': 'F',
   'F#': 'F#',
   Gb: 'F#',
-  'G#': 'Ab',
+  G: 'G',
   Ab: 'Ab',
-  'B#': 'C',
+  'G#': 'Ab',
+  A: 'A',
+  Bb: 'Bb',
+  'A#': 'Bb',
+  B: 'B',
   Cb: 'B',
-  'E#': 'F',
-  Fb: 'E',
 };
 
 function canonicalPitchClass(pc: string): string {
-  return ENHARMONIC_TO_PREFERRED[pc] ?? pc;
+  return TO_PREFERRED_PITCH_CLASS[pc] ?? pc;
 }
 
 function pitchClassOf(fullName: string): string {
@@ -64,40 +68,38 @@ function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
 }
 
+function formatSceneNames(sceneName: string, sceneAliases?: string[]): string {
+  const names = [sceneName, ...(sceneAliases ?? [])].filter(Boolean);
+  return uniq(names).join(' / ');
+}
+
 function scoreScale(
   detectedPitchClasses: Set<string>,
   scalePitchClassesRaw: string[],
-  preferredRootPitchClass?: string | null,
-): {
-  overlap: number;
-  total: number;
-  score: number;
-  missing: string[];
-  extras: string[];
-  rootPitchClass: string | null;
-  rootMatchedLowest: boolean;
-} {
+  preferredRootPitchClass: string | null,
+  scaleRootPitchClass: string,
+): { overlap: number; total: number; score: number; missing: string[]; extras: string[] } {
   const scalePitchClasses = scalePitchClassesRaw.map(canonicalPitchClass);
   const scaleSet = new Set(scalePitchClasses);
-  const rootPitchClass = scalePitchClasses[0] ?? null;
+
   let overlap = 0;
   for (const pc of detectedPitchClasses) {
     if (scaleSet.has(pc)) overlap += 1;
   }
+
   const total = scaleSet.size;
   const missing = scalePitchClasses.filter((pc) => !detectedPitchClasses.has(pc));
   const extras = Array.from(detectedPitchClasses).filter((pc) => !scaleSet.has(pc));
 
-  // Base score is coverage of the scale; lightly penalize extras.
-  const base = total === 0 ? 0 : overlap / total;
-  const penalty = Math.min(0.35, extras.length * 0.06);
-  const rootMatchedLowest = Boolean(
-    preferredRootPitchClass && rootPitchClass && canonicalPitchClass(preferredRootPitchClass) === canonicalPitchClass(rootPitchClass),
-  );
-  const rootBonus = rootMatchedLowest ? LOWEST_NOTE_ROOT_BONUS : 0;
-  const score = Math.max(0, base - penalty + rootBonus);
+  const coverage = total === 0 ? 0 : overlap / total;
+  const containment = detectedPitchClasses.size === 0 ? 0 : overlap / detectedPitchClasses.size;
+  const rootBonus = preferredRootPitchClass && preferredRootPitchClass === scaleRootPitchClass ? 0.18 : 0;
+  const exactBonus = missing.length === 0 ? 0.04 : 0;
+  const extrasPenalty = Math.min(0.28, extras.length * 0.05);
 
-  return { overlap, total, score, missing, extras, rootPitchClass, rootMatchedLowest };
+  const score = Math.max(0, coverage * 0.72 + containment * 0.24 + rootBonus + exactBonus - extrasPenalty);
+
+  return { overlap, total, score, missing, extras };
 }
 
 const ScaleIdentifyPage: React.FC = () => {
@@ -168,30 +170,26 @@ const ScaleIdentifyPage: React.FC = () => {
     return new Set(registered.map((n) => n.pitchClass));
   }, [registered]);
 
-  const preferredRootPitchClass = useMemo(() => {
-    if (registeredSorted.length === 0) return null;
-    return registeredSorted[0].pitchClass;
-  }, [registeredSorted]);
+  const preferredRootPitchClass = registeredSorted[0]?.pitchClass ?? null;
 
   const topMatches = useMemo(() => {
     if (detectedPitchClasses.size < MIN_UNIQUE_NOTES_TO_SUGGEST) return [];
 
     const rows = HANDPAN_SCALE_LIBRARY.map((s) => {
       const scalePitchClasses = uniq(s.notes.map(pitchClassOf));
-      const scored = scoreScale(detectedPitchClasses, scalePitchClasses, preferredRootPitchClass);
+      const scaleRootPitchClass = pitchClassOf(s.notes[0]);
+      const scored = scoreScale(detectedPitchClasses, scalePitchClasses, preferredRootPitchClass, scaleRootPitchClass);
       return {
         sceneName: s.sceneName,
+        sceneAliases: s.sceneAliases,
+        sceneDisplayName: formatSceneNames(s.sceneName, s.sceneAliases),
         theoreticalName: s.theoreticalName,
         notes: s.notes,
         scalePitchClasses,
+        scaleRootPitchClass,
         ...scored,
       };
-    }).sort((a, b) =>
-      b.score - a.score
-      || Number(b.rootMatchedLowest) - Number(a.rootMatchedLowest)
-      || b.overlap - a.overlap
-      || a.total - b.total
-    );
+    }).sort((a, b) => b.score - a.score || b.overlap - a.overlap || a.total - b.total);
 
     return rows.slice(0, 3);
   }, [detectedPitchClasses, preferredRootPitchClass]);
@@ -289,30 +287,26 @@ const ScaleIdentifyPage: React.FC = () => {
           <div className="scaleid-matchgrid scaleid-matchgrid--highlight">
             <div className="scaleid-matchcol">
               <div className="scaleid-matchlabel">Handpan Scene Name</div>
-              <div className="scaleid-matchvalue">{best.sceneName}</div>
+              <div className="scaleid-matchvalue">{best.sceneDisplayName}</div>
             </div>
             <div className="scaleid-matchcol">
               <div className="scaleid-matchlabel">Theoretical Music Name</div>
               <div className="scaleid-matchvalue">{best.theoreticalName}</div>
             </div>
             <div className="scaleid-matchmeta">
-              Confidence: <strong>{Math.round(Math.min(1, best.score) * 100)}%</strong> · Matched {best.overlap}/{best.total}
-              {best.rootMatchedLowest && preferredRootPitchClass ? (
-                <> · Root matched to lowest note <strong>{preferredRootPitchClass}</strong></>
-              ) : null}
+              Confidence: <strong>{Math.round(best.score * 100)}%</strong> · Matched {best.overlap}/{best.total}
               {best.missing.length > 0 ? ` · Missing: ${best.missing.slice(0, 6).join(', ')}${best.missing.length > 6 ? '…' : ''}` : ''}
               {best.extras.length > 0 ? ` · Extras: ${best.extras.slice(0, 6).join(', ')}${best.extras.length > 6 ? '…' : ''}` : ''}
             </div>
-
-            </div>
+          </div>
         )}
 
         {topMatches.length > 1 && (
           <div className="scaleid-altmatches">
             <div className="scaleid-alt-title">Other possible matches</div>
             {topMatches.slice(1).map((m) => (
-              <div key={m.theoreticalName} className="scaleid-altrow">
-                <span className="scaleid-altname">{m.sceneName} | {m.theoreticalName}</span>
+              <div key={`${m.sceneDisplayName}|${m.theoreticalName}`} className="scaleid-altrow">
+                <span className="scaleid-altname">{m.sceneDisplayName} | {m.theoreticalName}</span>
                 <span className="scaleid-altscore">{Math.round(m.score * 100)}%</span>
               </div>
             ))}
@@ -323,7 +317,7 @@ const ScaleIdentifyPage: React.FC = () => {
       {DEBUG && (
         <div className="debug-panel">
           <h3>Debug</h3>
-          <pre>{JSON.stringify({ result, debugInfo, registered: registeredSorted }, null, 2)}</pre>
+          <pre>{JSON.stringify({ result, debugInfo, registered: registeredSorted, preferredRootPitchClass }, null, 2)}</pre>
         </div>
       )}
     </div>
