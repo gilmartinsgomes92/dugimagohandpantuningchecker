@@ -694,6 +694,39 @@
   display: none;
 }
 
+
+.welcome-action-card {
+  min-height: 84px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  text-align: left;
+}
+
+.welcome-action-title {
+  display: block;
+  width: 100%;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.welcome-action-subtitle {
+  display: block;
+  width: 100%;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 500;
+}
+
+.welcome-cta-group .btn-secondary .welcome-action-subtitle {
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .welcome-cta-group .btn-secondary:hover {
   border-color: rgba(255, 255, 255, 0.18);
 }
