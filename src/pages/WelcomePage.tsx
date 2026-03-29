@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import dugimagoLogo from '../assets/dugimago-logo-cropped.png';
 
 const WelcomePage: React.FC = () => {
@@ -79,6 +79,14 @@ const WelcomePage: React.FC = () => {
           <span>•</span>
           <span>Fast tuning check</span>
         </div>
+
+        <div className="footer-links" aria-label="Legal and help links">
+          <Link className="footer-link" to="/privacy">Privacy</Link>
+          <Link className="footer-link" to="/terms">Terms</Link>
+          <Link className="footer-link" to="/disclaimer">Disclaimer</Link>
+          <Link className="footer-link" to="/faq">Q&amp;A</Link>
+        </div>
+
         <p className="footer-copyright">© {new Date().getFullYear()} Dugimago</p>
       </footer>
     </div>
