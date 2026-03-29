@@ -10,29 +10,26 @@ interface InlineLegalNoticeProps {
 
 const VARIANT_COPY: Record<InlineLegalNoticeVariant, { title: string; body: React.ReactNode }> = {
   contact: {
-    title: 'Before you submit',
+    title: 'Helpful links',
     body: (
       <>
-        Your contact details and attached tuning summary will be sent to Dugimago to answer your request.
-        Read the Privacy page for data handling details and the Disclaimer page for how these results should be used.
+        Your contact details and attached tuning summary may be sent to Dugimago to answer your request.
       </>
     ),
   },
   certification: {
-    title: 'Before you issue or share a certified report',
+    title: 'Helpful links',
     body: (
       <>
-        Certified reports may be stored with a verification ID so the original record can be checked later.
-        Read the Terms, Privacy, and Disclaimer pages before relying on a certificate in a sale, purchase, or evaluation.
+        These pages explain how certified reports are handled and how they should be used.
       </>
     ),
   },
   verification: {
-    title: 'Before you rely on a verification result',
+    title: 'Helpful links',
     body: (
       <>
-        Verification confirms whether the entered ID matches a stored report record. It does not replace an in-person expert assessment of the instrument.
-        See the Disclaimer and Q&amp;A pages for important context.
+        Verification checks whether a report ID matches a stored record.
       </>
     ),
   },
