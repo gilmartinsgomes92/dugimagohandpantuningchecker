@@ -39,30 +39,34 @@ const WelcomePage: React.FC = () => {
 
         <div className="welcome-cta-group">
           <button
-            className="btn btn-primary btn-large"
+            className="btn btn-primary btn-large welcome-action-card"
             onClick={() => navigate('/notes-count-selection')}
           >
-            Start Check
+            <span className="welcome-action-title">Quick Tuning Check</span>
+            <span className="welcome-action-subtitle">Fast live tuning check</span>
           </button>
           <button
-            className="btn btn-secondary btn-large"
+            className="btn btn-secondary btn-large welcome-action-card"
             onClick={() => navigate('/scale-identify')}
           >
-            Identify My Scale
+            <span className="welcome-action-title">Identify My Scale</span>
+            <span className="welcome-action-subtitle">Find your handpan scale family</span>
           </button>
 
           <button
-            className="btn btn-premium btn-large"
+            className="btn btn-premium btn-large welcome-action-card"
             onClick={() => navigate('/certification/start')}
           >
-            Certified Tuning Report
+            <span className="welcome-action-title">Certified Tuning Report</span>
+            <span className="welcome-action-subtitle">Formal report for buying, selling, and tuning verification</span>
           </button>
 
           <button
-            className="btn btn-premium btn-large"
+            className="btn btn-premium btn-large welcome-action-card"
             onClick={() => navigate('/verify')}
           >
-            Verify Report ID
+            <span className="welcome-action-title">Verify Report ID</span>
+            <span className="welcome-action-subtitle">Check a report’s authenticity</span>
           </button>
 
           <p className="welcome-privacy">
