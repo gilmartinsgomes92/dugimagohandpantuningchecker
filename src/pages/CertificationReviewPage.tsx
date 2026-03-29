@@ -12,7 +12,6 @@ import {
 } from '../utils/certificationReportUtils';
 import { generateVerificationId } from '../utils/verificationId';
 import { certificationAggregateSortKey } from '../utils/certificationOrder';
-import InlineLegalNotice from '../components/InlineLegalNotice';
 
 const CertificationReviewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -181,8 +180,6 @@ const CertificationReviewPage: React.FC = () => {
           </tbody>
         </table>
       </div>
-
-      <InlineLegalNotice variant="certification" />
 
       <div className="page-actions" style={{ marginTop: '1rem' }}>
         <button className="btn btn-secondary" onClick={() => navigate('/certification/check')}>
