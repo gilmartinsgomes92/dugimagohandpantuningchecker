@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import InlineLegalNotice from '../components/InlineLegalNotice';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
 
@@ -223,8 +222,6 @@ const ContactFormPage: React.FC = () => {
     })}
   </div>
 </div>
-
-        <InlineLegalNotice variant="contact" className="form-inline-legal" />
 
         {submitError && <div className="error-banner">{submitError}</div>}
         
