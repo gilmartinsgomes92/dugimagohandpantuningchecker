@@ -73,6 +73,10 @@ function formatSceneNames(sceneName: string, sceneAliases?: string[]): string {
   return uniq(names).join(' / ');
 }
 
+function formatDefinitiveScaleName(rootPitchClass: string, sceneName: string): string {
+  return `${rootPitchClass} ${sceneName}`;
+}
+
 function scoreScale(
   detectedPitchClasses: Set<string>,
   scalePitchClassesRaw: string[],
@@ -182,6 +186,7 @@ const ScaleIdentifyPage: React.FC = () => {
       return {
         sceneName: s.sceneName,
         sceneAliases: s.sceneAliases,
+        definitiveScaleName: formatDefinitiveScaleName(scaleRootPitchClass, s.sceneName),
         sceneDisplayName: formatSceneNames(s.sceneName, s.sceneAliases),
         theoreticalName: s.theoreticalName,
         notes: s.notes,
@@ -285,6 +290,10 @@ const ScaleIdentifyPage: React.FC = () => {
           </div>
         ) : (
           <div className="scaleid-matchgrid scaleid-matchgrid--highlight">
+            <div className="scaleid-matchcol" style={{ gridColumn: '1 / -1' }}>
+              <div className="scaleid-matchlabel">Detected Scale</div>
+              <div className="scaleid-matchvalue">{best.definitiveScaleName}</div>
+            </div>
             <div className="scaleid-matchcol">
               <div className="scaleid-matchlabel">Handpan Scene Name</div>
               <div className="scaleid-matchvalue">{best.sceneDisplayName}</div>
