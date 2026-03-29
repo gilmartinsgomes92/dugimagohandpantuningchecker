@@ -14,6 +14,7 @@ import CertificationShareCard from '../components/CertificationShareCard';
 import { exportShareCard } from '../utils/exportShareCard';
 import { createCertificationReportRecord, saveCertificationReport } from '../utils/reportRegistry';
 import { certificationAggregateSortKey } from '../utils/certificationOrder';
+import InlineLegalNotice from '../components/InlineLegalNotice';
 
 const CertificationResultsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -215,6 +216,8 @@ const CertificationResultsPage: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      <InlineLegalNotice variant="certification" />
 
       <div
         aria-hidden="true"
