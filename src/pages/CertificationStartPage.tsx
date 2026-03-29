@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCertificationContext } from '../contexts/CertificationContext';
+import InlineLegalNotice from '../components/InlineLegalNotice';
 
 const NOTE_COUNTS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
@@ -52,6 +53,8 @@ const CertificationStartPage: React.FC = () => {
           <br />
           You can mark a note as octave-only later if that tonefield is intentionally built without a compound fifth.
         </div>
+
+        <InlineLegalNotice variant="certification" />
       </div>
     </div>
   );
