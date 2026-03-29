@@ -18,6 +18,10 @@ import CertificationCheckPage from './pages/CertificationCheckPage';
 import CertificationReviewPage from './pages/CertificationReviewPage';
 import CertificationResultsPage from './pages/CertificationResultsPage';
 import VerifyReportPage from './pages/VerifyReportPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
+import DisclaimerPage from './pages/DisclaimerPage';
+import FaqPage from './pages/FaqPage';
 import './App.css';
 
 function App() {
@@ -48,6 +52,10 @@ function App() {
           <Route path="/certification/review" element={<CertificationReviewPage />} />
           <Route path="/certification/results" element={<CertificationResultsPage />} />
           <Route path="/verify" element={<VerifyReportPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/disclaimer" element={<DisclaimerPage />} />
+          <Route path="/faq" element={<FaqPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
