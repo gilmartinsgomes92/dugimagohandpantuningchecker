@@ -23,6 +23,7 @@ import TermsPage from './pages/TermsPage';
 import DisclaimerPage from './pages/DisclaimerPage';
 import FaqPage from './pages/FaqPage';
 import LoginPage from './pages/LoginPage';
+import AccountAccessButton from './components/AccountAccessButton';
 import './App.css';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
     <AppProvider>
       <CertificationProvider>
       <BrowserRouter>
+        <AccountAccessButton />
         <Routes>
           <Route path="/" element={<WelcomePage />} />
           <Route path="/notes-count-selection" element={<NotesCountSelectionPage />} />
