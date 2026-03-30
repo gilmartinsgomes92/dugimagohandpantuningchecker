@@ -1,9 +1,26 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import dugimagoLogo from '../assets/dugimago-logo-cropped.png';
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
+
+  const handleCertifiedReportClick = async () => {
+    if (!supabase) {
+      navigate('/login');
+      return;
+    }
+
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      navigate('/login');
+      return;
+    }
+
+    navigate('/certification/start');
+  };
 
   return (
     <div className="page welcome-page">
@@ -53,7 +70,7 @@ const WelcomePage: React.FC = () => {
 
           <button
             className="btn btn-premium btn-large"
-            onClick={() => navigate('/certification/start')}
+            onClick={handleCertifiedReportClick}
           >
             Certified Tuning Report
           </button>
