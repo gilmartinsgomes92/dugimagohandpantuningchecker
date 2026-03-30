@@ -22,6 +22,7 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import DisclaimerPage from './pages/DisclaimerPage';
 import FaqPage from './pages/FaqPage';
+import LoginPage from './pages/LoginPage';
 import './App.css';
 
 function App() {
@@ -56,6 +57,7 @@ function App() {
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/disclaimer" element={<DisclaimerPage />} />
           <Route path="/faq" element={<FaqPage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
