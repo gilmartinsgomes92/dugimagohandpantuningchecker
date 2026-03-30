@@ -4,7 +4,7 @@ import type { User } from '@supabase/supabase-js';
 import { Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-type AuthMode = 'password-signin' | 'password-signup' | 'magic-link';
+type AuthMode = 'password-signin' | 'password-signup';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -56,7 +56,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (mode !== 'magic-link' && password.length < 6) {
+    if (password.length < 6) {
       setStatus('error');
       setMessage('Password must have at least 6 characters.');
       return;
@@ -83,28 +83,9 @@ export default function LoginPage() {
         return;
       }
 
-      if (mode === 'password-signup') {
-        const { error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            emailRedirectTo: 'https://tuner.dugimago.com/login',
-          },
-        });
-
-        if (error) {
-          setStatus('error');
-          setMessage(error.message);
-          return;
-        }
-
-        setStatus('success');
-        setMessage('Account created. Check your email if confirmation is required.');
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signUp({
         email: email.trim(),
+        password,
         options: {
           emailRedirectTo: 'https://tuner.dugimago.com/login',
         },
@@ -117,7 +98,7 @@ export default function LoginPage() {
       }
 
       setStatus('success');
-      setMessage('Magic link sent. Check your email.');
+      setMessage('Account created. Check your email to confirm your account.');
     } catch {
       setStatus('error');
       setMessage('Something went wrong.');
@@ -149,12 +130,7 @@ export default function LoginPage() {
     }
   };
 
-  const title =
-    mode === 'password-signup'
-      ? 'Create account'
-      : mode === 'magic-link'
-      ? 'Login with magic link'
-      : 'Login';
+  const title = mode === 'password-signup' ? 'Create account' : 'Login';
 
   return (
     <div
@@ -212,7 +188,7 @@ export default function LoginPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr 1fr',
+                gridTemplateColumns: '1fr 1fr',
                 gap: '8px',
                 marginBottom: '20px',
               }}
@@ -254,32 +230,11 @@ export default function LoginPage() {
               >
                 Sign up
               </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('magic-link');
-                  setMessage('');
-                  setStatus('idle');
-                }}
-                style={{
-                  padding: '10px',
-                  borderRadius: '10px',
-                  border: mode === 'magic-link' ? '2px solid #111827' : '1px solid #cfd6df',
-                  background: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Magic link
-              </button>
             </div>
 
             <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
               {mode === 'password-signup'
                 ? 'Create an account with your email and password.'
-                : mode === 'magic-link'
-                ? 'Enter your email and we’ll send you a magic link.'
                 : 'Sign in with your email and password.'}
             </p>
 
@@ -309,34 +264,30 @@ export default function LoginPage() {
                 }}
               />
 
-              {mode !== 'magic-link' && (
-                <>
-                  <label
-                    htmlFor="password"
-                    style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
-                  >
-                    Password
-                  </label>
+              <label
+                htmlFor="password"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
+              >
+                Password
+              </label>
 
-                  <input
-                    id="password"
-                    type="password"
-                    autoComplete={mode === 'password-signup' ? 'new-password' : 'current-password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Your password"
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: '10px',
-                      border: '1px solid #cfd6df',
-                      fontSize: '16px',
-                      marginBottom: '16px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </>
-              )}
+              <input
+                id="password"
+                type="password"
+                autoComplete={mode === 'password-signup' ? 'new-password' : 'current-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #cfd6df',
+                  fontSize: '16px',
+                  marginBottom: '16px',
+                  boxSizing: 'border-box',
+                }}
+              />
 
               <button
                 type="submit"
@@ -353,13 +304,9 @@ export default function LoginPage() {
                 }}
               >
                 {status === 'loading'
-                  ? mode === 'magic-link'
-                    ? 'Sending...'
-                    : 'Please wait...'
+                  ? 'Please wait...'
                   : mode === 'password-signup'
                   ? 'Create account'
-                  : mode === 'magic-link'
-                  ? 'Send magic link'
                   : 'Login'}
               </button>
             </form>
