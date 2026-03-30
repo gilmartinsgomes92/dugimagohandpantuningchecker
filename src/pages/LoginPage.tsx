@@ -9,11 +9,14 @@ type AuthMode = 'password-signin' | 'password-signup';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [mode, setMode] = useState<AuthMode>('password-signin');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
@@ -25,14 +28,24 @@ export default function LoginPage() {
 
     supabase.auth.getUser().then(({ data, error }) => {
       if (!isMounted) return;
-      if (!error) setUser(data.user ?? null);
+
+      if (!error) {
+        setUser(data.user ?? null);
+      }
+
       setCheckingSession(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryMode(true);
+        setStatus('idle');
+        setMessage('Choose a new password for your account.');
+      }
     });
 
     return () => {
@@ -140,6 +153,48 @@ export default function LoginPage() {
     }
   };
 
+  const handleUpdatePassword = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!supabase) return;
+
+    if (newPassword.length < 6) {
+      setStatus('error');
+      setMessage('New password must have at least 6 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setStatus('error');
+      setMessage('Passwords do not match.');
+      return;
+    }
+
+    try {
+      setStatus('loading');
+      setMessage('');
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        setStatus('error');
+        setMessage(error.message);
+        return;
+      }
+
+      setStatus('success');
+      setMessage('Password updated successfully.');
+      setRecoveryMode(false);
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch {
+      setStatus('error');
+      setMessage('Something went wrong updating your password.');
+    }
+  };
+
   const handleSignOut = async () => {
     if (!supabase) return;
 
@@ -159,13 +214,20 @@ export default function LoginPage() {
       setMessage('Signed out successfully.');
       setUser(null);
       setPassword('');
+      setRecoveryMode(false);
+      setNewPassword('');
+      setConfirmNewPassword('');
     } catch {
       setStatus('error');
       setMessage('Something went wrong signing out.');
     }
   };
 
-  const title = mode === 'password-signup' ? 'Create account' : 'Login';
+  const title = recoveryMode
+    ? 'Set new password'
+    : mode === 'password-signup'
+    ? 'Create account'
+    : 'Login';
 
   return (
     <div
@@ -194,6 +256,81 @@ export default function LoginPage() {
           <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
             Checking session...
           </p>
+        ) : recoveryMode ? (
+          <>
+            <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
+              Enter your new password below.
+            </p>
+
+            <form onSubmit={handleUpdatePassword}>
+              <label
+                htmlFor="new-password"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
+              >
+                New password
+              </label>
+
+              <input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #cfd6df',
+                  fontSize: '16px',
+                  marginBottom: '16px',
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              <label
+                htmlFor="confirm-new-password"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
+              >
+                Confirm new password
+              </label>
+
+              <input
+                id="confirm-new-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Confirm new password"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #cfd6df',
+                  fontSize: '16px',
+                  marginBottom: '16px',
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              <button
+                type="submit"
+                disabled={status === 'loading'}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  cursor: status === 'loading' ? 'default' : 'pointer',
+                  opacity: status === 'loading' ? 0.7 : 1,
+                }}
+              >
+                {status === 'loading' ? 'Updating...' : 'Update password'}
+              </button>
+            </form>
+          </>
         ) : user ? (
           <>
             <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
