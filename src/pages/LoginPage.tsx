@@ -105,6 +105,41 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!isSupabaseConfigured() || !supabase) {
+      setStatus('error');
+      setMessage('Supabase is not configured yet.');
+      return;
+    }
+
+    if (!email.trim()) {
+      setStatus('error');
+      setMessage('Enter your email first, then click Forgot password.');
+      return;
+    }
+
+    try {
+      setStatus('loading');
+      setMessage('');
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: 'https://tuner.dugimago.com/login',
+      });
+
+      if (error) {
+        setStatus('error');
+        setMessage(error.message);
+        return;
+      }
+
+      setStatus('success');
+      setMessage('Password reset email sent. Check your inbox.');
+    } catch {
+      setStatus('error');
+      setMessage('Something went wrong sending the reset email.');
+    }
+  };
+
   const handleSignOut = async () => {
     if (!supabase) return;
 
@@ -284,10 +319,30 @@ export default function LoginPage() {
                   borderRadius: '10px',
                   border: '1px solid #cfd6df',
                   fontSize: '16px',
-                  marginBottom: '16px',
+                  marginBottom: '12px',
                   boxSizing: 'border-box',
                 }}
               />
+
+              {mode === 'password-signin' && (
+                <div style={{ marginBottom: '16px', textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={status === 'loading'}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: '#1d4ed8',
+                      fontSize: '14px',
+                      cursor: status === 'loading' ? 'default' : 'pointer',
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
 
               <button
                 type="submit"
