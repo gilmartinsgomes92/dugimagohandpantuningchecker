@@ -1919,3 +1919,78 @@
     padding: 0 16px 18px;
   }
 }
+
+
+/* ---- Global account access ---- */
+.account-access-button {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 132px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.account-access-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+
+.account-access-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.account-access-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.account-access-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.account-access-detail {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+@media (max-width: 640px) {
+  .account-access-button {
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    min-width: 116px;
+    padding: 9px 11px;
+  }
+
+  .account-access-detail {
+    max-width: 110px;
+  }
+}
