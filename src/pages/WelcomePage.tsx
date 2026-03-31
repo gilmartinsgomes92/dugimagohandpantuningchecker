@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase';
 import dugimagoLogo from '../assets/dugimago-logo-cropped.png';
 
 const iconProps = {
-  width: 18,
-  height: 18,
+  width: 20,
+  height: 20,
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
@@ -14,6 +14,22 @@ const iconProps = {
   strokeLinejoin: 'round' as const,
   'aria-hidden': true,
   focusable: false,
+};
+
+const buttonIconWrapStyle: React.CSSProperties = {
+  width: 24,
+  minWidth: 24,
+  height: 24,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+};
+
+const buttonLabelStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 12,
 };
 
 const SearchIcon = () => (
@@ -95,28 +111,41 @@ const WelcomePage: React.FC = () => {
           >
             Start Check
           </button>
+
           <button
             className="btn btn-secondary btn-large"
             onClick={() => navigate('/scale-identify')}
           >
-            <MusicIcon />
-            <span>Identify My Scale</span>
+            <span style={buttonLabelStyle}>
+              <span style={buttonIconWrapStyle} aria-hidden="true">
+                <MusicIcon />
+              </span>
+              <span>Identify My Scale</span>
+            </span>
           </button>
 
           <button
             className="btn btn-premium btn-large"
             onClick={handleCertifiedReportClick}
           >
-            <ShieldCheckIcon />
-            <span>Certified Tuning Report</span>
+            <span style={buttonLabelStyle}>
+              <span style={buttonIconWrapStyle} aria-hidden="true">
+                <ShieldCheckIcon />
+              </span>
+              <span>Certified Tuning Report</span>
+            </span>
           </button>
 
           <button
             className="btn btn-premium btn-large"
             onClick={() => navigate('/verify')}
           >
-            <SearchIcon />
-            <span>Verify Report ID</span>
+            <span style={buttonLabelStyle}>
+              <span style={buttonIconWrapStyle} aria-hidden="true">
+                <SearchIcon />
+              </span>
+              <span>Verify Report ID</span>
+            </span>
           </button>
 
           <p className="welcome-privacy">
