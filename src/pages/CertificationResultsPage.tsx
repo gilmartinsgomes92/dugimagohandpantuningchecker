@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { useCertificationAggregates, useCertificationContext } from '../contexts/CertificationContext';
 import { formatCents } from '../utils/musicUtils';
@@ -15,7 +16,12 @@ import { exportShareCard } from '../utils/exportShareCard';
 import { createCertificationReportRecord, saveCertificationReport } from '../utils/reportRegistry';
 import { certificationAggregateSortKey } from '../utils/certificationOrder';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { saveCertifiedReportToHistory } from '../utils/userHistory';
+import {
+  listUserInstruments,
+  moveCertifiedReportToInstrument,
+  saveCertifiedReportToHistory,
+  type InstrumentRecord,
+} from '../utils/userHistory';
 
 const CertificationResultsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +31,13 @@ const CertificationResultsPage: React.FC = () => {
   const [saveMessage, setSaveMessage] = useState<string>('');
   const [historySaveState, setHistorySaveState] = useState<'idle' | 'saving' | 'saved' | 'error' | 'skipped'>('idle');
   const [historySaveMessage, setHistorySaveMessage] = useState<string>('');
+  const [historyUser, setHistoryUser] = useState<User | null>(null);
+  const [historyInstruments, setHistoryInstruments] = useState<InstrumentRecord[]>([]);
+  const [savedInstrumentId, setSavedInstrumentId] = useState<string | null>(null);
+  const [savedInstrumentName, setSavedInstrumentName] = useState<string>('');
+  const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
+  const [moveState, setMoveState] = useState<'idle' | 'moving' | 'moved' | 'error'>('idle');
+  const [moveMessage, setMoveMessage] = useState<string>('');
   const lastSavedSignatureRef = useRef<string | null>(null);
   const lastHistorySavedSignatureRef = useRef<string | null>(null);
 
@@ -42,6 +55,17 @@ const CertificationResultsPage: React.FC = () => {
   const stats = useMemo(() => getCertificationReportStats(aggregates), [aggregates]);
   const verdict = useMemo(() => getCertificationVerdict(stats), [stats]);
   const verificationId = state.verificationId ?? 'Pending';
+
+  const currentAssignedInstrument = useMemo(() => {
+    if (!savedInstrumentId) return null;
+    return historyInstruments.find((instrument) => instrument.id === savedInstrumentId) ?? null;
+  }, [historyInstruments, savedInstrumentId]);
+
+  const canShowMoveSection =
+    historySaveState === 'saved'
+    && Boolean(historyUser)
+    && Boolean(savedInstrumentId)
+    && historyInstruments.length > 1;
 
   useEffect(() => {
     if (!state.notesCount) {
@@ -67,32 +91,32 @@ const CertificationResultsPage: React.FC = () => {
   const reportSignature = useMemo(() => (reportRecord ? JSON.stringify(reportRecord) : null), [reportRecord]);
 
   useEffect(() => {
-  if (!reportRecord || !reportSignature || lastSavedSignatureRef.current === reportSignature) {
-    return;
-  }
-
-  let cancelled = false;
-
-  setSaveState('saving');
-  setSaveMessage('Saving original report to the verification registry…');
-
-  saveCertificationReport(reportRecord).then((result) => {
-    if (cancelled) return;
-
-    if (result.ok) {
-      lastSavedSignatureRef.current = reportSignature;
-      setSaveState('saved');
-      setSaveMessage('Original report saved. This verification ID can now be checked on the Verify page.');
-    } else {
-      setSaveState('error');
-      setSaveMessage(result.error ?? 'Could not save this report to the verification registry.');
+    if (!reportRecord || !reportSignature || lastSavedSignatureRef.current === reportSignature) {
+      return;
     }
-  });
 
-  return () => {
-    cancelled = true;
-  };
-}, [reportRecord, reportSignature]);
+    let cancelled = false;
+
+    setSaveState('saving');
+    setSaveMessage('Saving original report to the verification registry…');
+
+    saveCertificationReport(reportRecord).then((result) => {
+      if (cancelled) return;
+
+      if (result.ok) {
+        lastSavedSignatureRef.current = reportSignature;
+        setSaveState('saved');
+        setSaveMessage('Original report saved. This verification ID can now be checked on the Verify page.');
+      } else {
+        setSaveState('error');
+        setSaveMessage(result.error ?? 'Could not save this report to the verification registry.');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reportRecord, reportSignature]);
 
   useEffect(() => {
     if (!reportRecord || !reportSignature || lastHistorySavedSignatureRef.current === reportSignature) {
@@ -102,6 +126,11 @@ const CertificationResultsPage: React.FC = () => {
     if (!isSupabaseConfigured() || !supabase) {
       setHistorySaveState('skipped');
       setHistorySaveMessage('Sign in and connect Supabase to save certified report history to your account.');
+      setHistoryUser(null);
+      setHistoryInstruments([]);
+      setSavedInstrumentId(null);
+      setSavedInstrumentName('');
+      setSelectedInstrumentId('');
       return;
     }
 
@@ -113,9 +142,15 @@ const CertificationResultsPage: React.FC = () => {
       if (error || !data.user) {
         setHistorySaveState('skipped');
         setHistorySaveMessage('Sign in to save this certified report to your personal history.');
+        setHistoryUser(null);
+        setHistoryInstruments([]);
+        setSavedInstrumentId(null);
+        setSavedInstrumentName('');
+        setSelectedInstrumentId('');
         return;
       }
 
+      setHistoryUser(data.user);
       setHistorySaveState('saving');
       setHistorySaveMessage('Saving this certified report to your account history…');
 
@@ -134,9 +169,29 @@ const CertificationResultsPage: React.FC = () => {
         lastHistorySavedSignatureRef.current = reportSignature;
         setHistorySaveState('saved');
         setHistorySaveMessage(`Saved to your account history under ${result.instrumentName ?? 'this instrument'}.`);
+        setSavedInstrumentId(result.instrumentId ?? null);
+        setSavedInstrumentName(result.instrumentName ?? '');
+        setMoveState('idle');
+        setMoveMessage('');
+
+        const instrumentsResult = await listUserInstruments(data.user);
+        if (cancelled) return;
+
+        if (instrumentsResult.ok) {
+          const instruments = instrumentsResult.instruments ?? [];
+          setHistoryInstruments(instruments);
+          setSelectedInstrumentId(result.instrumentId ?? instruments[0]?.id ?? '');
+        } else {
+          setHistoryInstruments([]);
+          setSelectedInstrumentId(result.instrumentId ?? '');
+        }
       } else {
         setHistorySaveState('error');
         setHistorySaveMessage(result.error ?? 'Could not save this certified report to your account history.');
+        setSavedInstrumentId(null);
+        setSavedInstrumentName('');
+        setHistoryInstruments([]);
+        setSelectedInstrumentId('');
       }
     });
 
@@ -144,6 +199,13 @@ const CertificationResultsPage: React.FC = () => {
       cancelled = true;
     };
   }, [aggregates, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
+
+  useEffect(() => {
+    if (moveState === 'moved' || moveState === 'error') {
+      setMoveState('idle');
+      setMoveMessage('');
+    }
+  }, [selectedInstrumentId]);
 
   const handleStartOver = () => {
     dispatch({ type: 'RESET_CERTIFICATION_SESSION' });
@@ -153,6 +215,37 @@ const CertificationResultsPage: React.FC = () => {
   const shareCertifiedReport = async () => {
     const safeVerificationId = verificationId.replace(/[^A-Z0-9-]/gi, '-').toLowerCase();
     await exportShareCard('certification-share-card', `dugimago-certified-tuning-report-${safeVerificationId}.png`);
+  };
+
+  const handleMoveReport = async () => {
+    if (!historyUser || !savedInstrumentId || !selectedInstrumentId || selectedInstrumentId === savedInstrumentId) {
+      return;
+    }
+
+    setMoveState('moving');
+    setMoveMessage('Moving this saved report to the selected instrument…');
+
+    const result = await moveCertifiedReportToInstrument({
+      user: historyUser,
+      verificationId,
+      instrumentId: selectedInstrumentId,
+    });
+
+    if (!result.ok) {
+      setMoveState('error');
+      setMoveMessage(result.error ?? 'Could not move this certified report.');
+      return;
+    }
+
+    setSavedInstrumentId(result.instrumentId ?? selectedInstrumentId);
+    setSavedInstrumentName(result.instrumentName ?? savedInstrumentName);
+    setMoveState('moved');
+    setMoveMessage(`Report moved to ${result.instrumentName ?? 'the selected instrument'}.`);
+
+    const instrumentsResult = await listUserInstruments(historyUser);
+    if (instrumentsResult.ok) {
+      setHistoryInstruments(instrumentsResult.instruments ?? []);
+    }
   };
 
   return (
@@ -174,12 +267,62 @@ const CertificationResultsPage: React.FC = () => {
 
       <div
         className="cert-start-card cert-start-card-muted"
-        style={{ marginBottom: '1rem', borderColor: historySaveState === 'error' ? 'rgba(255,102,102,0.45)' : undefined }}
+        style={{ marginBottom: canShowMoveSection ? '1rem' : '1.5rem', borderColor: historySaveState === 'error' ? 'rgba(255,102,102,0.45)' : undefined }}
       >
         <strong>Account history:</strong> {historySaveState === 'saved' ? 'Saved' : historySaveState === 'saving' ? 'Saving…' : historySaveState === 'error' ? 'Save failed' : historySaveState === 'skipped' ? 'Sign in required' : 'Pending'}
         <br />
         {historySaveMessage || 'When you are signed in, this certified report is also saved automatically to your personal history.'}
       </div>
+
+      {canShowMoveSection ? (
+        <div className="cert-start-card cert-start-card-muted" style={{ marginBottom: '1.5rem' }}>
+          <strong>Assign this report</strong>
+          <div style={{ marginTop: '0.5rem' }}>
+            Currently saved under <strong>{currentAssignedInstrument?.name ?? savedInstrumentName ?? 'this instrument'}</strong>.
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              marginTop: '0.9rem',
+            }}
+          >
+            <select
+              value={selectedInstrumentId}
+              onChange={(e) => setSelectedInstrumentId(e.target.value)}
+              style={{
+                flex: '1 1 260px',
+                minWidth: '220px',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                border: '1px solid #2f2f2f',
+                background: '#181818',
+                color: '#fff',
+                fontSize: '1rem',
+              }}
+            >
+              {historyInstruments.map((instrument) => (
+                <option key={instrument.id} value={instrument.id}>
+                  {instrument.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleMoveReport}
+              disabled={moveState === 'moving' || !selectedInstrumentId || selectedInstrumentId === savedInstrumentId}
+            >
+              {moveState === 'moving' ? 'Moving…' : 'Move report'}
+            </button>
+          </div>
+          <div style={{ marginTop: '0.75rem', color: moveState === 'error' ? '#ff9a9a' : '#d6d6d6' }}>
+            {moveMessage || 'Choose one of your existing instruments to reassign this already-saved certified report.'}
+          </div>
+        </div>
+      ) : null}
 
       <div className="results-verdict">
         <div className={`verdict-badge ${verdict.className}`}>{verdict.badge}</div>
