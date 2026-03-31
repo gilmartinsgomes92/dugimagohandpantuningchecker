@@ -3,6 +3,41 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import dugimagoLogo from '../assets/dugimago-logo-cropped.png';
 
+const iconProps = {
+  width: 18,
+  height: 18,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+  focusable: false,
+};
+
+const SearchIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </svg>
+);
+
+const MusicIcon = () => (
+  <svg {...iconProps}>
+    <path d="M9 18V6l10-2v12" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="16" cy="16" r="3" />
+  </svg>
+);
+
+const ShieldCheckIcon = () => (
+  <svg {...iconProps}>
+    <path d="M12 3l7 3v6c0 4.5-2.9 7.9-7 9-4.1-1.1-7-4.5-7-9V6l7-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
 
@@ -30,7 +65,6 @@ const WelcomePage: React.FC = () => {
             <div className="welcome-logo-wrap">
               <img className="welcome-logo-img" src={dugimagoLogo} alt="Dugimago" loading="eager" />
             </div>
-          
           </div>
 
           <h1 className="welcome-title">Handpan Tuning Check</h1>
@@ -65,21 +99,24 @@ const WelcomePage: React.FC = () => {
             className="btn btn-secondary btn-large"
             onClick={() => navigate('/scale-identify')}
           >
-            Identify My Scale
+            <MusicIcon />
+            <span>Identify My Scale</span>
           </button>
 
           <button
             className="btn btn-premium btn-large"
             onClick={handleCertifiedReportClick}
           >
-            Certified Tuning Report
+            <ShieldCheckIcon />
+            <span>Certified Tuning Report</span>
           </button>
 
           <button
             className="btn btn-premium btn-large"
             onClick={() => navigate('/verify')}
           >
-            Verify Report ID
+            <SearchIcon />
+            <span>Verify Report ID</span>
           </button>
 
           <p className="welcome-privacy">
