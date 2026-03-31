@@ -171,6 +171,43 @@ async function getOrCreateInstrument(user: User, suggestedName: string, scaleLab
   return created as InstrumentRecord;
 }
 
+export async function createInstrumentForUser(params: {
+  user: User;
+  name: string;
+  scaleLabel?: string | null;
+}): Promise<{ ok: boolean; error?: string; instrument?: InstrumentRecord }> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
+
+  const trimmedName = params.name.trim();
+  if (!trimmedName) {
+    return { ok: false, error: 'Instrument name cannot be empty.' };
+  }
+
+  try {
+    await ensureUserProfile(params.user);
+
+    const { data, error } = await supabase
+      .from('instruments')
+      .insert({
+        user_id: params.user.id,
+        name: trimmedName,
+        scale_label: params.scaleLabel ?? null,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    return {
+      ok: true,
+      instrument: data as InstrumentRecord,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not create instrument.';
+    return { ok: false, error: message };
+  }
+}
+
 export async function listUserInstruments(user: User): Promise<{
   ok: boolean;
   instruments?: InstrumentRecord[];
@@ -363,7 +400,6 @@ export async function listInstrumentHistory(user: User): Promise<{
     return { ok: false, error: message };
   }
 }
-
 
 export async function renameInstrument(params: {
   user: User;
