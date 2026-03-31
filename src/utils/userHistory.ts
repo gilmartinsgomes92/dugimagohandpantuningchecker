@@ -264,3 +264,37 @@ export async function listInstrumentHistory(user: User): Promise<{
     return { ok: false, error: message };
   }
 }
+
+
+export async function renameInstrument(params: {
+  user: User;
+  instrumentId: string;
+  name: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
+
+  const trimmedName = params.name.trim();
+  if (!trimmedName) {
+    return { ok: false, error: 'Instrument name cannot be empty.' };
+  }
+
+  try {
+    await ensureUserProfile(params.user);
+
+    const { error } = await supabase
+      .from('instruments')
+      .update({
+        name: trimmedName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.instrumentId)
+      .eq('user_id', params.user.id);
+
+    if (error) throw error;
+
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not rename instrument.';
+    return { ok: false, error: message };
+  }
+}
