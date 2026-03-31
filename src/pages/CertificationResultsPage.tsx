@@ -14,6 +14,8 @@ import CertificationShareCard from '../components/CertificationShareCard';
 import { exportShareCard } from '../utils/exportShareCard';
 import { createCertificationReportRecord, saveCertificationReport } from '../utils/reportRegistry';
 import { certificationAggregateSortKey } from '../utils/certificationOrder';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { saveCertifiedReportToHistory } from '../utils/userHistory';
 
 const CertificationResultsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +23,10 @@ const CertificationResultsPage: React.FC = () => {
   const allAggregates = useCertificationAggregates();
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string>('');
+  const [historySaveState, setHistorySaveState] = useState<'idle' | 'saving' | 'saved' | 'error' | 'skipped'>('idle');
+  const [historySaveMessage, setHistorySaveMessage] = useState<string>('');
   const lastSavedSignatureRef = useRef<string | null>(null);
+  const lastHistorySavedSignatureRef = useRef<string | null>(null);
 
   const aggregates = useMemo(
     () => [...allAggregates]
@@ -89,6 +94,57 @@ const CertificationResultsPage: React.FC = () => {
   };
 }, [reportRecord, reportSignature]);
 
+  useEffect(() => {
+    if (!reportRecord || !reportSignature || lastHistorySavedSignatureRef.current === reportSignature) {
+      return;
+    }
+
+    if (!isSupabaseConfigured() || !supabase) {
+      setHistorySaveState('skipped');
+      setHistorySaveMessage('Sign in and connect Supabase to save certified report history to your account.');
+      return;
+    }
+
+    let cancelled = false;
+
+    supabase.auth.getUser().then(async ({ data, error }) => {
+      if (cancelled) return;
+
+      if (error || !data.user) {
+        setHistorySaveState('skipped');
+        setHistorySaveMessage('Sign in to save this certified report to your personal history.');
+        return;
+      }
+
+      setHistorySaveState('saving');
+      setHistorySaveMessage('Saving this certified report to your account history…');
+
+      const result = await saveCertifiedReportToHistory({
+        user: data.user,
+        verificationId,
+        aggregates,
+        stats,
+        verdict,
+        finalizedAt: state.finalizedAt ?? new Date().toISOString(),
+      });
+
+      if (cancelled) return;
+
+      if (result.ok) {
+        lastHistorySavedSignatureRef.current = reportSignature;
+        setHistorySaveState('saved');
+        setHistorySaveMessage(`Saved to your account history under ${result.instrumentName ?? 'this instrument'}.`);
+      } else {
+        setHistorySaveState('error');
+        setHistorySaveMessage(result.error ?? 'Could not save this certified report to your account history.');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [aggregates, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
+
   const handleStartOver = () => {
     dispatch({ type: 'RESET_CERTIFICATION_SESSION' });
     navigate('/');
@@ -114,6 +170,15 @@ const CertificationResultsPage: React.FC = () => {
         <strong>Registry status:</strong> {saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Pending'}
         <br />
         {saveMessage || 'The original certified report will be stored in the verification registry.'}
+      </div>
+
+      <div
+        className="cert-start-card cert-start-card-muted"
+        style={{ marginBottom: '1rem', borderColor: historySaveState === 'error' ? 'rgba(255,102,102,0.45)' : undefined }}
+      >
+        <strong>Account history:</strong> {historySaveState === 'saved' ? 'Saved' : historySaveState === 'saving' ? 'Saving…' : historySaveState === 'error' ? 'Save failed' : historySaveState === 'skipped' ? 'Sign in required' : 'Pending'}
+        <br />
+        {historySaveMessage || 'When you are signed in, this certified report is also saved automatically to your personal history.'}
       </div>
 
       <div className="results-verdict">
