@@ -24,6 +24,7 @@ import TermsPage from './pages/TermsPage';
 import DisclaimerPage from './pages/DisclaimerPage';
 import FaqPage from './pages/FaqPage';
 import LoginPage from './pages/LoginPage';
+import MyReportsPage from './pages/MyReportsPage';
 import './App.css';
 
 function App() {
@@ -58,6 +59,7 @@ function App() {
             <Route path="/disclaimer" element={<DisclaimerPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/my-reports" element={<MyReportsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
