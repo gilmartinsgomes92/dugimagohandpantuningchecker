@@ -2082,3 +2082,8 @@
     padding-top: 76px;
   }
 }
+
+
+.my-reports-page .results-table td {
+  vertical-align: middle;
+}
