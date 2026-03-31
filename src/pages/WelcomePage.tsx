@@ -16,30 +16,27 @@ const iconProps = {
   focusable: false,
 };
 
-const buttonInnerStyle: React.CSSProperties = {
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100%',
-};
-
-const buttonIconStyle: React.CSSProperties = {
+const iconWrapStyle: React.CSSProperties = {
   position: 'absolute',
-  left: 'clamp(18px, 5vw, 32px)',
+  left: 'clamp(22px, 6vw, 34px)',
+  top: '50%',
+  transform: 'translateY(-50%)',
   width: 24,
-  minWidth: 24,
   height: 24,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  flexShrink: 0,
   pointerEvents: 'none',
 };
 
-const buttonTextStyle: React.CSSProperties = {
-  display: 'inline-block',
+const textWrapStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
   textAlign: 'center',
+};
+
+const buttonWithIconStyle: React.CSSProperties = {
+  position: 'relative',
 };
 
 const SearchIcon = () => (
@@ -124,38 +121,35 @@ const WelcomePage: React.FC = () => {
 
           <button
             className="btn btn-secondary btn-large"
+            style={buttonWithIconStyle}
             onClick={() => navigate('/scale-identify')}
           >
-            <span style={buttonInnerStyle}>
-              <span style={buttonIconStyle} aria-hidden="true">
-                <MusicIcon />
-              </span>
-              <span style={buttonTextStyle}>Identify My Scale</span>
+            <span style={iconWrapStyle} aria-hidden="true">
+              <MusicIcon />
             </span>
+            <span style={textWrapStyle}>Identify My Scale</span>
           </button>
 
           <button
             className="btn btn-premium btn-large"
+            style={buttonWithIconStyle}
             onClick={handleCertifiedReportClick}
           >
-            <span style={buttonInnerStyle}>
-              <span style={buttonIconStyle} aria-hidden="true">
-                <ShieldCheckIcon />
-              </span>
-              <span style={buttonTextStyle}>Certified Tuning Report</span>
+            <span style={iconWrapStyle} aria-hidden="true">
+              <ShieldCheckIcon />
             </span>
+            <span style={textWrapStyle}>Certified Tuning Report</span>
           </button>
 
           <button
             className="btn btn-premium btn-large"
+            style={buttonWithIconStyle}
             onClick={() => navigate('/verify')}
           >
-            <span style={buttonInnerStyle}>
-              <span style={buttonIconStyle} aria-hidden="true">
-                <SearchIcon />
-              </span>
-              <span style={buttonTextStyle}>Verify Report ID</span>
+            <span style={iconWrapStyle} aria-hidden="true">
+              <SearchIcon />
             </span>
+            <span style={textWrapStyle}>Verify Report ID</span>
           </button>
 
           <p className="welcome-privacy">
