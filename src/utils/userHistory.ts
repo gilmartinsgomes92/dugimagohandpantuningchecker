@@ -171,6 +171,35 @@ async function getOrCreateInstrument(user: User, suggestedName: string, scaleLab
   return created as InstrumentRecord;
 }
 
+export async function listUserInstruments(user: User): Promise<{
+  ok: boolean;
+  instruments?: InstrumentRecord[];
+  error?: string;
+}> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
+
+  try {
+    await ensureUserProfile(user);
+
+    const { data, error } = await supabase
+      .from('instruments')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return {
+      ok: true,
+      instruments: (data ?? []) as InstrumentRecord[],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not load instruments.';
+    return { ok: false, error: message };
+  }
+}
+
 export async function saveCertifiedReportToHistory(params: {
   user: User;
   verificationId: string;
@@ -178,7 +207,7 @@ export async function saveCertifiedReportToHistory(params: {
   stats: CertificationReportStats;
   verdict: CertificationVerdict;
   finalizedAt: string;
-}): Promise<{ ok: boolean; error?: string; instrumentName?: string }> {
+}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
 
   try {
@@ -219,9 +248,83 @@ export async function saveCertifiedReportToHistory(params: {
       throw error;
     }
 
-    return { ok: true, instrumentName };
+    return { ok: true, instrumentName, instrumentId: instrument.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not save certified report history.';
+    return { ok: false, error: message };
+  }
+}
+
+export async function moveCertifiedReportToInstrument(params: {
+  user: User;
+  verificationId: string;
+  instrumentId: string;
+}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
+
+  try {
+    await ensureUserProfile(params.user);
+
+    const { data: targetInstrument, error: instrumentError } = await supabase
+      .from('instruments')
+      .select('*')
+      .eq('id', params.instrumentId)
+      .eq('user_id', params.user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (instrumentError) throw instrumentError;
+    if (!targetInstrument) {
+      return { ok: false, error: 'Selected instrument could not be found.' };
+    }
+
+    const { data: existingReport, error: reportLookupError } = await supabase
+      .from('certified_reports')
+      .select('instrument_id')
+      .eq('user_id', params.user.id)
+      .eq('verification_id', params.verificationId)
+      .limit(1)
+      .maybeSingle<{ instrument_id: string }>();
+
+    if (reportLookupError) throw reportLookupError;
+    if (!existingReport) {
+      return { ok: false, error: 'Saved certified report could not be found.' };
+    }
+
+    if (existingReport.instrument_id === targetInstrument.id) {
+      return {
+        ok: true,
+        instrumentName: (targetInstrument as InstrumentRecord).name,
+        instrumentId: (targetInstrument as InstrumentRecord).id,
+      };
+    }
+
+    const now = new Date().toISOString();
+
+    const { error: updateReportError } = await supabase
+      .from('certified_reports')
+      .update({ instrument_id: targetInstrument.id })
+      .eq('user_id', params.user.id)
+      .eq('verification_id', params.verificationId);
+
+    if (updateReportError) throw updateReportError;
+
+    const touchedInstrumentIds = uniq([existingReport.instrument_id, targetInstrument.id]);
+    const { error: touchInstrumentsError } = await supabase
+      .from('instruments')
+      .update({ updated_at: now })
+      .in('id', touchedInstrumentIds)
+      .eq('user_id', params.user.id);
+
+    if (touchInstrumentsError) throw touchInstrumentsError;
+
+    return {
+      ok: true,
+      instrumentName: (targetInstrument as InstrumentRecord).name,
+      instrumentId: (targetInstrument as InstrumentRecord).id,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not move certified report.';
     return { ok: false, error: message };
   }
 }
@@ -236,14 +339,10 @@ export async function listInstrumentHistory(user: User): Promise<{
   try {
     await ensureUserProfile(user);
 
-    const { data: instruments, error: instrumentsError } = await supabase
-      .from('instruments')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (instrumentsError) throw instrumentsError;
+    const instrumentsResult = await listUserInstruments(user);
+    if (!instrumentsResult.ok) {
+      return { ok: false, error: instrumentsResult.error ?? 'Could not load instruments.' };
+    }
 
     const { data: reports, error: reportsError } = await supabase
       .from('certified_reports')
@@ -253,8 +352,8 @@ export async function listInstrumentHistory(user: User): Promise<{
 
     if (reportsError) throw reportsError;
 
-    const grouped = (instruments ?? []).map((instrument) => ({
-      ...(instrument as InstrumentRecord),
+    const grouped = (instrumentsResult.instruments ?? []).map((instrument) => ({
+      ...instrument,
       reports: (reports ?? []).filter((report) => report.instrument_id === instrument.id) as CertifiedReportHistoryRecord[],
     }));
 
