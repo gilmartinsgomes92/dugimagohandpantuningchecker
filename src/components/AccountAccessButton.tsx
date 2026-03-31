@@ -126,6 +126,18 @@ export default function AccountAccessButton() {
           <button
             type="button"
             className="account-access-menu-item"
+            onClick={() => {
+              setOpen(false);
+              navigate('/my-reports');
+            }}
+            role="menuitem"
+          >
+            My Reports
+          </button>
+
+          <button
+            type="button"
+            className="account-access-menu-item"
             onClick={handleGoToLogin}
             role="menuitem"
           >
