@@ -16,7 +16,17 @@ const iconProps = {
   focusable: false,
 };
 
-const buttonIconWrapStyle: React.CSSProperties = {
+const buttonInnerStyle: React.CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+};
+
+const buttonIconStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: 'clamp(18px, 5vw, 32px)',
   width: 24,
   minWidth: 24,
   height: 24,
@@ -24,12 +34,12 @@ const buttonIconWrapStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
+  pointerEvents: 'none',
 };
 
-const buttonLabelStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 12,
+const buttonTextStyle: React.CSSProperties = {
+  display: 'inline-block',
+  textAlign: 'center',
 };
 
 const SearchIcon = () => (
@@ -116,11 +126,11 @@ const WelcomePage: React.FC = () => {
             className="btn btn-secondary btn-large"
             onClick={() => navigate('/scale-identify')}
           >
-            <span style={buttonLabelStyle}>
-              <span style={buttonIconWrapStyle} aria-hidden="true">
+            <span style={buttonInnerStyle}>
+              <span style={buttonIconStyle} aria-hidden="true">
                 <MusicIcon />
               </span>
-              <span>Identify My Scale</span>
+              <span style={buttonTextStyle}>Identify My Scale</span>
             </span>
           </button>
 
@@ -128,11 +138,11 @@ const WelcomePage: React.FC = () => {
             className="btn btn-premium btn-large"
             onClick={handleCertifiedReportClick}
           >
-            <span style={buttonLabelStyle}>
-              <span style={buttonIconWrapStyle} aria-hidden="true">
+            <span style={buttonInnerStyle}>
+              <span style={buttonIconStyle} aria-hidden="true">
                 <ShieldCheckIcon />
               </span>
-              <span>Certified Tuning Report</span>
+              <span style={buttonTextStyle}>Certified Tuning Report</span>
             </span>
           </button>
 
@@ -140,11 +150,11 @@ const WelcomePage: React.FC = () => {
             className="btn btn-premium btn-large"
             onClick={() => navigate('/verify')}
           >
-            <span style={buttonLabelStyle}>
-              <span style={buttonIconWrapStyle} aria-hidden="true">
+            <span style={buttonInnerStyle}>
+              <span style={buttonIconStyle} aria-hidden="true">
                 <SearchIcon />
               </span>
-              <span>Verify Report ID</span>
+              <span style={buttonTextStyle}>Verify Report ID</span>
             </span>
           </button>
 
