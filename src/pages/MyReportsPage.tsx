@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { Link, useNavigate } from 'react-router-dom';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { listInstrumentHistory, renameInstrument } from '../utils/userHistory';
+import { listInstrumentHistory, moveCertifiedReportToInstrument, renameInstrument } from '../utils/userHistory';
 
 type InstrumentHistory = Awaited<ReturnType<typeof listInstrumentHistory>> extends { instruments?: infer T } ? T : never;
 
@@ -12,10 +12,13 @@ const MyReportsPage: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [infoMessage, setInfoMessage] = useState<string>('');
   const [instruments, setInstruments] = useState<InstrumentHistory>([] as InstrumentHistory);
   const [editingInstrumentId, setEditingInstrumentId] = useState<string | null>(null);
   const [draftInstrumentName, setDraftInstrumentName] = useState('');
   const [renaming, setRenaming] = useState(false);
+  const [reportMoveTargets, setReportMoveTargets] = useState<Record<string, string>>({});
+  const [movingReportId, setMovingReportId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
@@ -67,11 +70,22 @@ const MyReportsPage: React.FC = () => {
     };
   }, [user]);
 
+  const reloadHistory = async (activeUser: User) => {
+    const result = await listInstrumentHistory(activeUser);
+    if (!result.ok) {
+      setError(result.error ?? 'Could not load your saved history.');
+      return false;
+    }
+
+    setInstruments(result.instruments ?? ([] as InstrumentHistory));
+    return true;
+  };
 
   const handleStartRename = (instrumentId: string, currentName: string) => {
     setEditingInstrumentId(instrumentId);
     setDraftInstrumentName(currentName);
     setError('');
+    setInfoMessage('');
   };
 
   const handleSaveRename = async (instrumentId: string) => {
@@ -79,6 +93,7 @@ const MyReportsPage: React.FC = () => {
 
     setRenaming(true);
     setError('');
+    setInfoMessage('');
 
     const result = await renameInstrument({
       user,
@@ -100,17 +115,51 @@ const MyReportsPage: React.FC = () => {
               name: draftInstrumentName.trim(),
             }
           : instrument,
-      ) as InstrumentHistory
+      ) as InstrumentHistory,
     );
 
     setEditingInstrumentId(null);
     setDraftInstrumentName('');
     setRenaming(false);
+    setInfoMessage('Instrument name updated.');
   };
 
   const handleCancelRename = () => {
     setEditingInstrumentId(null);
     setDraftInstrumentName('');
+  };
+
+  const handleMoveReport = async (verificationId: string, currentInstrumentId: string, reportId: string) => {
+    if (!user) return;
+
+    const targetInstrumentId = reportMoveTargets[reportId] ?? currentInstrumentId;
+    if (!targetInstrumentId || targetInstrumentId === currentInstrumentId) {
+      return;
+    }
+
+    setMovingReportId(reportId);
+    setError('');
+    setInfoMessage('');
+
+    const result = await moveCertifiedReportToInstrument({
+      user,
+      verificationId,
+      instrumentId: targetInstrumentId,
+    });
+
+    if (!result.ok) {
+      setError(result.error ?? 'Could not move this report.');
+      setMovingReportId(null);
+      return;
+    }
+
+    await reloadHistory(user);
+    setReportMoveTargets((prev) => ({
+      ...prev,
+      [reportId]: result.instrumentId ?? targetInstrumentId,
+    }));
+    setMovingReportId(null);
+    setInfoMessage(`Report moved to ${result.instrumentName ?? 'the selected instrument'}.`);
   };
 
   if (checkingSession) {
@@ -131,8 +180,14 @@ const MyReportsPage: React.FC = () => {
       </div>
 
       <div className="cert-start-card cert-start-card-muted" style={{ marginBottom: '1rem' }}>
-        <strong>History tip:</strong> The first time an instrument is saved, we suggest a name from the detected scale, such as <em>G Pygmy</em>. Later you can refine naming and organization.
+        <strong>History tip:</strong> The first time an instrument is saved, we suggest a name from the detected scale, such as <em>G Pygmy</em>. Later you can rename instruments and move reports between them.
       </div>
+
+      {infoMessage ? (
+        <div className="cert-start-card cert-start-card-muted" style={{ marginBottom: '1rem' }}>
+          {infoMessage}
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="cert-start-card cert-start-card-muted">Loading your report history…</div>
@@ -241,26 +296,82 @@ const MyReportsPage: React.FC = () => {
                       <th>Verification ID</th>
                       <th>Scale</th>
                       <th>Health</th>
+                      <th>Assign</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {instrument.reports.map((report) => (
-                      <tr key={report.id}>
-                        <td>{new Date(report.report_created_at).toLocaleString()}</td>
-                        <td>{report.verification_id}</td>
-                        <td>{report.detected_scale ?? '—'}</td>
-                        <td>{report.health_score ?? '—'}%</td>
-                        <td>
-                          <Link
-                            className="btn btn-ghost cert-inline-btn"
-                            to={`/verify?id=${encodeURIComponent(report.verification_id)}`}
-                          >
-                            Open
-                          </Link>
+                    {instrument.reports.length > 0 ? instrument.reports.map((report) => {
+                      const targetInstrumentId = reportMoveTargets[report.id] ?? report.instrument_id;
+
+                      return (
+                        <tr key={report.id}>
+                          <td>{new Date(report.report_created_at).toLocaleString()}</td>
+                          <td>{report.verification_id}</td>
+                          <td>{report.detected_scale ?? '—'}</td>
+                          <td>{report.health_score ?? '—'}%</td>
+                          <td>
+                            {instruments.length > 1 ? (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: '8px',
+                                  flexWrap: 'wrap',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <select
+                                  value={targetInstrumentId}
+                                  onChange={(e) => setReportMoveTargets((prev) => ({
+                                    ...prev,
+                                    [report.id]: e.target.value,
+                                  }))}
+                                  style={{
+                                    minWidth: '160px',
+                                    padding: '8px 10px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #2f2f2f',
+                                    background: '#181818',
+                                    color: '#fff',
+                                    fontSize: '0.95rem',
+                                  }}
+                                >
+                                  {instruments.map((targetInstrument) => (
+                                    <option key={targetInstrument.id} value={targetInstrument.id}>
+                                      {targetInstrument.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost cert-inline-btn"
+                                  onClick={() => handleMoveReport(report.verification_id, report.instrument_id, report.id)}
+                                  disabled={movingReportId === report.id || targetInstrumentId === report.instrument_id}
+                                >
+                                  {movingReportId === report.id ? 'Moving…' : 'Move'}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="legal-meta">Only one instrument</span>
+                            )}
+                          </td>
+                          <td>
+                            <Link
+                              className="btn btn-ghost cert-inline-btn"
+                              to={`/verify?id=${encodeURIComponent(report.verification_id)}`}
+                            >
+                              Open
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan={6} className="legal-meta">
+                          No reports are currently assigned to this instrument.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
