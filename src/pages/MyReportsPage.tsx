@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { Link, useNavigate } from 'react-router-dom';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { listInstrumentHistory } from '../utils/userHistory';
+import { listInstrumentHistory, renameInstrument } from '../utils/userHistory';
 
 type InstrumentHistory = Awaited<ReturnType<typeof listInstrumentHistory>> extends { instruments?: infer T } ? T : never;
 
@@ -13,6 +13,9 @@ const MyReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [instruments, setInstruments] = useState<InstrumentHistory>([] as InstrumentHistory);
+  const [editingInstrumentId, setEditingInstrumentId] = useState<string | null>(null);
+  const [draftInstrumentName, setDraftInstrumentName] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
@@ -64,6 +67,52 @@ const MyReportsPage: React.FC = () => {
     };
   }, [user]);
 
+
+  const handleStartRename = (instrumentId: string, currentName: string) => {
+    setEditingInstrumentId(instrumentId);
+    setDraftInstrumentName(currentName);
+    setError('');
+  };
+
+  const handleSaveRename = async (instrumentId: string) => {
+    if (!user) return;
+
+    setRenaming(true);
+    setError('');
+
+    const result = await renameInstrument({
+      user,
+      instrumentId,
+      name: draftInstrumentName,
+    });
+
+    if (!result.ok) {
+      setError(result.error ?? 'Could not rename instrument.');
+      setRenaming(false);
+      return;
+    }
+
+    setInstruments((prev) =>
+      prev.map((instrument) =>
+        instrument.id === instrumentId
+          ? {
+              ...instrument,
+              name: draftInstrumentName.trim(),
+            }
+          : instrument,
+      ) as InstrumentHistory
+    );
+
+    setEditingInstrumentId(null);
+    setDraftInstrumentName('');
+    setRenaming(false);
+  };
+
+  const handleCancelRename = () => {
+    setEditingInstrumentId(null);
+    setDraftInstrumentName('');
+  };
+
   if (checkingSession) {
     return (
       <div className="page results-page">
@@ -100,10 +149,89 @@ const MyReportsPage: React.FC = () => {
         <div className="legal-content">
           {instruments.map((instrument) => (
             <div key={instrument.id} className="legal-card">
-              <h3 style={{ marginBottom: '0.4rem' }}>{instrument.name}</h3>
-              <p className="legal-meta">
-                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
-              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                  {editingInstrumentId === instrument.id ? (
+                    <>
+                      <input
+                        type="text"
+                        value={draftInstrumentName}
+                        onChange={(e) => setDraftInstrumentName(e.target.value)}
+                        placeholder="Instrument name"
+                        style={{
+                          width: '100%',
+                          maxWidth: '420px',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          border: '1px solid #2f2f2f',
+                          background: '#181818',
+                          color: '#fff',
+                          fontSize: '1rem',
+                          fontWeight: 700,
+                          marginBottom: '0.5rem',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <p className="legal-meta">
+                        {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 style={{ marginBottom: '0.4rem' }}>{instrument.name}</h3>
+                      <p className="legal-meta">
+                        {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                  }}
+                >
+                  {editingInstrumentId === instrument.id ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-primary cert-inline-btn"
+                        onClick={() => handleSaveRename(instrument.id)}
+                        disabled={renaming}
+                      >
+                        {renaming ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost cert-inline-btn"
+                        onClick={handleCancelRename}
+                        disabled={renaming}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost cert-inline-btn"
+                      onClick={() => handleStartRename(instrument.id, instrument.name)}
+                    >
+                      Rename
+                    </button>
+                  )}
+                </div>
+              </div>
 
               <div className="results-table-container" style={{ marginTop: '1rem' }}>
                 <table className="results-table">
