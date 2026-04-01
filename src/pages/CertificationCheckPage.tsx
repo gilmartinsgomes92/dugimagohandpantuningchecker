@@ -88,30 +88,8 @@ const CertificationCheckPage: React.FC = () => {
   const justRegistered = useRef(false);
 
   const [instructionText, setInstructionText] = useState('Play one clean strike and let the note ring until it fades');
+  const [compoundExpectationTouched, setCompoundExpectationTouched] = useState<Record<number, boolean>>({});
 
-  const currentNoteIsCertifiable = useMemo(() => {
-    if (!currentAggregate || currentStrikes.length < 3) return false;
-
-    const fundamentalReady = currentAggregate.fundamental.status === 'measured';
-    const octaveReady = !currentExpectations.octave || currentAggregate.octave.status === 'measured';
-    const compoundReady = !currentExpectations.compoundFifth || currentAggregate.compoundFifth.status === 'measured';
-
-    return fundamentalReady && octaveReady && compoundReady;
-  }, [currentAggregate, currentExpectations.compoundFifth, currentExpectations.octave, currentStrikes.length]);
-
-  const noteComplete = hasMinimumStrikes && currentNoteIsCertifiable;
-  const allDone = notesCount > 0 && state.strikesByNote.every((noteStrikes, index) => {
-    if (noteStrikes.length < 3) return false;
-    const aggregate = aggregates[index];
-    const expectations = state.expectationsByNote[index] ?? { octave: true, compoundFifth: true };
-    if (!aggregate) return false;
-
-    const fundamentalReady = aggregate.fundamental.status === 'measured';
-    const octaveReady = !expectations.octave || aggregate.octave.status === 'measured';
-    const compoundReady = !expectations.compoundFifth || aggregate.compoundFifth.status === 'measured';
-
-    return fundamentalReady && octaveReady && compoundReady;
-  });
 
   const resetCaptureState = useCallback(() => {
     stableFrequencies.current = [];
@@ -140,17 +118,6 @@ const CertificationCheckPage: React.FC = () => {
     resetCaptureState();
   }, [noteIndex, resetCaptureState]);
 
-  useEffect(() => {
-    if (!lockedNoteName || currentStrikes.length > 0 || !currentExpectations.compoundFifth) return;
-
-    const parsed = parseFullNoteName(lockedNoteName);
-    if (!parsed || parsed.midiNote < HIGH_NOTE_OCTAVE_ONLY_MIDI) return;
-
-    dispatch({
-      type: 'SET_NOTE_EXPECTATIONS',
-      payload: { noteIndex, expectations: { compoundFifth: false } },
-    });
-  }, [currentExpectations.compoundFifth, currentStrikes.length, dispatch, lockedNoteName, noteIndex]);
 
   const registerStrike = useCallback((capturedNoteName: string) => {
     if (justRegistered.current) return;
@@ -208,6 +175,43 @@ const CertificationCheckPage: React.FC = () => {
 
   const currentNoteMidi = liveNoteParsed?.midiNote ?? (lockedNoteName ? parseFullNoteName(lockedNoteName)?.midiNote ?? null : null);
   const isHighNoteDefaultOctaveOnly = currentNoteMidi !== null && currentNoteMidi >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
+  const effectiveCompoundFifthExpected = isHighNoteDefaultOctaveOnly && !compoundExpectationTouched[noteIndex]
+    ? false
+    : currentExpectations.compoundFifth;
+
+  const currentNoteIsCertifiable = useMemo(() => {
+    if (!currentAggregate || currentStrikes.length < 3) return false;
+
+    const fundamentalReady = currentAggregate.fundamental.status === 'measured';
+    const octaveReady = !currentExpectations.octave || currentAggregate.octave.status === 'measured';
+    const compoundReady = !effectiveCompoundFifthExpected || currentAggregate.compoundFifth.status === 'measured';
+
+    return fundamentalReady && octaveReady && compoundReady;
+  }, [currentAggregate, currentExpectations.octave, currentStrikes.length, effectiveCompoundFifthExpected]);
+
+
+  const noteComplete = hasMinimumStrikes && currentNoteIsCertifiable;
+  const allDone = notesCount > 0 && state.strikesByNote.every((noteStrikes, index) => {
+    if (noteStrikes.length < 3) return false;
+    const aggregate = aggregates[index];
+    const expectations = state.expectationsByNote[index] ?? { octave: true, compoundFifth: true };
+    if (!aggregate) return false;
+
+    const fundamentalReady = aggregate.fundamental.status === 'measured';
+    const octaveReady = !expectations.octave || aggregate.octave.status === 'measured';
+    const compoundReady = !expectations.compoundFifth || aggregate.compoundFifth.status === 'measured';
+
+    return fundamentalReady && octaveReady && compoundReady;
+  });
+
+  useEffect(() => {
+    if (!isHighNoteDefaultOctaveOnly || compoundExpectationTouched[noteIndex] || !currentExpectations.compoundFifth) return;
+
+    dispatch({
+      type: 'SET_NOTE_EXPECTATIONS',
+      payload: { noteIndex, expectations: { compoundFifth: false } },
+    });
+  }, [compoundExpectationTouched, currentExpectations.compoundFifth, dispatch, isHighNoteDefaultOctaveOnly, noteIndex]);
 
   useEffect(() => {
     if (!isListening || noteComplete || justRegistered.current) return;
@@ -332,13 +336,15 @@ const CertificationCheckPage: React.FC = () => {
 
   const handleRestartNote = () => {
     dispatch({ type: 'RESET_CURRENT_NOTE', payload: { noteIndex } });
+    setCompoundExpectationTouched((prev) => ({ ...prev, [noteIndex]: false }));
     resetCaptureState();
   };
 
   const toggleCompoundExpectation = () => {
+    setCompoundExpectationTouched((prev) => ({ ...prev, [noteIndex]: true }));
     dispatch({
       type: 'SET_NOTE_EXPECTATIONS',
-      payload: { noteIndex, expectations: { compoundFifth: !currentExpectations.compoundFifth } },
+      payload: { noteIndex, expectations: { compoundFifth: !effectiveCompoundFifthExpected } },
     });
   };
 
@@ -361,13 +367,9 @@ const CertificationCheckPage: React.FC = () => {
       </div>
 
       <div className="cert-toggle-row">
-        {isHighNoteDefaultOctaveOnly ? (
-          <div className="cert-muted">E5 and above default to octave-only in certified mode.</div>
-        ) : (
-          <button className={`btn ${currentExpectations.compoundFifth ? 'btn-secondary' : 'btn-primary'}`} onClick={toggleCompoundExpectation}>
-            {currentExpectations.compoundFifth ? 'Mark this note as octave-only' : 'Compound fifth not expected'}
-          </button>
-        )}
+        <button className={`btn ${effectiveCompoundFifthExpected ? 'btn-secondary' : 'btn-primary'}`} onClick={toggleCompoundExpectation}>
+          {effectiveCompoundFifthExpected ? 'Mark this note as octave-only' : (isHighNoteDefaultOctaveOnly ? 'Mark this note as octave and compound fifth' : 'Compound fifth not expected')}
+        </button>
       </div>
 
       {needsMoreCertification && (
@@ -398,7 +400,7 @@ const CertificationCheckPage: React.FC = () => {
             <>
               <div className="reading-row"><span className="reading-label">Fundamental</span><span className="reading-value">{result.cents !== null ? formatCents(result.cents) : '—'}</span></div>
               <div className="reading-row"><span className="reading-label">Octave</span><span className="reading-value">{result.octaveFrequency !== null && liveNoteParsed ? formatCents(1200 * Math.log2(result.octaveFrequency / midiToFrequency(liveNoteParsed.midiNote + 12))) : '—'}</span></div>
-              <div className="reading-row"><span className="reading-label">Compound 5th</span><span className="reading-value">{currentExpectations.compoundFifth && result.compoundFifthFrequency !== null && liveNoteParsed ? formatCents(1200 * Math.log2(result.compoundFifthFrequency / midiToFrequency(liveNoteParsed.midiNote + 19))) : (currentExpectations.compoundFifth ? '—' : 'N/A')}</span></div>
+              <div className="reading-row"><span className="reading-label">Compound 5th</span><span className="reading-value">{effectiveCompoundFifthExpected && result.compoundFifthFrequency !== null && liveNoteParsed ? formatCents(1200 * Math.log2(result.compoundFifthFrequency / midiToFrequency(liveNoteParsed.midiNote + 19))) : (effectiveCompoundFifthExpected ? '—' : 'N/A')}</span></div>
             </>
           ) : (
             <div className="listening-placeholder">{isListening ? '🎵 Listening…' : 'Starting microphone…'}</div>
@@ -420,7 +422,7 @@ const CertificationCheckPage: React.FC = () => {
               <span className="reg-note-name">#{id + 1}</span>
               <span className="reg-note-cents" style={{ color }}>{strike.noteName} · {strike.cents !== null ? formatCents(strike.cents) : '—'}</span>
               <span className="cert-mini-partial">Oct {strike.octaveCents !== null ? formatCents(strike.octaveCents) : 'Inconclusive'}</span>
-              <span className="cert-mini-partial">5th {strike.compoundFifthCents !== null ? formatCents(strike.compoundFifthCents) : (currentExpectations.compoundFifth ? 'Inconclusive' : 'N/A')}</span>
+              <span className="cert-mini-partial">5th {strike.compoundFifthCents !== null && effectiveCompoundFifthExpected ? formatCents(strike.compoundFifthCents) : (effectiveCompoundFifthExpected ? 'Inconclusive' : 'N/A')}</span>
             </div>
           ))
         )}
