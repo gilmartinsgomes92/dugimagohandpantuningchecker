@@ -1,10 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { Link, useNavigate } from 'react-router-dom';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { listInstrumentHistory, moveCertifiedReportToInstrument, renameInstrument } from '../utils/userHistory';
+import {
+  deleteEmptyInstrument,
+  listInstrumentHistory,
+  moveCertifiedReportToInstrument,
+  renameInstrument,
+} from '../utils/userHistory';
 
 type InstrumentHistory = Awaited<ReturnType<typeof listInstrumentHistory>> extends { instruments?: infer T } ? T : never;
+type InstrumentWithReports = InstrumentHistory extends Array<infer T> ? T : never;
 
 const MyReportsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,17 +24,16 @@ const MyReportsPage: React.FC = () => {
   const [draftInstrumentName, setDraftInstrumentName] = useState('');
   const [renaming, setRenaming] = useState(false);
   const [reportMoveTargets, setReportMoveTargets] = useState<Record<string, string>>({});
-  const [movingReportId, setMovingReportId] = useState<string | null>(null);
   const [expandedMoveReportId, setExpandedMoveReportId] = useState<string | null>(null);
+  const [movingReportId, setMovingReportId] = useState<string | null>(null);
   const [showEmptyInstruments, setShowEmptyInstruments] = useState(false);
+  const [deletingInstrumentId, setDeletingInstrumentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
-      queueMicrotask(() => {
-        setCheckingSession(false);
-        setLoading(false);
-        setError('Supabase is not configured yet.');
-      });
+      setCheckingSession(false);
+      setLoading(false);
+      setError('Supabase is not configured yet.');
       return;
     }
 
@@ -53,10 +58,8 @@ const MyReportsPage: React.FC = () => {
     if (!user) return;
 
     let cancelled = false;
-    queueMicrotask(() => {
-      setLoading(true);
-      setError('');
-    });
+    setLoading(true);
+    setError('');
 
     listInstrumentHistory(user).then((result) => {
       if (cancelled) return;
@@ -75,6 +78,15 @@ const MyReportsPage: React.FC = () => {
       cancelled = true;
     };
   }, [user]);
+
+  const visibleInstruments = useMemo(
+    () => instruments.filter((instrument) => instrument.reports.length > 0) as InstrumentHistory,
+    [instruments],
+  );
+  const emptyInstruments = useMemo(
+    () => instruments.filter((instrument) => instrument.reports.length === 0) as InstrumentHistory,
+    [instruments],
+  );
 
   const reloadHistory = async (activeUser: User) => {
     const result = await listInstrumentHistory(activeUser);
@@ -135,18 +147,14 @@ const MyReportsPage: React.FC = () => {
     setDraftInstrumentName('');
   };
 
-  const handleOpenMove = (reportId: string, currentInstrumentId: string) => {
+  const handleOpenMovePanel = (reportId: string, currentInstrumentId: string) => {
+    setExpandedMoveReportId(reportId);
     setReportMoveTargets((prev) => ({
       ...prev,
       [reportId]: prev[reportId] ?? currentInstrumentId,
     }));
-    setExpandedMoveReportId(reportId);
     setError('');
     setInfoMessage('');
-  };
-
-  const handleCancelMove = () => {
-    setExpandedMoveReportId(null);
   };
 
   const handleMoveReport = async (verificationId: string, currentInstrumentId: string, reportId: string) => {
@@ -154,6 +162,7 @@ const MyReportsPage: React.FC = () => {
 
     const targetInstrumentId = reportMoveTargets[reportId] ?? currentInstrumentId;
     if (!targetInstrumentId || targetInstrumentId === currentInstrumentId) {
+      setExpandedMoveReportId(null);
       return;
     }
 
@@ -178,13 +187,247 @@ const MyReportsPage: React.FC = () => {
       ...prev,
       [reportId]: result.instrumentId ?? targetInstrumentId,
     }));
-    setMovingReportId(null);
     setExpandedMoveReportId(null);
+    setMovingReportId(null);
     setInfoMessage(`Report moved to ${result.instrumentName ?? 'the selected instrument'}.`);
   };
 
-  const instrumentsWithReports = instruments.filter((instrument) => instrument.reports.length > 0);
-  const emptyInstruments = instruments.filter((instrument) => instrument.reports.length === 0);
+  const handleDeleteEmptyInstrument = async (instrument: InstrumentWithReports) => {
+    if (!user) return;
+
+    setDeletingInstrumentId(instrument.id);
+    setError('');
+    setInfoMessage('');
+
+    const result = await deleteEmptyInstrument({
+      user,
+      instrumentId: instrument.id,
+    });
+
+    if (!result.ok) {
+      setError(result.error ?? 'Could not delete this empty instrument.');
+      setDeletingInstrumentId(null);
+      return;
+    }
+
+    setInstruments((prev) => prev.filter((item) => item.id !== instrument.id) as InstrumentHistory);
+    setDeletingInstrumentId(null);
+    setInfoMessage(`Deleted empty instrument “${instrument.name}”.`);
+  };
+
+  const renderInstrumentCard = (instrument: InstrumentWithReports) => (
+    <div key={instrument.id} className="legal-card">
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          {editingInstrumentId === instrument.id ? (
+            <>
+              <input
+                type="text"
+                value={draftInstrumentName}
+                onChange={(e) => setDraftInstrumentName(e.target.value)}
+                placeholder="Instrument name"
+                style={{
+                  width: '100%',
+                  maxWidth: '420px',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #2f2f2f',
+                  background: '#181818',
+                  color: '#fff',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  marginBottom: '0.45rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <p className="legal-meta">
+                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 style={{ marginBottom: '0.35rem' }}>{instrument.name}</h3>
+              <p className="legal-meta">
+                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          {editingInstrumentId === instrument.id ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary cert-inline-btn"
+                onClick={() => handleSaveRename(instrument.id)}
+                disabled={renaming}
+              >
+                {renaming ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost cert-inline-btn"
+                onClick={handleCancelRename}
+                disabled={renaming}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost cert-inline-btn"
+                onClick={() => handleStartRename(instrument.id, instrument.name)}
+              >
+                Rename
+              </button>
+              {instrument.reports.length === 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost cert-inline-btn"
+                  onClick={() => handleDeleteEmptyInstrument(instrument)}
+                  disabled={deletingInstrumentId === instrument.id}
+                >
+                  {deletingInstrumentId === instrument.id ? 'Deleting…' : 'Delete'}
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
+
+      {instrument.reports.length > 0 ? (
+        <div className="results-table-container" style={{ marginTop: '1rem' }}>
+          <table className="results-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Verification ID</th>
+                <th>Scale</th>
+                <th>Health</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {instrument.reports.map((report) => {
+                const targetInstrumentId = reportMoveTargets[report.id] ?? report.instrument_id;
+                const canMove = instruments.length > 1;
+                const moveExpanded = expandedMoveReportId === report.id;
+
+                return (
+                  <React.Fragment key={report.id}>
+                    <tr>
+                      <td>{new Date(report.report_created_at).toLocaleString()}</td>
+                      <td>{report.verification_id}</td>
+                      <td>{report.detected_scale ?? '—'}</td>
+                      <td>{report.health_score ?? '—'}%</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <Link
+                            className="btn btn-ghost cert-inline-btn"
+                            to={`/verify?id=${encodeURIComponent(report.verification_id)}`}
+                          >
+                            Open
+                          </Link>
+                          {canMove ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost cert-inline-btn"
+                              onClick={() => handleOpenMovePanel(report.id, report.instrument_id)}
+                            >
+                              Move
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                    {moveExpanded ? (
+                      <tr>
+                        <td colSpan={5}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              gap: '8px',
+                              flexWrap: 'wrap',
+                              alignItems: 'center',
+                              padding: '4px 0',
+                            }}
+                          >
+                            <span className="legal-meta" style={{ whiteSpace: 'nowrap' }}>Move report to</span>
+                            <select
+                              value={targetInstrumentId}
+                              onChange={(e) => setReportMoveTargets((prev) => ({
+                                ...prev,
+                                [report.id]: e.target.value,
+                              }))}
+                              style={{
+                                minWidth: '180px',
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                border: '1px solid #2f2f2f',
+                                background: '#181818',
+                                color: '#fff',
+                                fontSize: '0.95rem',
+                              }}
+                            >
+                              {instruments
+                                .filter((targetInstrument) => targetInstrument.id !== report.instrument_id)
+                                .map((targetInstrument) => (
+                                  <option key={targetInstrument.id} value={targetInstrument.id}>
+                                    {targetInstrument.name}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="btn btn-primary cert-inline-btn"
+                              onClick={() => handleMoveReport(report.verification_id, report.instrument_id, report.id)}
+                              disabled={movingReportId === report.id || targetInstrumentId === report.instrument_id}
+                            >
+                              {movingReportId === report.id ? 'Moving…' : 'Confirm'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost cert-inline-btn"
+                              onClick={() => setExpandedMoveReportId(null)}
+                              disabled={movingReportId === report.id}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="cert-start-card cert-start-card-muted" style={{ marginTop: '1rem', padding: '0.85rem 1rem' }}>
+          This instrument is empty. You can rename it or delete it.
+        </div>
+      )}
+    </div>
+  );
 
   if (checkingSession) {
     return (
@@ -204,7 +447,7 @@ const MyReportsPage: React.FC = () => {
       </div>
 
       <div className="cert-start-card cert-start-card-muted" style={{ marginBottom: '1rem' }}>
-        <strong>History tip:</strong> The first time an instrument is saved, we suggest a name from the detected scale, such as <em>G Pygmy</em>. Later you can rename instruments and move reports between them.
+        <strong>History tip:</strong> The first time an instrument is saved, we suggest a name from the detected scale, such as <em>G Pygmy</em>. Later you can rename instruments, move reports, or delete empty instruments.
       </div>
 
       {infoMessage ? (
@@ -226,175 +469,10 @@ const MyReportsPage: React.FC = () => {
         </div>
       ) : (
         <div className="legal-content">
-          {instrumentsWithReports.map((instrument) => (
-            <div key={instrument.id} className="legal-card">
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-                  {editingInstrumentId === instrument.id ? (
-                    <>
-                      <input
-                        type="text"
-                        value={draftInstrumentName}
-                        onChange={(e) => setDraftInstrumentName(e.target.value)}
-                        placeholder="Instrument name"
-                        style={{
-                          width: '100%',
-                          maxWidth: '420px',
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          border: '1px solid #2f2f2f',
-                          background: '#181818',
-                          color: '#fff',
-                          fontSize: '1rem',
-                          fontWeight: 700,
-                          marginBottom: '0.5rem',
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                      <p className="legal-meta">
-                        {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <h3 style={{ marginBottom: '0.4rem' }}>{instrument.name}</h3>
-                      <p className="legal-meta">
-                        {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  {editingInstrumentId === instrument.id ? (
-                    <>
-                      <button type="button" className="btn btn-primary cert-inline-btn" onClick={() => handleSaveRename(instrument.id)} disabled={renaming}>
-                        {renaming ? 'Saving…' : 'Save'}
-                      </button>
-                      <button type="button" className="btn btn-ghost cert-inline-btn" onClick={handleCancelRename} disabled={renaming}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="btn btn-ghost cert-inline-btn" onClick={() => handleStartRename(instrument.id, instrument.name)}>
-                      Rename
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="results-table-container" style={{ marginTop: '1rem' }}>
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Verification ID</th>
-                      <th>Scale</th>
-                      <th>Health</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {instrument.reports.map((report) => {
-                      const targetInstrumentId = reportMoveTargets[report.id] ?? report.instrument_id;
-                      const moveExpanded = expandedMoveReportId === report.id;
-                      const canMoveAnywhere = instruments.length > 1;
-
-                      return (
-                        <React.Fragment key={report.id}>
-                          <tr>
-                            <td>{new Date(report.report_created_at).toLocaleString()}</td>
-                            <td>{report.verification_id}</td>
-                            <td>{report.detected_scale ?? '—'}</td>
-                            <td>{report.health_score ?? '—'}%</td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                <Link className="btn btn-ghost cert-inline-btn" to={`/verify?id=${encodeURIComponent(report.verification_id)}`}>
-                                  Open
-                                </Link>
-                                {canMoveAnywhere ? (
-                                  <button
-                                    type="button"
-                                    className="btn btn-ghost cert-inline-btn"
-                                    onClick={() => (moveExpanded ? handleCancelMove() : handleOpenMove(report.id, report.instrument_id))}
-                                  >
-                                    {moveExpanded ? 'Close' : 'Move'}
-                                  </button>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                          {moveExpanded ? (
-                            <tr>
-                              <td colSpan={5} style={{ paddingTop: 0 }}>
-                                <div
-                                  className="cert-start-card cert-start-card-muted"
-                                  style={{
-                                    marginTop: '0.75rem',
-                                    padding: '0.9rem 1rem',
-                                    borderRadius: '12px',
-                                  }}
-                                >
-                                  <div style={{ fontWeight: 700, marginBottom: '0.45rem' }}>Move report to another instrument</div>
-                                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                    <select
-                                      value={targetInstrumentId}
-                                      onChange={(e) => setReportMoveTargets((prev) => ({ ...prev, [report.id]: e.target.value }))}
-                                      style={{
-                                        flex: '1 1 220px',
-                                        minWidth: '180px',
-                                        padding: '8px 10px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #2f2f2f',
-                                        background: '#181818',
-                                        color: '#fff',
-                                        fontSize: '0.95rem',
-                                      }}
-                                    >
-                                      {instruments.map((targetInstrument) => (
-                                        <option key={targetInstrument.id} value={targetInstrument.id}>
-                                          {targetInstrument.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <button
-                                      type="button"
-                                      className="btn btn-primary cert-inline-btn"
-                                      onClick={() => handleMoveReport(report.verification_id, report.instrument_id, report.id)}
-                                      disabled={movingReportId === report.id || targetInstrumentId === report.instrument_id}
-                                    >
-                                      {movingReportId === report.id ? 'Moving…' : 'Confirm move'}
-                                    </button>
-                                    <button type="button" className="btn btn-ghost cert-inline-btn" onClick={handleCancelMove} disabled={movingReportId === report.id}>
-                                      Cancel
-                                    </button>
-                                  </div>
-                                  <div className="legal-meta" style={{ marginTop: '0.65rem' }}>
-                                    Move stays hidden until you need it, so the history page remains easier to scan.
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
+          {visibleInstruments.map((instrument) => renderInstrumentCard(instrument))}
 
           {emptyInstruments.length > 0 ? (
-            <div className="legal-card" style={{ paddingTop: '1rem', paddingBottom: '1rem' }}>
+            <div className="legal-card">
               <div
                 style={{
                   display: 'flex',
@@ -406,9 +484,7 @@ const MyReportsPage: React.FC = () => {
               >
                 <div>
                   <h3 style={{ marginBottom: '0.3rem' }}>Empty instruments ({emptyInstruments.length})</h3>
-                  <p className="legal-meta" style={{ marginBottom: 0 }}>
-                    Hidden by default so your report history stays focused on instruments that already have certified reports.
-                  </p>
+                  <p className="legal-meta">Hide unused instrument names until you need them.</p>
                 </div>
                 <button
                   type="button"
@@ -418,84 +494,10 @@ const MyReportsPage: React.FC = () => {
                   {showEmptyInstruments ? 'Hide empty instruments' : 'Show empty instruments'}
                 </button>
               </div>
-
-              {showEmptyInstruments ? (
-                <div style={{ display: 'grid', gap: '0.85rem', marginTop: '1rem' }}>
-                  {emptyInstruments.map((instrument) => (
-                    <div
-                      key={instrument.id}
-                      className="cert-start-card cert-start-card-muted"
-                      style={{ padding: '1rem 1.1rem', borderRadius: '14px' }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          gap: '12px',
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-                          {editingInstrumentId === instrument.id ? (
-                            <>
-                              <input
-                                type="text"
-                                value={draftInstrumentName}
-                                onChange={(e) => setDraftInstrumentName(e.target.value)}
-                                placeholder="Instrument name"
-                                style={{
-                                  width: '100%',
-                                  maxWidth: '420px',
-                                  padding: '10px 12px',
-                                  borderRadius: '10px',
-                                  border: '1px solid #2f2f2f',
-                                  background: '#181818',
-                                  color: '#fff',
-                                  fontSize: '1rem',
-                                  fontWeight: 700,
-                                  marginBottom: '0.5rem',
-                                  boxSizing: 'border-box',
-                                }}
-                              />
-                              <p className="legal-meta" style={{ marginBottom: 0 }}>
-                                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <h4 style={{ marginBottom: '0.35rem' }}>{instrument.name}</h4>
-                              <p className="legal-meta" style={{ marginBottom: '0.35rem' }}>
-                                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
-                              </p>
-                              <div className="legal-meta">No reports are currently assigned to this instrument.</div>
-                            </>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                          {editingInstrumentId === instrument.id ? (
-                            <>
-                              <button type="button" className="btn btn-primary cert-inline-btn" onClick={() => handleSaveRename(instrument.id)} disabled={renaming}>
-                                {renaming ? 'Saving…' : 'Save'}
-                              </button>
-                              <button type="button" className="btn btn-ghost cert-inline-btn" onClick={handleCancelRename} disabled={renaming}>
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <button type="button" className="btn btn-ghost cert-inline-btn" onClick={() => handleStartRename(instrument.id, instrument.name)}>
-                              Rename
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
             </div>
           ) : null}
+
+          {showEmptyInstruments ? emptyInstruments.map((instrument) => renderInstrumentCard(instrument)) : null}
         </div>
       )}
     </div>
