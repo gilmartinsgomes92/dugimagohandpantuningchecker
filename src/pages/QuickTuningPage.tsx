@@ -112,7 +112,7 @@ const QuickTuningPage: React.FC = () => {
   // Tracks full note names already registered this session to prevent duplicates.
   const registeredNoteNames = useRef<Set<string>>(new Set());
 
-  const resetStabilityState = useCallback(() => {
+  const resetStabilityRefs = useCallback(() => {
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
@@ -120,7 +120,17 @@ const QuickTuningPage: React.FC = () => {
     noteCaptureStartedAt.current = 0;
     sameNoteSince.current = 0;
     noteWaitingForPartials.current = null;
+  }, []);
+
+  const resetStabilityState = useCallback(() => {
+    resetStabilityRefs();
     setInstructionText('Hold the note ringing — it will be auto-registered');
+  }, [resetStabilityRefs]);
+
+  const updateInstructionText = useCallback((text: string) => {
+    queueMicrotask(() => {
+      setInstructionText((current) => (current === text ? current : text));
+    });
   }, []);
 
   const registeredCount = state.tuningResults.filter((r) => r.status !== 'pending').length;
@@ -278,7 +288,7 @@ useEffect(() => {
   // Collect immediately when lock is decent; register when lock is strong.
   useEffect(() => {
     if (!isListening) {
-      resetStabilityState();
+      resetStabilityRefs();
       return;
     }
 
@@ -340,13 +350,13 @@ if (result.compoundFifthFrequency !== null) {
 
     if (!justRegistered.current) {
       if (noteWaitingForPartials.current === result.noteName && !enoughPartials) {
-        setInstructionText(
+        updateInstructionText(
           captureAgeMs >= PARTIAL_EXTRA_HOLD_MS
             ? 'Try one more clean strike for best accuracy'
             : 'Hold the note ringing a little longer for best accuracy',
         );
       } else {
-        setInstructionText('Hold the note ringing — it will be auto-registered');
+        updateInstructionText('Hold the note ringing — it will be auto-registered');
       }
     }
 
@@ -407,7 +417,7 @@ if (result.compoundFifthFrequency !== null) {
 
       if (!enoughPartials && captureAgeMs < PARTIAL_MAX_WAIT_MS && sameNoteAgeMs >= SAME_NOTE_GRACE_MS) {
         noteWaitingForPartials.current = result.noteName;
-        setInstructionText(
+        updateInstructionText(
           captureAgeMs >= PARTIAL_EXTRA_HOLD_MS
             ? 'Try one more clean strike for best accuracy'
             : 'Hold the note ringing a little longer for best accuracy',
@@ -416,10 +426,12 @@ if (result.compoundFifthFrequency !== null) {
       }
 
       noteWaitingForPartials.current = null;
-      setInstructionText('Hold the note ringing — it will be auto-registered');
-      registerNote();
+      updateInstructionText('Hold the note ringing — it will be auto-registered');
+      queueMicrotask(() => {
+        registerNote();
+      });
     }
-  }, [result, isListening, shouldRegister, registerNote, resetStabilityState, dispatch]);
+  }, [dispatch, isListening, registerNote, resetStabilityRefs, result, shouldRegister, updateInstructionText]);
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
