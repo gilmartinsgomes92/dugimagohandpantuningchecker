@@ -22,6 +22,7 @@ const PARTIAL_MIN_SAMPLES = 4;
 const PARTIAL_EXTRA_HOLD_MS = 900;
 const PARTIAL_MAX_WAIT_MS = 1800;
 const SAME_NOTE_GRACE_MS = 240;
+const HIGH_NOTE_OCTAVE_ONLY_MIDI = 76; // E5 and above default to octave-only in Quick Check
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
   if (absCents <= 12) return 'in-tune';
@@ -203,6 +204,7 @@ useEffect(() => {
 
     const targetOctaveFreq = midiToFrequency(midiNote + 12);
     const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
+    const isHighNoteDefaultOctaveOnly = midiNote >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
 
     const rawOctave = trimmedMean(stableOctaveFreqs.current);
     const rawOctaveCents =
@@ -219,6 +221,7 @@ useEffect(() => {
     const rawCFifthCents =
       rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
     const useMeasuredCFifth =
+      !isHighNoteDefaultOctaveOnly &&
       rawCFifth !== null &&
       rawCFifthCents !== null &&
       Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
@@ -345,6 +348,7 @@ if (result.compoundFifthFrequency !== null) {
       const midiNote = parsedDetectedNote.midiNote;
       const targetOctaveFreq = midiToFrequency(midiNote + 12);
       const targetCompoundFifthFreq = midiToFrequency(midiNote + 19);
+      const isHighNoteDefaultOctaveOnly = midiNote >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
 
       const OCTAVE_MAX_TARGET_CENTS = 900;
       const CFIFTH_MAX_TARGET_CENTS = 900;
@@ -361,6 +365,7 @@ if (result.compoundFifthFrequency !== null) {
       const rawCFifthCents =
         rawCFifth !== null ? 1200 * Math.log2(rawCFifth / targetCompoundFifthFreq) : null;
       const useMeasuredCFifth =
+        !isHighNoteDefaultOctaveOnly &&
         rawCFifth !== null &&
         rawCFifthCents !== null &&
         Math.abs(rawCFifthCents) <= CFIFTH_MAX_TARGET_CENTS;
@@ -414,6 +419,7 @@ if (result.compoundFifthFrequency !== null) {
   const liveParsedNote = result.noteName ? parseFullNoteName(result.noteName) : null;
   const liveFundamentalTarget = liveParsedNote ? midiToFrequency(liveParsedNote.midiNote) : null;
   const liveOctaveTarget = liveParsedNote ? midiToFrequency(liveParsedNote.midiNote + 12) : null;
+  const isHighNoteDefaultOctaveOnly = liveParsedNote !== null && liveParsedNote.midiNote >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
   const liveCompoundFifthTarget = liveParsedNote
     ? midiToFrequency(liveParsedNote.midiNote + 19)
     : null;
@@ -427,7 +433,7 @@ if (result.compoundFifthFrequency !== null) {
       ? 1200 * Math.log2(result.octaveFrequency / liveOctaveTarget)
       : null;
   const liveCompoundFifthCents =
-    result.compoundFifthFrequency !== null && liveCompoundFifthTarget !== null
+    !isHighNoteDefaultOctaveOnly && result.compoundFifthFrequency !== null && liveCompoundFifthTarget !== null
       ? 1200 * Math.log2(result.compoundFifthFrequency / liveCompoundFifthTarget)
       : null;
 
@@ -521,7 +527,7 @@ if (result.compoundFifthFrequency !== null) {
                   <div className="reading-row">
                     <span className="reading-label">Compound 5th</span>
                     <span className="reading-value" style={{ color: liveCompoundFifthColor }}>
-                      {liveCompoundFifthCents !== null ? formatCents(liveCompoundFifthCents) : '—'}
+                      {isHighNoteDefaultOctaveOnly ? 'N/A' : (liveCompoundFifthCents !== null ? formatCents(liveCompoundFifthCents) : '—')}
                     </span>
                   </div>
                 </div>
