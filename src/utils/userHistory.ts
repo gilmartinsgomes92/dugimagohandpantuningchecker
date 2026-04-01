@@ -133,7 +133,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
   }
 }
 
-async function getOrCreateInstrument(user: User, suggestedName: string, scaleLabel: string | null): Promise<InstrumentRecord> {
+async function getOrCreateInstrument(user: User, suggestedName: string, scaleLabel: string | null): Promise<{ instrument: InstrumentRecord; wasCreated: boolean }> {
   if (!supabase) {
     throw new Error('Supabase is not configured.');
   }
@@ -151,7 +151,7 @@ async function getOrCreateInstrument(user: User, suggestedName: string, scaleLab
   }
 
   if (existing) {
-    return existing as InstrumentRecord;
+    return { instrument: existing as InstrumentRecord, wasCreated: false };
   }
 
   const { data: created, error: createError } = await supabase
@@ -168,7 +168,7 @@ async function getOrCreateInstrument(user: User, suggestedName: string, scaleLab
     throw createError;
   }
 
-  return created as InstrumentRecord;
+  return { instrument: created as InstrumentRecord, wasCreated: true };
 }
 
 export async function createInstrumentForUser(params: {
@@ -244,7 +244,7 @@ export async function saveCertifiedReportToHistory(params: {
   stats: CertificationReportStats;
   verdict: CertificationVerdict;
   finalizedAt: string;
-}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string }> {
+}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string; createdNewInstrument?: boolean }> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
 
   try {
@@ -257,7 +257,8 @@ export async function saveCertifiedReportToHistory(params: {
       .join(' ');
     const instrumentName = scaleLabel || fallbackName || 'My Handpan';
 
-    const instrument = await getOrCreateInstrument(params.user, instrumentName, scaleLabel);
+    const ensuredInstrument = await getOrCreateInstrument(params.user, instrumentName, scaleLabel);
+    const instrument = ensuredInstrument.instrument;
 
     const reportRecord = createCertificationReportRecord({
       verificationId: params.verificationId,
@@ -285,7 +286,7 @@ export async function saveCertifiedReportToHistory(params: {
       throw error;
     }
 
-    return { ok: true, instrumentName, instrumentId: instrument.id };
+    return { ok: true, instrumentName, instrumentId: instrument.id, createdNewInstrument: ensuredInstrument.wasCreated };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not save certified report history.';
     return { ok: false, error: message };
@@ -296,7 +297,7 @@ export async function moveCertifiedReportToInstrument(params: {
   user: User;
   verificationId: string;
   instrumentId: string;
-}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string }> {
+}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string; createdNewInstrument?: boolean }> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
 
   try {
@@ -362,6 +363,43 @@ export async function moveCertifiedReportToInstrument(params: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not move certified report.';
+    return { ok: false, error: message };
+  }
+}
+
+
+export async function deleteInstrumentIfEmpty(params: {
+  user: User;
+  instrumentId: string;
+}): Promise<{ ok: boolean; deleted?: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
+
+  try {
+    await ensureUserProfile(params.user);
+
+    const { count, error: countError } = await supabase
+      .from('certified_reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', params.user.id)
+      .eq('instrument_id', params.instrumentId);
+
+    if (countError) throw countError;
+
+    if ((count ?? 0) > 0) {
+      return { ok: true, deleted: false };
+    }
+
+    const { error: deleteError } = await supabase
+      .from('instruments')
+      .delete()
+      .eq('id', params.instrumentId)
+      .eq('user_id', params.user.id);
+
+    if (deleteError) throw deleteError;
+
+    return { ok: true, deleted: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Could not remove empty instrument.';
     return { ok: false, error: message };
   }
 }
