@@ -106,10 +106,11 @@ const CertificationResultsPage: React.FC = () => {
 
     let cancelled = false;
 
-    setSaveState('saving');
-    setSaveMessage('Saving original report to the verification registry…');
+    const saveReport = async () => {
+      setSaveState('saving');
+      setSaveMessage('Saving original report to the verification registry…');
 
-    saveCertificationReport(reportRecord).then((result) => {
+      const result = await saveCertificationReport(reportRecord);
       if (cancelled) return;
 
       if (result.ok) {
@@ -120,7 +121,9 @@ const CertificationResultsPage: React.FC = () => {
         setSaveState('error');
         setSaveMessage(result.error ?? 'Could not save this report to the verification registry.');
       }
-    });
+    };
+
+    void saveReport();
 
     return () => {
       cancelled = true;
@@ -132,32 +135,30 @@ const CertificationResultsPage: React.FC = () => {
       return;
     }
 
-    if (!isSupabaseConfigured() || !supabase) {
+    let cancelled = false;
+
+    const clearHistoryAssignment = (message: string) => {
       setHistorySaveState('skipped');
-      setHistorySaveMessage('Sign in and connect Supabase to save certified report history to your account.');
+      setHistorySaveMessage(message);
       setHistoryUser(null);
       setHistoryInstruments([]);
       setSavedInstrumentId(null);
       setSavedInstrumentName('');
       setSelectedInstrumentId('');
       setNewInstrumentName('');
-      return;
-    }
+    };
 
-    let cancelled = false;
+    const saveHistory = async () => {
+      if (!isSupabaseConfigured() || !supabase) {
+        clearHistoryAssignment('Sign in and connect Supabase to save certified report history to your account.');
+        return;
+      }
 
-    supabase.auth.getUser().then(async ({ data, error }) => {
+      const { data, error } = await supabase.auth.getUser();
       if (cancelled) return;
 
       if (error || !data.user) {
-        setHistorySaveState('skipped');
-        setHistorySaveMessage('Sign in to save this certified report to your personal history.');
-        setHistoryUser(null);
-        setHistoryInstruments([]);
-        setSavedInstrumentId(null);
-        setSavedInstrumentName('');
-        setSelectedInstrumentId('');
-        setNewInstrumentName('');
+        clearHistoryAssignment('Sign in to save this certified report to your personal history.');
         return;
       }
 
@@ -208,19 +209,14 @@ const CertificationResultsPage: React.FC = () => {
         setSelectedInstrumentId('');
         setNewInstrumentName('');
       }
-    });
+    };
+
+    void saveHistory();
 
     return () => {
       cancelled = true;
     };
   }, [aggregates, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
-
-  useEffect(() => {
-    if (moveState === 'moved' || moveState === 'error') {
-      setMoveState('idle');
-      setMoveMessage('');
-    }
-  }, [selectedInstrumentId]);
 
   const handleStartOver = () => {
     dispatch({ type: 'RESET_CERTIFICATION_SESSION' });
@@ -400,7 +396,13 @@ const CertificationResultsPage: React.FC = () => {
             >
               <select
                 value={selectedInstrumentId}
-                onChange={(e) => setSelectedInstrumentId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedInstrumentId(e.target.value);
+                  if (moveState === 'moved' || moveState === 'error') {
+                    setMoveState('idle');
+                    setMoveMessage('');
+                  }
+                }}
                 style={{
                   flex: '1 1 260px',
                   minWidth: '220px',
