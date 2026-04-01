@@ -2098,3 +2098,33 @@
 .my-reports-page .results-table td {
   vertical-align: middle;
 }
+
+
+.feedback-link-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.feedback-link-button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.44);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+
+.feedback-link-button:hover,
+.feedback-link-button:focus-visible {
+  color: rgba(255, 255, 255, 0.66);
+  outline: none;
+}
+
+.feedback-link-button:active {
+  color: rgba(255, 255, 255, 0.82);
+}
