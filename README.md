@@ -1,73 +1,88 @@
-# React + TypeScript + Vite
+# Dugimago Handpan Tuning Check
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Browser-based handpan tuning analysis app built with React, Vite, and TypeScript.
 
-Currently, two official plugins are available:
+## What it does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Quick Tuning Check for fast note-by-note tuning results
+- Certified Tuning Report flow with 3-strike aggregation
+- Scale identification and ordered scale display
+- Shareable result cards and certified report exports
+- Verification flow for report IDs
+- Optional account login and personal report history with Supabase
 
-## React Compiler
+## Tech stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19
+- Vite 7
+- TypeScript
+- React Router
+- Supabase Auth + data storage
+- Cloudflare Pages / Functions / D1 for report verification registry
 
-## Expanding the ESLint configuration
+## Local development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Install dependencies:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Start the dev server:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Build for production:
+
+```bash
+npm run build
+```
+
+Run lint:
+
+```bash
+npm run lint
+```
+
+Run tests:
+
+```bash
+npm test -- --runInBand
+```
+
+## Environment variables
+
+Create a `.env` file based on `env.example`:
+
+```env
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-publishable-anon-key
+```
+
+If these values are not set, the tuner still works, but login and personal history features are skipped.
+
+## Verification registry
+
+The verification endpoints live in `functions/api/reports/` and expect a Cloudflare D1 binding named `CERT_REPORTS_DB`.
+
+## Contact form
+
+The contact and feedback form posts to Formspree from `src/pages/ContactFormPage.tsx`.
+
+## Launch checklist
+
+Before public launch, confirm all of these in production:
+
+- Quick check works on iPhone Safari, iPhone Chrome, Mac Safari, and Mac Chrome
+- Certified report flow saves and exports correctly
+- Verify page can look up a real report ID
+- Login, signup, password reset, and My Reports all work against the live Supabase project
+- Form submissions arrive in the destination inbox
+- Cloudflare Pages env vars and D1 binding are configured
+
+## Notes
+
+- Large audio-analysis code paths are intentionally kept in the client for responsiveness
+- Route-level lazy loading is enabled to reduce the initial bundle for first-time visitors
