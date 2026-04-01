@@ -206,6 +206,9 @@ const CertificationCheckPage: React.FC = () => {
     return sourceName ? parseFullNoteName(sourceName) : null;
   }, [lockedNoteName, result.noteName]);
 
+  const currentNoteMidi = liveNoteParsed?.midiNote ?? (lockedNoteName ? parseFullNoteName(lockedNoteName)?.midiNote ?? null : null);
+  const isHighNoteDefaultOctaveOnly = currentNoteMidi !== null && currentNoteMidi >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
+
   useEffect(() => {
     if (!isListening || noteComplete || justRegistered.current) return;
 
@@ -358,9 +361,13 @@ const CertificationCheckPage: React.FC = () => {
       </div>
 
       <div className="cert-toggle-row">
-        <button className={`btn ${currentExpectations.compoundFifth ? 'btn-secondary' : 'btn-primary'}`} onClick={toggleCompoundExpectation}>
-          {currentExpectations.compoundFifth ? 'Mark this note as octave-only' : 'Compound fifth not expected'}
-        </button>
+        {isHighNoteDefaultOctaveOnly ? (
+          <div className="cert-muted">E5 and above default to octave-only in certified mode.</div>
+        ) : (
+          <button className={`btn ${currentExpectations.compoundFifth ? 'btn-secondary' : 'btn-primary'}`} onClick={toggleCompoundExpectation}>
+            {currentExpectations.compoundFifth ? 'Mark this note as octave-only' : 'Compound fifth not expected'}
+          </button>
+        )}
       </div>
 
       {needsMoreCertification && (
@@ -391,7 +398,7 @@ const CertificationCheckPage: React.FC = () => {
             <>
               <div className="reading-row"><span className="reading-label">Fundamental</span><span className="reading-value">{result.cents !== null ? formatCents(result.cents) : '—'}</span></div>
               <div className="reading-row"><span className="reading-label">Octave</span><span className="reading-value">{result.octaveFrequency !== null && liveNoteParsed ? formatCents(1200 * Math.log2(result.octaveFrequency / midiToFrequency(liveNoteParsed.midiNote + 12))) : '—'}</span></div>
-              <div className="reading-row"><span className="reading-label">Compound 5th</span><span className="reading-value">{result.compoundFifthFrequency !== null && liveNoteParsed ? formatCents(1200 * Math.log2(result.compoundFifthFrequency / midiToFrequency(liveNoteParsed.midiNote + 19))) : '—'}</span></div>
+              <div className="reading-row"><span className="reading-label">Compound 5th</span><span className="reading-value">{currentExpectations.compoundFifth && result.compoundFifthFrequency !== null && liveNoteParsed ? formatCents(1200 * Math.log2(result.compoundFifthFrequency / midiToFrequency(liveNoteParsed.midiNote + 19))) : (currentExpectations.compoundFifth ? '—' : 'N/A')}</span></div>
             </>
           ) : (
             <div className="listening-placeholder">{isListening ? '🎵 Listening…' : 'Starting microphone…'}</div>
