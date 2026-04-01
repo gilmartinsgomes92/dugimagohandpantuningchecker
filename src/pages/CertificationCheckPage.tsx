@@ -65,7 +65,7 @@ const CertificationCheckPage: React.FC = () => {
 
   const notesCount = state.notesCount ?? 0;
   const noteIndex = state.currentNoteIndex;
-  const currentStrikes = state.strikesByNote[noteIndex] ?? [];
+  const currentStrikes = useMemo(() => state.strikesByNote[noteIndex] ?? [], [state.strikesByNote, noteIndex]);
   const strikeNumber = Math.min(3, currentStrikes.length + 1);
   const currentAggregate = aggregates[noteIndex];
   const lockedNoteName = state.lockedNoteNames[noteIndex] ?? null;
@@ -89,6 +89,19 @@ const CertificationCheckPage: React.FC = () => {
 
   const [instructionText, setInstructionText] = useState('Play one clean strike and let the note ring until it fades');
   const [compoundExpectationTouched, setCompoundExpectationTouched] = useState<Record<number, boolean>>({});
+  const [activeDisplayNoteName, setActiveDisplayNoteName] = useState<string | null>(null);
+
+  const updateInstructionText = useCallback((text: string) => {
+    queueMicrotask(() => {
+      setInstructionText((current) => (current === text ? current : text));
+    });
+  }, []);
+
+  const updateActiveDisplayNoteName = useCallback((noteName: string | null) => {
+    queueMicrotask(() => {
+      setActiveDisplayNoteName((current) => (current === noteName ? current : noteName));
+    });
+  }, []);
 
   const handleSendFeedback = () => {
     stopListening();
@@ -101,7 +114,7 @@ const CertificationCheckPage: React.FC = () => {
   };
 
 
-  const resetCaptureState = useCallback(() => {
+  const resetCaptureRefs = useCallback(() => {
     stableFrequencies.current = [];
     stableOctaveFreqs.current = [];
     stableCFifthFreqs.current = [];
@@ -109,8 +122,13 @@ const CertificationCheckPage: React.FC = () => {
     collectingNoteName.current = null;
     sessionStartedAt.current = 0;
     sessionLastSeenAt.current = 0;
-    setInstructionText('Play one clean strike and let the note ring until it fades');
   }, []);
+
+  const resetCaptureState = useCallback(() => {
+    resetCaptureRefs();
+    setActiveDisplayNoteName(null);
+    setInstructionText('Play one clean strike and let the note ring until it fades');
+  }, [resetCaptureRefs]);
 
   useEffect(() => {
     if (!state.notesCount) navigate('/certification/start');
@@ -125,8 +143,10 @@ const CertificationCheckPage: React.FC = () => {
   }, [isListening, startListening]);
 
   useEffect(() => {
-    resetCaptureState();
-  }, [noteIndex, resetCaptureState]);
+    resetCaptureRefs();
+    updateActiveDisplayNoteName(null);
+    updateInstructionText('Play one clean strike and let the note ring until it fades');
+  }, [noteIndex, resetCaptureRefs, updateActiveDisplayNoteName, updateInstructionText]);
 
 
   const registerStrike = useCallback((capturedNoteName: string) => {
@@ -167,6 +187,7 @@ const CertificationCheckPage: React.FC = () => {
     }
 
     dispatch({ type: 'RECORD_STRIKE', payload: { noteIndex, strike } });
+    setActiveDisplayNoteName(parsed.fullName);
     setInstructionText(`Captured strike ${Math.min(3, currentStrikes.length + 1)}/3 for ${parsed.fullName}`);
 
     setTimeout(() => {
@@ -178,10 +199,10 @@ const CertificationCheckPage: React.FC = () => {
   const lockQuality = result.lockQuality ?? 0;
   const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
+  const displayNoteName = activeDisplayNoteName ?? lockedNoteName ?? result.noteName ?? null;
   const liveNoteParsed = useMemo(() => {
-    const sourceName = collectingNoteName.current ?? lockedNoteName ?? result.noteName ?? null;
-    return sourceName ? parseFullNoteName(sourceName) : null;
-  }, [lockedNoteName, result.noteName]);
+    return displayNoteName ? parseFullNoteName(displayNoteName) : null;
+  }, [displayNoteName]);
 
   const currentNoteMidi = liveNoteParsed?.midiNote ?? (lockedNoteName ? parseFullNoteName(lockedNoteName)?.midiNote ?? null : null);
   const isHighNoteDefaultOctaveOnly = currentNoteMidi !== null && currentNoteMidi >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
@@ -235,13 +256,13 @@ const CertificationCheckPage: React.FC = () => {
     if (!strikeSessionActive.current) {
       if (hasMinimumStrikes && !currentNoteIsCertifiable) {
         if (lockedNoteName) {
-          setInstructionText(`This note was not measured clearly enough for certification. Please strike ${lockedNoteName} again to continue.`);
+          updateInstructionText(`This note was not measured clearly enough for certification. Please strike ${lockedNoteName} again to continue.`);
         } else {
-          setInstructionText('This note was not measured clearly enough for certification. Please strike this note again to continue.');
+          updateInstructionText('This note was not measured clearly enough for certification. Please strike this note again to continue.');
         }
       }
       if (!lockedNoteName && detectedName !== null && completedNoteNames.has(detectedName)) {
-        setInstructionText(`${detectedName} is already fully certified. Play a different note to continue.`);
+        updateInstructionText(`${detectedName} is already fully certified. Play a different note to continue.`);
         return;
       }
 
@@ -253,18 +274,19 @@ const CertificationCheckPage: React.FC = () => {
       ) {
         strikeSessionActive.current = true;
         collectingNoteName.current = detectedName;
+        updateActiveDisplayNoteName(detectedName);
         sessionStartedAt.current = now;
         sessionLastSeenAt.current = now;
         stableFrequencies.current = [detectedFreq];
         stableOctaveFreqs.current = result.octaveFrequency !== null ? [result.octaveFrequency] : [];
         stableCFifthFreqs.current = result.compoundFifthFrequency !== null ? [result.compoundFifthFrequency] : [];
-        setInstructionText(`Capturing strike ${Math.min(currentStrikes.length + 1, 3)}/3 — let ${detectedName} ring and fade before the next strike`);
+        updateInstructionText(`Capturing strike ${Math.min(currentStrikes.length + 1, 3)}/3 — let ${detectedName} ring and fade before the next strike`);
       } else if (lockedNoteName && detectedName && detectedName !== lockedNoteName) {
-        setInstructionText(`Please play ${lockedNoteName}. A different note is being heard now.`);
+        updateInstructionText(`Please play ${lockedNoteName}. A different note is being heard now.`);
       } else if (lockedNoteName) {
-        setInstructionText(`Play ${lockedNoteName} cleanly and let it fully ring out — strike ${strikeNumber} of 3`);
+        updateInstructionText(`Play ${lockedNoteName} cleanly and let it fully ring out — strike ${strikeNumber} of 3`);
       } else {
-        setInstructionText(`Play any clean note and let it fully ring out — strike ${strikeNumber} of 3`);
+        updateInstructionText(`Play any clean note and let it fully ring out — strike ${strikeNumber} of 3`);
       }
       return;
     }
@@ -277,7 +299,8 @@ const CertificationCheckPage: React.FC = () => {
       stableFrequencies.current.push(detectedFreq);
       if (result.octaveFrequency !== null) stableOctaveFreqs.current.push(result.octaveFrequency);
       if (result.compoundFifthFrequency !== null) stableCFifthFreqs.current.push(result.compoundFifthFrequency);
-      setInstructionText(`Listening through the fade of ${sessionNoteName} — partials are still being measured`);
+      updateActiveDisplayNoteName(sessionNoteName);
+      updateInstructionText(`Listening through the fade of ${sessionNoteName} — partials are still being measured`);
       return;
     }
 
@@ -285,7 +308,7 @@ const CertificationCheckPage: React.FC = () => {
     const releaseAgeMs = now - sessionLastSeenAt.current;
 
     if (releaseAgeMs < STRIKE_RELEASE_MS) {
-      setInstructionText(`Hold before the next strike — finalizing strike ${Math.min(currentStrikes.length + 1, 3)}/3…`);
+      updateInstructionText(`Hold before the next strike — finalizing strike ${Math.min(currentStrikes.length + 1, 3)}/3…`);
       return;
     }
 
@@ -306,6 +329,8 @@ const CertificationCheckPage: React.FC = () => {
     noteComplete,
     registerStrike,
     resetCaptureState,
+    updateActiveDisplayNoteName,
+    updateInstructionText,
     result.compoundFifthFrequency,
     result.frequency,
     result.noteName,
@@ -370,7 +395,7 @@ const CertificationCheckPage: React.FC = () => {
       <div className="note-prompt-card">
         <div className="note-zone-label">Certification mode</div>
         <div className="note-prompt-name" style={{ color: statusColor }}>
-          {collectingNoteName.current ?? lockedNoteName ?? result.noteName ?? '—'}
+          {displayNoteName ?? '—'}
         </div>
         {result.frequency !== null && <div className="note-prompt-freq">{result.frequency.toFixed(2)} Hz</div>}
         <p className="note-instruction">{instructionText}</p>
