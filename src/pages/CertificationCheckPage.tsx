@@ -90,6 +90,16 @@ const CertificationCheckPage: React.FC = () => {
   const [instructionText, setInstructionText] = useState('Play one clean strike and let the note ring until it fades');
   const [compoundExpectationTouched, setCompoundExpectationTouched] = useState<Record<number, boolean>>({});
 
+  const handleSendFeedback = () => {
+    stopListening();
+    navigate('/contact', {
+      state: {
+        mode: 'feedback',
+        returnTo: '/certification/check',
+      },
+    });
+  };
+
 
   const resetCaptureState = useCallback(() => {
     stableFrequencies.current = [];
@@ -446,6 +456,12 @@ const CertificationCheckPage: React.FC = () => {
         <button className="btn btn-secondary" onClick={handleRestartNote}>Restart note</button>
         <button className="btn btn-primary" onClick={handleNext} disabled={!noteComplete && !allDone}>
           {allDone || noteIndex >= notesCount - 1 ? 'View certified results' : 'Next note'}
+        </button>
+      </div>
+
+      <div className="feedback-link-row">
+        <button type="button" className="feedback-link-button" onClick={handleSendFeedback}>
+          Send feedback
         </button>
       </div>
     </div>
