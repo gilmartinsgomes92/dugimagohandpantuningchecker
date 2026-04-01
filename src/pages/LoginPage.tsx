@@ -7,6 +7,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 type AuthMode = 'password-signin' | 'password-signup';
 
 export default function LoginPage() {
+  const authEnabled = isSupabaseConfigured() && !!supabase;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -15,18 +16,19 @@ export default function LoginPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [user, setUser] = useState<User | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(authEnabled);
   const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
-    if (!isSupabaseConfigured() || !supabase) {
-      setCheckingSession(false);
+    if (!authEnabled || !supabase) {
       return;
     }
 
+    const authClient = supabase;
     let isMounted = true;
 
-    supabase.auth.getUser().then(({ data, error }) => {
+    const loadSession = async () => {
+      const { data, error } = await authClient.auth.getUser();
       if (!isMounted) return;
 
       if (!error) {
@@ -34,11 +36,13 @@ export default function LoginPage() {
       }
 
       setCheckingSession(false);
-    });
+    };
+
+    void loadSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = authClient.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
 
       if (event === 'PASSWORD_RECOVERY') {
@@ -52,12 +56,12 @@ export default function LoginPage() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [authEnabled]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!isSupabaseConfigured() || !supabase) {
+    if (!authEnabled || !supabase) {
       setStatus('error');
       setMessage('Supabase is not configured yet.');
       return;
@@ -119,7 +123,7 @@ export default function LoginPage() {
   };
 
   const handleForgotPassword = async () => {
-    if (!isSupabaseConfigured() || !supabase) {
+    if (!authEnabled || !supabase) {
       setStatus('error');
       setMessage('Supabase is not configured yet.');
       return;
@@ -226,8 +230,8 @@ export default function LoginPage() {
   const title = recoveryMode
     ? 'Set new password'
     : mode === 'password-signup'
-    ? 'Create account'
-    : 'Login';
+      ? 'Create account'
+      : 'Login';
 
   return (
     <div
@@ -261,79 +265,50 @@ export default function LoginPage() {
             <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
               Enter your new password below.
             </p>
-
-            <form onSubmit={handleUpdatePassword}>
-              <label
-                htmlFor="new-password"
-                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
-              >
-                New password
+            <form onSubmit={handleUpdatePassword} style={{ display: 'grid', gap: '14px' }}>
+              <label style={{ display: 'grid', gap: '6px' }}>
+                <span>New password</span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                />
               </label>
 
-              <input
-                id="new-password"
-                type="password"
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="New password"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #cfd6df',
-                  fontSize: '16px',
-                  marginBottom: '16px',
-                  boxSizing: 'border-box',
-                }}
-              />
-
-              <label
-                htmlFor="confirm-new-password"
-                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
-              >
-                Confirm new password
+              <label style={{ display: 'grid', gap: '6px' }}>
+                <span>Confirm new password</span>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Repeat your password"
+                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                />
               </label>
-
-              <input
-                id="confirm-new-password"
-                type="password"
-                autoComplete="new-password"
-                value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
-                placeholder="Confirm new password"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #cfd6df',
-                  fontSize: '16px',
-                  marginBottom: '16px',
-                  boxSizing: 'border-box',
-                }}
-              />
 
               <button
                 type="submit"
                 disabled={status === 'loading'}
                 style={{
-                  width: '100%',
-                  padding: '12px 16px',
+                  marginTop: '8px',
                   border: 'none',
                   borderRadius: '10px',
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  cursor: status === 'loading' ? 'default' : 'pointer',
-                  opacity: status === 'loading' ? 0.7 : 1,
+                  padding: '12px 16px',
+                  fontWeight: 600,
+                  color: '#ffffff',
+                  background: '#2754ff',
+                  cursor: 'pointer',
                 }}
               >
-                {status === 'loading' ? 'Updating...' : 'Update password'}
+                {status === 'loading' ? 'Saving...' : 'Update password'}
               </button>
             </form>
           </>
         ) : user ? (
           <>
-            <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 20px', color: '#5b6470', lineHeight: 1.5 }}>
               Signed in as <strong>{user.email}</strong>
             </p>
 
@@ -342,14 +317,14 @@ export default function LoginPage() {
               onClick={handleSignOut}
               disabled={status === 'loading'}
               style={{
-                width: '100%',
-                padding: '12px 16px',
                 border: 'none',
                 borderRadius: '10px',
-                fontSize: '16px',
-                fontWeight: 700,
-                cursor: status === 'loading' ? 'default' : 'pointer',
-                opacity: status === 'loading' ? 0.7 : 1,
+                padding: '12px 16px',
+                fontWeight: 600,
+                color: '#ffffff',
+                background: '#1f2937',
+                cursor: 'pointer',
+                width: '100%',
               }}
             >
               {status === 'loading' ? 'Signing out...' : 'Sign out'}
@@ -357,169 +332,100 @@ export default function LoginPage() {
           </>
         ) : (
           <>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '8px',
-                marginBottom: '20px',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('password-signin');
-                  setMessage('');
-                  setStatus('idle');
-                }}
-                style={{
-                  padding: '10px',
-                  borderRadius: '10px',
-                  border: mode === 'password-signin' ? '2px solid #111827' : '1px solid #cfd6df',
-                  background: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Login
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('password-signup');
-                  setMessage('');
-                  setStatus('idle');
-                }}
-                style={{
-                  padding: '10px',
-                  borderRadius: '10px',
-                  border: mode === 'password-signup' ? '2px solid #111827' : '1px solid #cfd6df',
-                  background: '#fff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Sign up
-              </button>
-            </div>
-
             <p style={{ margin: '0 0 24px', color: '#5b6470', lineHeight: 1.5 }}>
-              {mode === 'password-signup'
-                ? 'Create an account with your email and password.'
-                : 'Sign in with your email and password.'}
+              Use your email and password to access saved certified reports.
             </p>
 
-            <form onSubmit={handleSubmit}>
-              <label
-                htmlFor="email"
-                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
-              >
-                Email
+            <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
+              <label style={{ display: 'grid', gap: '6px' }}>
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                />
               </label>
 
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #cfd6df',
-                  fontSize: '16px',
-                  marginBottom: '16px',
-                  boxSizing: 'border-box',
-                }}
-              />
-
-              <label
-                htmlFor="password"
-                style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}
-              >
-                Password
+              <label style={{ display: 'grid', gap: '6px' }}>
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  autoComplete={mode === 'password-signup' ? 'new-password' : 'current-password'}
+                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                />
               </label>
-
-              <input
-                id="password"
-                type="password"
-                autoComplete={mode === 'password-signup' ? 'new-password' : 'current-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your password"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #cfd6df',
-                  fontSize: '16px',
-                  marginBottom: '12px',
-                  boxSizing: 'border-box',
-                }}
-              />
-
-              {mode === 'password-signin' && (
-                <div style={{ marginBottom: '16px', textAlign: 'right' }}>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    disabled={status === 'loading'}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: 0,
-                      color: '#1d4ed8',
-                      fontSize: '14px',
-                      cursor: status === 'loading' ? 'default' : 'pointer',
-                    }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-              )}
 
               <button
                 type="submit"
                 disabled={status === 'loading'}
                 style={{
-                  width: '100%',
-                  padding: '12px 16px',
+                  marginTop: '8px',
                   border: 'none',
                   borderRadius: '10px',
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  cursor: status === 'loading' ? 'default' : 'pointer',
-                  opacity: status === 'loading' ? 0.7 : 1,
+                  padding: '12px 16px',
+                  fontWeight: 600,
+                  color: '#ffffff',
+                  background: '#2754ff',
+                  cursor: 'pointer',
                 }}
               >
                 {status === 'loading'
-                  ? 'Please wait...'
+                  ? mode === 'password-signup'
+                    ? 'Creating account...'
+                    : 'Signing in...'
                   : mode === 'password-signup'
-                  ? 'Create account'
-                  : 'Login'}
+                    ? 'Create account'
+                    : 'Sign in'}
               </button>
             </form>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginTop: '18px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setMode((prev) => (prev === 'password-signin' ? 'password-signup' : 'password-signin'))}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#2754ff', cursor: 'pointer' }}
+              >
+                {mode === 'password-signin' ? 'Create a new account' : 'I already have an account'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={status === 'loading'}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#2754ff', cursor: 'pointer' }}
+              >
+                Forgot password?
+              </button>
+            </div>
           </>
         )}
 
         {message ? (
-          <p
+          <div
             style={{
-              marginTop: '16px',
-              color: status === 'error' ? '#b42318' : '#1d4ed8',
+              marginTop: '18px',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              background: status === 'error' ? '#fff1f1' : '#eef4ff',
+              color: status === 'error' ? '#9f1d1d' : '#1d3f91',
               lineHeight: 1.5,
             }}
           >
             {message}
-          </p>
+          </div>
         ) : null}
 
-        <p style={{ marginTop: '20px' }}>
-          <Link to="/">Back to home</Link>
-        </p>
+        <div style={{ marginTop: '20px' }}>
+          <Link to="/" style={{ color: '#5b6470', textDecoration: 'none' }}>
+            ← Back to tuner
+          </Link>
+        </div>
       </div>
     </div>
   );
