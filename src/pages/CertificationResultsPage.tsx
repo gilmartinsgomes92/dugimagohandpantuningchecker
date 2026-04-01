@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { useCertificationAggregates, useCertificationContext } from '../contexts/CertificationContext';
+import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
 import { statusText } from '../utils/certificationAggregation';
 import {
@@ -28,6 +29,7 @@ import {
 const CertificationResultsPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, dispatch } = useCertificationContext();
+  const { dispatch: appDispatch } = useAppContext();
   const allAggregates = useCertificationAggregates();
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string>('');
@@ -223,6 +225,40 @@ const CertificationResultsPage: React.FC = () => {
   const handleStartOver = () => {
     dispatch({ type: 'RESET_CERTIFICATION_SESSION' });
     navigate('/');
+  };
+
+  const handleContactClick = () => {
+    appDispatch({ type: 'RESET_EVALUATION' });
+
+    aggregates.forEach((aggregate, index) => {
+      const noteStatus = getCertificationNoteStatus(aggregate);
+
+      appDispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: index });
+      appDispatch({
+        type: 'ADD_TUNING_RESULT',
+        payload: {
+          noteName: aggregate.noteName,
+          targetFrequency: 0,
+          detectedFrequency: null,
+          cents: aggregate.fundamental.status === 'measured' ? aggregate.fundamental.cents : null,
+          status:
+            noteStatus === 'in-tune'
+              ? 'in-tune'
+              : noteStatus === 'slightly-out-of-tune'
+                ? 'slightly-out-of-tune'
+                : noteStatus === 'out-of-tune'
+                  ? 'out-of-tune'
+                  : 'pending',
+          octaveFreq: undefined,
+          octaveCents: aggregate.octave.status === 'measured' ? aggregate.octave.cents ?? undefined : undefined,
+          compoundFifthFreq: undefined,
+          compoundFifthCents:
+            aggregate.compoundFifth.status === 'measured' ? aggregate.compoundFifth.cents ?? undefined : undefined,
+        },
+      });
+    });
+
+    navigate('/contact');
   };
 
   const shareCertifiedReport = async () => {
@@ -575,6 +611,9 @@ const CertificationResultsPage: React.FC = () => {
       </div>
 
       <div className="page-actions results-actions">
+        <button className="btn btn-secondary" onClick={handleContactClick}>
+          Request Professional Evaluation
+        </button>
         <button className="btn btn-primary" onClick={handleStartOver}>Start new session</button>
       </div>
     </div>
