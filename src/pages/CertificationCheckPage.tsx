@@ -13,6 +13,7 @@ const MIN_FUNDAMENTAL_SAMPLES = 4;
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 const LOCK_THRESHOLD_START = IS_IOS ? 0.58 : 0.64;
 const LOCK_THRESHOLD_DISPLAY = IS_IOS ? 0.55 : 0.60;
+const HIGH_NOTE_OCTAVE_ONLY_MIDI = 76; // E5 and above default to octave-only in certified mode
 
 const NOTE_INDEX: Record<string, number> = {
   C: 0,
@@ -69,8 +70,7 @@ const CertificationCheckPage: React.FC = () => {
   const currentAggregate = aggregates[noteIndex];
   const lockedNoteName = state.lockedNoteNames[noteIndex] ?? null;
   const currentExpectations = state.expectationsByNote[noteIndex] ?? { octave: true, compoundFifth: true };
-  const noteComplete = currentStrikes.length >= 3;
-  const allDone = notesCount > 0 && state.strikesByNote.every((noteStrikes) => noteStrikes.length >= 3);
+  const hasMinimumStrikes = currentStrikes.length >= 3;
   const completedNoteNames = useMemo(() => new Set(
     aggregates
       .map((aggregate, index) => ({ aggregate, index }))
@@ -88,6 +88,30 @@ const CertificationCheckPage: React.FC = () => {
   const justRegistered = useRef(false);
 
   const [instructionText, setInstructionText] = useState('Play one clean strike and let the note ring until it fades');
+
+  const currentNoteIsCertifiable = useMemo(() => {
+    if (!currentAggregate || currentStrikes.length < 3) return false;
+
+    const fundamentalReady = currentAggregate.fundamental.status === 'measured';
+    const octaveReady = !currentExpectations.octave || currentAggregate.octave.status === 'measured';
+    const compoundReady = !currentExpectations.compoundFifth || currentAggregate.compoundFifth.status === 'measured';
+
+    return fundamentalReady && octaveReady && compoundReady;
+  }, [currentAggregate, currentExpectations.compoundFifth, currentExpectations.octave, currentStrikes.length]);
+
+  const noteComplete = hasMinimumStrikes && currentNoteIsCertifiable;
+  const allDone = notesCount > 0 && state.strikesByNote.every((noteStrikes, index) => {
+    if (noteStrikes.length < 3) return false;
+    const aggregate = aggregates[index];
+    const expectations = state.expectationsByNote[index] ?? { octave: true, compoundFifth: true };
+    if (!aggregate) return false;
+
+    const fundamentalReady = aggregate.fundamental.status === 'measured';
+    const octaveReady = !expectations.octave || aggregate.octave.status === 'measured';
+    const compoundReady = !expectations.compoundFifth || aggregate.compoundFifth.status === 'measured';
+
+    return fundamentalReady && octaveReady && compoundReady;
+  });
 
   const resetCaptureState = useCallback(() => {
     stableFrequencies.current = [];
@@ -116,8 +140,20 @@ const CertificationCheckPage: React.FC = () => {
     resetCaptureState();
   }, [noteIndex, resetCaptureState]);
 
+  useEffect(() => {
+    if (!lockedNoteName || currentStrikes.length > 0 || !currentExpectations.compoundFifth) return;
+
+    const parsed = parseFullNoteName(lockedNoteName);
+    if (!parsed || parsed.midiNote < HIGH_NOTE_OCTAVE_ONLY_MIDI) return;
+
+    dispatch({
+      type: 'SET_NOTE_EXPECTATIONS',
+      payload: { noteIndex, expectations: { compoundFifth: false } },
+    });
+  }, [currentExpectations.compoundFifth, currentStrikes.length, dispatch, lockedNoteName, noteIndex]);
+
   const registerStrike = useCallback((capturedNoteName: string) => {
-    if (justRegistered.current || noteComplete) return;
+    if (justRegistered.current) return;
 
     const detectedFreq = trimmedMean(stableFrequencies.current) ?? result.frequency;
     if (detectedFreq === null) return;
@@ -160,7 +196,7 @@ const CertificationCheckPage: React.FC = () => {
       resetCaptureState();
       justRegistered.current = false;
     }, REGISTRATION_COOLDOWN_MS);
-  }, [currentStrikes.length, dispatch, lockedNoteName, noteComplete, noteIndex, resetCaptureState, result.frequency]);
+  }, [currentStrikes.length, dispatch, lockedNoteName, noteIndex, resetCaptureState, result.frequency]);
 
   const lockQuality = result.lockQuality ?? 0;
   const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
@@ -180,6 +216,13 @@ const CertificationCheckPage: React.FC = () => {
     const noteMatchesTarget = detectedName !== null && (!targetName || detectedName === targetName);
 
     if (!strikeSessionActive.current) {
+      if (hasMinimumStrikes && !currentNoteIsCertifiable) {
+        if (lockedNoteName) {
+          setInstructionText(`This note was not measured clearly enough for certification. Please strike ${lockedNoteName} again to continue.`);
+        } else {
+          setInstructionText('This note was not measured clearly enough for certification. Please strike this note again to continue.');
+        }
+      }
       if (!lockedNoteName && detectedName !== null && completedNoteNames.has(detectedName)) {
         setInstructionText(`${detectedName} is already fully certified. Play a different note to continue.`);
         return;
@@ -198,7 +241,7 @@ const CertificationCheckPage: React.FC = () => {
         stableFrequencies.current = [detectedFreq];
         stableOctaveFreqs.current = result.octaveFrequency !== null ? [result.octaveFrequency] : [];
         stableCFifthFreqs.current = result.compoundFifthFrequency !== null ? [result.compoundFifthFrequency] : [];
-        setInstructionText(`Capturing strike ${strikeNumber}/3 — let ${detectedName} ring and fade before the next strike`);
+        setInstructionText(`Capturing strike ${Math.min(currentStrikes.length + 1, 3)}/3 — let ${detectedName} ring and fade before the next strike`);
       } else if (lockedNoteName && detectedName && detectedName !== lockedNoteName) {
         setInstructionText(`Please play ${lockedNoteName}. A different note is being heard now.`);
       } else if (lockedNoteName) {
@@ -225,7 +268,7 @@ const CertificationCheckPage: React.FC = () => {
     const releaseAgeMs = now - sessionLastSeenAt.current;
 
     if (releaseAgeMs < STRIKE_RELEASE_MS) {
-      setInstructionText(`Hold before the next strike — finalizing strike ${strikeNumber}/3…`);
+      setInstructionText(`Hold before the next strike — finalizing strike ${Math.min(currentStrikes.length + 1, 3)}/3…`);
       return;
     }
 
@@ -236,6 +279,9 @@ const CertificationCheckPage: React.FC = () => {
 
     resetCaptureState();
   }, [
+    currentNoteIsCertifiable,
+    currentStrikes.length,
+    hasMinimumStrikes,
     isListening,
     lockQuality,
     completedNoteNames,
@@ -251,6 +297,8 @@ const CertificationCheckPage: React.FC = () => {
   ]);
 
   const progressPct = notesCount > 0 ? ((noteIndex + (noteComplete ? 1 : 0)) / notesCount) * 100 : 0;
+
+  const needsMoreCertification = hasMinimumStrikes && !currentNoteIsCertifiable;
 
   const currentStrikePreview = useMemo(() => {
     const rows = currentStrikes.map((strike, index) => ({
@@ -297,7 +345,7 @@ const CertificationCheckPage: React.FC = () => {
         <div className="tuning-progress-bar">
           <div className="tuning-progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
-        <p className="progress-label">Note {noteIndex + 1} of {notesCount} · Strike {Math.min(strikeNumber, 3)} of 3</p>
+        <p className="progress-label">Note {noteIndex + 1} of {notesCount} · Strike {currentStrikes.length < 3 ? currentStrikes.length + 1 : 3} of 3</p>
       </div>
 
       <div className="note-prompt-card">
@@ -314,6 +362,12 @@ const CertificationCheckPage: React.FC = () => {
           {currentExpectations.compoundFifth ? 'Mark this note as octave-only' : 'Compound fifth not expected'}
         </button>
       </div>
+
+      {needsMoreCertification && (
+        <div className="warning-banner">
+          <strong>This note was not measured clearly enough for certification.</strong> Please strike this note again to continue.
+        </div>
+      )}
 
       <div className="tuning-display">
         <div className="quick-stability-ring">
