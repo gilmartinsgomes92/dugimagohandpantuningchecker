@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
 
@@ -56,8 +56,12 @@ function getOrderedScaleText(noteNames: string[]): string {
 
 const ContactFormPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state, dispatch } = useAppContext();
   const { tuningResults, contactInfo } = state;
+  const pageState = location.state as { mode?: 'feedback'; returnTo?: string } | null;
+  const isFeedbackMode = pageState?.mode === 'feedback';
+  const returnTo = pageState?.returnTo ?? '/results';
 
   const orderedScaleText = getOrderedScaleText(
   tuningResults
@@ -67,16 +71,30 @@ const ContactFormPage: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const defaultMessage = useMemo(() => {
+    if (contactInfo.message) return contactInfo.message;
+    return isFeedbackMode ? 'Share your suggestion, issue, or improvement idea…' : '';
+  }, [contactInfo.message, isFeedbackMode]);
   const [formData, setFormData] = useState(() => ({
     name: contactInfo.name,
     email: contactInfo.email,
     phone: contactInfo.phone,
-    message: contactInfo.message || '',
+    message: defaultMessage,
   }));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
+
+  const pageTitle = isFeedbackMode ? 'Send Feedback' : 'Request Professional Evaluation';
+  const pageSubtitle = isFeedbackMode
+    ? 'Share a suggestion, bug report, or improvement idea'
+    : 'Share your results with our tuning experts';
+  const messagePlaceholder = isFeedbackMode
+    ? 'Tell us what could be improved, what felt unclear, or what issue you found…'
+    : 'Additional notes or questions…';
+  const submitLabel = isFeedbackMode ? 'Send Feedback' : 'Request Professional Evaluation';
+  const attachedTitle = isFeedbackMode ? 'Session Context (attached)' : 'Tuning Summary (attached)';
 
   const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -109,6 +127,7 @@ const ContactFormPage: React.FC = () => {
   email: formData.email,
   phone: formData.phone || '',
   message: formData.message || '',
+  mode: isFeedbackMode ? 'feedback' : 'professional_evaluation',
   tuningSummary:
     `Scale: ${orderedScaleText || 'Unknown'}\n` +
     `Values = Fundamental | Octave | Compound Fifth\n\n` +
@@ -129,7 +148,7 @@ const ContactFormPage: React.FC = () => {
       throw new Error('Submission failed');
     }
 
-    navigate('/confirmation');
+    navigate('/confirmation', { state: { mode: isFeedbackMode ? 'feedback' : 'contact' } });
 
   } catch (err) {
     setSubmitError('Could not send your request. Please try again.');
@@ -141,8 +160,8 @@ const ContactFormPage: React.FC = () => {
   return (
     <div className="page contact-page">
       <div className="page-header">
-        <h2 className="page-title">Request Professional Evaluation</h2>
-        <p className="page-subtitle">Share your results with our tuning experts</p>
+        <h2 className="page-title">{pageTitle}</h2>
+        <p className="page-subtitle">{pageSubtitle}</p>
       </div>
 
       <form className="contact-form" onSubmit={handleSubmit}>
@@ -189,12 +208,12 @@ const ContactFormPage: React.FC = () => {
             value={formData.message}
             onChange={handleChange}
             rows={6}
-            placeholder="Additional notes or questions…"
+            placeholder={messagePlaceholder}
           />
         </div>
 
         <div className="tuning-summary-display">
-  <h4>Tuning Summary (attached)</h4>
+  <h4>{attachedTitle}</h4>
   <div className="summary-scale">{orderedScaleText || 'Scale not available'}</div>
 
   <div className="summary-notes">
@@ -226,11 +245,11 @@ const ContactFormPage: React.FC = () => {
         {submitError && <div className="error-banner">{submitError}</div>}
         
         <div className="page-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => navigate('/results')}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(returnTo)}>
             ← Back
           </button>
           <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-           {isSubmitting ? 'Sending...' : 'Request Professional Evaluation'}
+           {isSubmitting ? 'Sending...' : submitLabel}
           </button>
         </div>
       </form>
