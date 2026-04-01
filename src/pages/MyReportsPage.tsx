@@ -20,6 +20,7 @@ const MyReportsPage: React.FC = () => {
   const [reportMoveTargets, setReportMoveTargets] = useState<Record<string, string>>({});
   const [movingReportId, setMovingReportId] = useState<string | null>(null);
   const [expandedMoveReportId, setExpandedMoveReportId] = useState<string | null>(null);
+  const [showEmptyInstruments, setShowEmptyInstruments] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) {
@@ -182,6 +183,9 @@ const MyReportsPage: React.FC = () => {
     setInfoMessage(`Report moved to ${result.instrumentName ?? 'the selected instrument'}.`);
   };
 
+  const instrumentsWithReports = instruments.filter((instrument) => instrument.reports.length > 0);
+  const emptyInstruments = instruments.filter((instrument) => instrument.reports.length === 0);
+
   if (checkingSession) {
     return (
       <div className="page results-page">
@@ -222,7 +226,7 @@ const MyReportsPage: React.FC = () => {
         </div>
       ) : (
         <div className="legal-content">
-          {instruments.map((instrument) => (
+          {instrumentsWithReports.map((instrument) => (
             <div key={instrument.id} className="legal-card">
               <div
                 style={{
@@ -299,7 +303,7 @@ const MyReportsPage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {instrument.reports.length > 0 ? instrument.reports.map((report) => {
+                    {instrument.reports.map((report) => {
                       const targetInstrumentId = reportMoveTargets[report.id] ?? report.instrument_id;
                       const moveExpanded = expandedMoveReportId === report.id;
                       const canMoveAnywhere = instruments.length > 1;
@@ -382,18 +386,116 @@ const MyReportsPage: React.FC = () => {
                           ) : null}
                         </React.Fragment>
                       );
-                    }) : (
-                      <tr>
-                        <td colSpan={5} className="legal-meta">
-                          No reports are currently assigned to this instrument.
-                        </td>
-                      </tr>
-                    )}
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
           ))}
+
+          {emptyInstruments.length > 0 ? (
+            <div className="legal-card" style={{ paddingTop: '1rem', paddingBottom: '1rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div>
+                  <h3 style={{ marginBottom: '0.3rem' }}>Empty instruments ({emptyInstruments.length})</h3>
+                  <p className="legal-meta" style={{ marginBottom: 0 }}>
+                    Hidden by default so your report history stays focused on instruments that already have certified reports.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost cert-inline-btn"
+                  onClick={() => setShowEmptyInstruments((prev) => !prev)}
+                >
+                  {showEmptyInstruments ? 'Hide empty instruments' : 'Show empty instruments'}
+                </button>
+              </div>
+
+              {showEmptyInstruments ? (
+                <div style={{ display: 'grid', gap: '0.85rem', marginTop: '1rem' }}>
+                  {emptyInstruments.map((instrument) => (
+                    <div
+                      key={instrument.id}
+                      className="cert-start-card cert-start-card-muted"
+                      style={{ padding: '1rem 1.1rem', borderRadius: '14px' }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: '12px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                          {editingInstrumentId === instrument.id ? (
+                            <>
+                              <input
+                                type="text"
+                                value={draftInstrumentName}
+                                onChange={(e) => setDraftInstrumentName(e.target.value)}
+                                placeholder="Instrument name"
+                                style={{
+                                  width: '100%',
+                                  maxWidth: '420px',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  border: '1px solid #2f2f2f',
+                                  background: '#181818',
+                                  color: '#fff',
+                                  fontSize: '1rem',
+                                  fontWeight: 700,
+                                  marginBottom: '0.5rem',
+                                  boxSizing: 'border-box',
+                                }}
+                              />
+                              <p className="legal-meta" style={{ marginBottom: 0 }}>
+                                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <h4 style={{ marginBottom: '0.35rem' }}>{instrument.name}</h4>
+                              <p className="legal-meta" style={{ marginBottom: '0.35rem' }}>
+                                {instrument.scale_label ? `Suggested scale: ${instrument.scale_label}` : 'Custom instrument label'}
+                              </p>
+                              <div className="legal-meta">No reports are currently assigned to this instrument.</div>
+                            </>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          {editingInstrumentId === instrument.id ? (
+                            <>
+                              <button type="button" className="btn btn-primary cert-inline-btn" onClick={() => handleSaveRename(instrument.id)} disabled={renaming}>
+                                {renaming ? 'Saving…' : 'Save'}
+                              </button>
+                              <button type="button" className="btn btn-ghost cert-inline-btn" onClick={handleCancelRename} disabled={renaming}>
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button type="button" className="btn btn-ghost cert-inline-btn" onClick={() => handleStartRename(instrument.id, instrument.name)}>
+                              Rename
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
     </div>
