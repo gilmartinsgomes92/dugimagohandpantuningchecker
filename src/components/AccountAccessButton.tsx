@@ -17,28 +17,32 @@ function getShortEmail(email?: string | null) {
 export default function AccountAccessButton() {
   const location = useLocation();
   const navigate = useNavigate();
+  const authEnabled = isSupabaseConfigured() && !!supabase;
   const [user, setUser] = useState<User | null>(null);
-  const [open, setOpen] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const [checking, setChecking] = useState(authEnabled);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured() || !supabase) {
-      setChecking(false);
+    if (!authEnabled || !supabase) {
       return;
     }
 
+    const authClient = supabase;
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    const loadUser = async () => {
+      const { data } = await authClient.auth.getUser();
       if (!mounted) return;
       setUser(data.user ?? null);
       setChecking(false);
-    });
+    };
+
+    void loadUser();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = authClient.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
@@ -46,13 +50,13 @@ export default function AccountAccessButton() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [authEnabled]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
+        setOpenPath(null);
       }
     };
 
@@ -60,13 +64,11 @@ export default function AccountAccessButton() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
   if (location.pathname === '/login') {
     return null;
   }
+
+  const open = openPath === location.pathname;
 
   const handleMainClick = () => {
     if (!user) {
@@ -74,11 +76,11 @@ export default function AccountAccessButton() {
       return;
     }
 
-    setOpen((prev) => !prev);
+    setOpenPath((prev) => (prev === location.pathname ? null : location.pathname));
   };
 
   const handleGoToLogin = () => {
-    setOpen(false);
+    setOpenPath(null);
     navigate('/login');
   };
 
@@ -86,7 +88,7 @@ export default function AccountAccessButton() {
     if (!supabase) return;
 
     await supabase.auth.signOut();
-    setOpen(false);
+    setOpenPath(null);
     navigate('/login');
   };
 
@@ -127,7 +129,7 @@ export default function AccountAccessButton() {
             type="button"
             className="account-access-menu-item"
             onClick={() => {
-              setOpen(false);
+              setOpenPath(null);
               navigate('/my-reports');
             }}
             role="menuitem"
