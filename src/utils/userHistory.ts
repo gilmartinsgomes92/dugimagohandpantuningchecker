@@ -133,7 +133,7 @@ export async function ensureUserProfile(user: User): Promise<void> {
   }
 }
 
-async function getOrCreateInstrument(user: User, suggestedName: string, scaleLabel: string | null): Promise<InstrumentRecord> {
+async function getOrCreateInstrument(user: User, suggestedName: string, scaleLabel: string | null): Promise<{ instrument: InstrumentRecord; created: boolean }> {
   if (!supabase) {
     throw new Error('Supabase is not configured.');
   }
@@ -151,7 +151,7 @@ async function getOrCreateInstrument(user: User, suggestedName: string, scaleLab
   }
 
   if (existing) {
-    return existing as InstrumentRecord;
+    return { instrument: existing as InstrumentRecord, created: false };
   }
 
   const { data: created, error: createError } = await supabase
@@ -168,7 +168,7 @@ async function getOrCreateInstrument(user: User, suggestedName: string, scaleLab
     throw createError;
   }
 
-  return created as InstrumentRecord;
+  return { instrument: created as InstrumentRecord, created: true };
 }
 
 export async function createInstrumentForUser(params: {
@@ -244,7 +244,7 @@ export async function saveCertifiedReportToHistory(params: {
   stats: CertificationReportStats;
   verdict: CertificationVerdict;
   finalizedAt: string;
-}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string }> {
+}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string; instrumentWasCreated?: boolean }> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
 
   try {
@@ -257,7 +257,8 @@ export async function saveCertifiedReportToHistory(params: {
       .join(' ');
     const instrumentName = scaleLabel || fallbackName || 'My Handpan';
 
-    const instrument = await getOrCreateInstrument(params.user, instrumentName, scaleLabel);
+    const instrumentResult = await getOrCreateInstrument(params.user, instrumentName, scaleLabel);
+    const instrument = instrumentResult.instrument;
 
     const reportRecord = createCertificationReportRecord({
       verificationId: params.verificationId,
@@ -285,7 +286,7 @@ export async function saveCertifiedReportToHistory(params: {
       throw error;
     }
 
-    return { ok: true, instrumentName, instrumentId: instrument.id };
+    return { ok: true, instrumentName, instrumentId: instrument.id, instrumentWasCreated: instrumentResult.created };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not save certified report history.';
     return { ok: false, error: message };
@@ -296,7 +297,7 @@ export async function moveCertifiedReportToInstrument(params: {
   user: User;
   verificationId: string;
   instrumentId: string;
-}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string }> {
+}): Promise<{ ok: boolean; error?: string; instrumentName?: string; instrumentId?: string; instrumentWasCreated?: boolean }> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
 
   try {
@@ -469,4 +470,13 @@ export async function deleteEmptyInstrument(params: {
     const message = error instanceof Error ? error.message : 'Could not delete empty instrument.';
     return { ok: false, error: message };
   }
+}
+
+
+export async function deleteInstrumentIfEmpty(params: {
+  user: User;
+  instrumentId: string;
+}): Promise<{ ok: boolean; error?: string; deleted?: boolean }> {
+  const result = await deleteEmptyInstrument(params);
+  return { ok: result.ok, error: result.error, deleted: result.ok };
 }
