@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCertificationAggregates, useCertificationContext } from '../contexts/CertificationContext';
+import { useAppContext } from '../contexts/AppContext';
 import { formatCents } from '../utils/musicUtils';
 import { statusText } from '../utils/certificationAggregation';
 import {
@@ -16,6 +17,7 @@ import { certificationAggregateSortKey } from '../utils/certificationOrder';
 const CertificationReviewPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, dispatch } = useCertificationContext();
+  const { dispatch: appDispatch } = useAppContext();
   const allAggregates = useCertificationAggregates();
 
   const orderedAggregateEntries = useMemo(
@@ -52,6 +54,40 @@ const CertificationReviewPage: React.FC = () => {
       payload: { verificationId, finalizedAt: new Date().toISOString() },
     });
     navigate('/certification/results');
+  };
+
+  const handleContactClick = () => {
+    appDispatch({ type: 'RESET_EVALUATION' });
+
+    aggregates.forEach((aggregate, index) => {
+      const noteStatus = getCertificationNoteStatus(aggregate);
+
+      appDispatch({ type: 'SET_CURRENT_NOTE_INDEX', payload: index });
+      appDispatch({
+        type: 'ADD_TUNING_RESULT',
+        payload: {
+          noteName: aggregate.noteName,
+          targetFrequency: 0,
+          detectedFrequency: null,
+          cents: aggregate.fundamental.status === 'measured' ? aggregate.fundamental.cents : null,
+          status:
+            noteStatus === 'in-tune'
+              ? 'in-tune'
+              : noteStatus === 'slightly-out-of-tune'
+                ? 'slightly-out-of-tune'
+                : noteStatus === 'out-of-tune'
+                  ? 'out-of-tune'
+                  : 'pending',
+          octaveFreq: undefined,
+          octaveCents: aggregate.octave.status === 'measured' ? aggregate.octave.cents ?? undefined : undefined,
+          compoundFifthFreq: undefined,
+          compoundFifthCents:
+            aggregate.compoundFifth.status === 'measured' ? aggregate.compoundFifth.cents ?? undefined : undefined,
+        },
+      });
+    });
+
+    navigate('/contact');
   };
 
   if (!state.notesCount) {
@@ -184,6 +220,9 @@ const CertificationReviewPage: React.FC = () => {
       <div className="page-actions" style={{ marginTop: '1rem' }}>
         <button className="btn btn-secondary" onClick={() => navigate('/certification/check')}>
           Back to measurement
+        </button>
+        <button className="btn btn-secondary" onClick={handleContactClick}>
+          Request Professional Evaluation
         </button>
         <button className="btn btn-primary" onClick={handleFinalize}>
           Finalize Certified Report
