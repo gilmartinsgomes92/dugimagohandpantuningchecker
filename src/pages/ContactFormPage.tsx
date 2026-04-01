@@ -150,7 +150,7 @@ const ContactFormPage: React.FC = () => {
 
     navigate('/confirmation', { state: { mode: isFeedbackMode ? 'feedback' : 'contact' } });
 
-  } catch (err) {
+  } catch {
     setSubmitError('Could not send your request. Please try again.');
   } finally {
     setIsSubmitting(false);
