@@ -112,45 +112,57 @@ const WelcomePage: React.FC = () => {
         </ul>
 
         <div className="welcome-cta-group">
-          <button
-            className="btn btn-primary btn-large"
-            onClick={() => navigate('/notes-count-selection')}
-          >
-            Start Check
-          </button>
+          <div className="welcome-cta-item">
+            <button
+              className="btn btn-primary btn-large"
+              onClick={() => navigate('/notes-count-selection')}
+            >
+              Start Check
+            </button>
+            <p className="welcome-helper">Quick tuning overview for your handpan</p>
+          </div>
 
-          <button
-            className="btn btn-secondary btn-large"
-            style={buttonWithIconStyle}
-            onClick={() => navigate('/scale-identify')}
-          >
-            <span style={iconWrapStyle} aria-hidden="true">
-              <MusicIcon />
-            </span>
-            <span style={textWrapStyle}>Identify My Scale</span>
-          </button>
+          <div className="welcome-cta-item">
+            <button
+              className="btn btn-secondary btn-large"
+              style={buttonWithIconStyle}
+              onClick={() => navigate('/scale-identify')}
+            >
+              <span style={iconWrapStyle} aria-hidden="true">
+                <MusicIcon />
+              </span>
+              <span style={textWrapStyle}>Identify My Scale</span>
+            </button>
+            <p className="welcome-helper">Find your handpan scale from the notes you play</p>
+          </div>
 
-          <button
-            className="btn btn-premium btn-large"
-            style={buttonWithIconStyle}
-            onClick={handleCertifiedReportClick}
-          >
-            <span style={iconWrapStyle} aria-hidden="true">
-              <ShieldCheckIcon />
-            </span>
-            <span style={textWrapStyle}>Certified Tuning Report</span>
-          </button>
+          <div className="welcome-cta-item">
+            <button
+              className="btn btn-premium btn-large"
+              style={buttonWithIconStyle}
+              onClick={handleCertifiedReportClick}
+            >
+              <span style={iconWrapStyle} aria-hidden="true">
+                <ShieldCheckIcon />
+              </span>
+              <span style={textWrapStyle}>Certified Tuning Report</span>
+            </button>
+            <p className="welcome-helper">Detailed tuning report for buy/sell transactions</p>
+          </div>
 
-          <button
-            className="btn btn-premium btn-large"
-            style={buttonWithIconStyle}
-            onClick={() => navigate('/verify')}
-          >
-            <span style={iconWrapStyle} aria-hidden="true">
-              <SearchIcon />
-            </span>
-            <span style={textWrapStyle}>Verify Report ID</span>
-          </button>
+          <div className="welcome-cta-item">
+            <button
+              className="btn btn-premium btn-large"
+              style={buttonWithIconStyle}
+              onClick={() => navigate('/verify')}
+            >
+              <span style={iconWrapStyle} aria-hidden="true">
+                <SearchIcon />
+              </span>
+              <span style={textWrapStyle}>Verify Report ID</span>
+            </button>
+            <p className="welcome-helper">Check whether a certified report is authentic</p>
+          </div>
 
           <p className="welcome-privacy">
             Mic permission required. Audio stays on your device.
