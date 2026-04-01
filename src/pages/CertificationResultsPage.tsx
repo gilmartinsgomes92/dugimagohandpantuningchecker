@@ -40,13 +40,14 @@ const CertificationResultsPage: React.FC = () => {
   const [historyInstruments, setHistoryInstruments] = useState<InstrumentRecord[]>([]);
   const [savedInstrumentId, setSavedInstrumentId] = useState<string | null>(null);
   const [savedInstrumentName, setSavedInstrumentName] = useState<string>('');
-  const [autoCreatedInstrumentId, setAutoCreatedInstrumentId] = useState<string | null>(null);
   const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
   const [moveState, setMoveState] = useState<'idle' | 'moving' | 'moved' | 'error'>('idle');
   const [moveMessage, setMoveMessage] = useState<string>('');
   const [newInstrumentName, setNewInstrumentName] = useState<string>('');
   const [createState, setCreateState] = useState<'idle' | 'creating' | 'created' | 'error'>('idle');
   const [createMessage, setCreateMessage] = useState<string>('');
+  const [assignmentMode, setAssignmentMode] = useState<'none' | 'existing' | 'new'>('none');
+  const [savedInstrumentWasAutoCreated, setSavedInstrumentWasAutoCreated] = useState(false);
   const lastSavedSignatureRef = useRef<string | null>(null);
   const lastHistorySavedSignatureRef = useRef<string | null>(null);
 
@@ -158,10 +159,10 @@ const CertificationResultsPage: React.FC = () => {
         setHistoryInstruments([]);
         setSavedInstrumentId(null);
         setSavedInstrumentName('');
-        setAutoCreatedInstrumentId(null);
         setSelectedInstrumentId('');
         setNewInstrumentName('');
-        setAutoCreatedInstrumentId(null);
+        setAssignmentMode('none');
+        setSavedInstrumentWasAutoCreated(false);
         return;
       }
 
@@ -186,12 +187,13 @@ const CertificationResultsPage: React.FC = () => {
         setHistorySaveMessage(`Saved to your account history under ${result.instrumentName ?? 'this instrument'}.`);
         setSavedInstrumentId(result.instrumentId ?? null);
         setSavedInstrumentName(result.instrumentName ?? '');
-        setAutoCreatedInstrumentId(result.createdNewInstrument ? result.instrumentId ?? null : null);
         setMoveState('idle');
         setMoveMessage('');
         setCreateState('idle');
         setCreateMessage('');
         setNewInstrumentName('');
+        setAssignmentMode('none');
+        setSavedInstrumentWasAutoCreated(Boolean(result.instrumentWasCreated));
 
         const instrumentsResult = await listUserInstruments(data.user);
         if (cancelled) return;
@@ -209,10 +211,11 @@ const CertificationResultsPage: React.FC = () => {
         setHistorySaveMessage(result.error ?? 'Could not save this certified report to your account history.');
         setSavedInstrumentId(null);
         setSavedInstrumentName('');
-        setAutoCreatedInstrumentId(null);
         setHistoryInstruments([]);
         setSelectedInstrumentId('');
         setNewInstrumentName('');
+        setAssignmentMode('none');
+        setSavedInstrumentWasAutoCreated(false);
       }
     });
 
@@ -221,12 +224,31 @@ const CertificationResultsPage: React.FC = () => {
     };
   }, [aggregates, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
 
-  useEffect(() => {
-    if (moveState === 'moved' || moveState === 'error') {
-      setMoveState('idle');
-      setMoveMessage('');
+
+  const reloadInstrumentsForUser = async (user: User) => {
+    const instrumentsResult = await listUserInstruments(user);
+    if (instrumentsResult.ok) {
+      const instruments = instrumentsResult.instruments ?? [];
+      setHistoryInstruments(instruments);
+      return instruments;
     }
-  }, [selectedInstrumentId]);
+
+    setHistoryInstruments([]);
+    return [] as InstrumentRecord[];
+  };
+
+  const maybeCleanUpPreviousAutoInstrument = async (previousInstrumentId: string | null, nextInstrumentId: string, user: User) => {
+    if (!savedInstrumentWasAutoCreated || !previousInstrumentId || previousInstrumentId === nextInstrumentId) {
+      return false;
+    }
+
+    const cleanupResult = await deleteInstrumentIfEmpty({
+      user,
+      instrumentId: previousInstrumentId,
+    });
+
+    return Boolean(cleanupResult.ok && cleanupResult.deleted);
+  };
 
   const handleStartOver = () => {
     dispatch({ type: 'RESET_CERTIFICATION_SESSION' });
@@ -296,23 +318,22 @@ const CertificationResultsPage: React.FC = () => {
       return;
     }
 
-    if (autoCreatedInstrumentId && previousInstrumentId === autoCreatedInstrumentId) {
-      await deleteInstrumentIfEmpty({
-        user: historyUser,
-        instrumentId: previousInstrumentId,
-      });
-      setAutoCreatedInstrumentId(null);
-    }
+    const nextInstrumentId = result.instrumentId ?? selectedInstrumentId;
+    const cleanedUp = await maybeCleanUpPreviousAutoInstrument(previousInstrumentId, nextInstrumentId, historyUser);
 
-    setSavedInstrumentId(result.instrumentId ?? selectedInstrumentId);
+    setSavedInstrumentId(nextInstrumentId);
     setSavedInstrumentName(result.instrumentName ?? savedInstrumentName);
+    setSavedInstrumentWasAutoCreated(false);
     setMoveState('moved');
-    setMoveMessage(`Report moved to ${result.instrumentName ?? 'the selected instrument'}.`);
+    setMoveMessage(
+      cleanedUp
+        ? `Report moved to ${result.instrumentName ?? 'the selected instrument'}. The temporary suggested instrument was removed because it became empty.`
+        : `Report moved to ${result.instrumentName ?? 'the selected instrument'}.`
+    );
+    setAssignmentMode('none');
 
-    const instrumentsResult = await listUserInstruments(historyUser);
-    if (instrumentsResult.ok) {
-      setHistoryInstruments(instrumentsResult.instruments ?? []);
-    }
+    const instruments = await reloadInstrumentsForUser(historyUser);
+    setSelectedInstrumentId(nextInstrumentId || instruments[0]?.id || '');
   };
 
   const handleCreateInstrumentAndMoveReport = async () => {
@@ -360,24 +381,23 @@ const CertificationResultsPage: React.FC = () => {
       return;
     }
 
-    if (autoCreatedInstrumentId && previousInstrumentId === autoCreatedInstrumentId) {
-      await deleteInstrumentIfEmpty({
-        user: historyUser,
-        instrumentId: previousInstrumentId,
-      });
-      setAutoCreatedInstrumentId(null);
-    }
+    const nextInstrumentId = moveResult.instrumentId ?? createResult.instrument.id;
+    const cleanedUp = await maybeCleanUpPreviousAutoInstrument(previousInstrumentId, nextInstrumentId, historyUser);
 
-    setSavedInstrumentId(moveResult.instrumentId ?? createResult.instrument.id);
+    setSavedInstrumentId(nextInstrumentId);
     setSavedInstrumentName(moveResult.instrumentName ?? createResult.instrument.name);
+    setSavedInstrumentWasAutoCreated(false);
     setCreateState('created');
-    setCreateMessage(`Created ${moveResult.instrumentName ?? createResult.instrument.name} and moved this report there.`);
+    setCreateMessage(
+      cleanedUp
+        ? `Created ${moveResult.instrumentName ?? createResult.instrument.name}, moved this report there, and removed the empty temporary suggestion.`
+        : `Created ${moveResult.instrumentName ?? createResult.instrument.name} and moved this report there.`
+    );
     setNewInstrumentName('');
+    setAssignmentMode('none');
 
-    const instrumentsResult = await listUserInstruments(historyUser);
-    if (instrumentsResult.ok) {
-      setHistoryInstruments(instrumentsResult.instruments ?? []);
-    }
+    const instruments = await reloadInstrumentsForUser(historyUser);
+    setSelectedInstrumentId(nextInstrumentId || instruments[0]?.id || '');
   };
 
   return (
@@ -408,105 +428,167 @@ const CertificationResultsPage: React.FC = () => {
 
       {canShowAssignmentSection ? (
         <div className="cert-start-card cert-start-card-muted" style={{ marginBottom: '1.5rem' }}>
-          <strong>Organize this report</strong>
+          <strong>Organize this saved report</strong>
           <div style={{ marginTop: '0.5rem' }}>
-            Currently saved under <strong>{currentAssignedInstrument?.name ?? savedInstrumentName ?? 'this instrument'}</strong>. You can keep it there, move it to an existing instrument, or create a custom instrument name.
+            This report is currently saved under <strong>{currentAssignedInstrument?.name ?? savedInstrumentName ?? 'this instrument'}</strong>.
+            {savedInstrumentWasAutoCreated ? ' That instrument name was suggested automatically from the detected scale.' : ''}
           </div>
 
-          <div style={{ marginTop: '1rem' }}>
-            <div style={{ fontWeight: 700, marginBottom: '0.45rem' }}>Move to an existing instrument</div>
-            <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                flexWrap: 'wrap',
-                alignItems: 'center',
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              flexWrap: 'wrap',
+              marginTop: '1rem',
+            }}
+          >
+            <button
+              type="button"
+              className={assignmentMode === 'none' ? 'btn btn-primary' : 'btn btn-secondary'}
+              onClick={() => {
+                setAssignmentMode('none');
+                setMoveState('idle');
+                setMoveMessage('');
+                setCreateState('idle');
+                setCreateMessage('');
               }}
             >
-              <select
-                value={selectedInstrumentId}
-                onChange={(e) => setSelectedInstrumentId(e.target.value)}
-                style={{
-                  flex: '1 1 260px',
-                  minWidth: '220px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid #2f2f2f',
-                  background: '#181818',
-                  color: '#fff',
-                  fontSize: '1rem',
-                }}
-              >
-                {historyInstruments.map((instrument) => (
-                  <option key={instrument.id} value={instrument.id}>
-                    {instrument.name}
-                  </option>
-                ))}
-              </select>
+              Keep as is
+            </button>
+            {hasOtherExistingInstruments ? (
               <button
                 type="button"
-                className="btn btn-secondary"
-                onClick={handleMoveReport}
-                disabled={moveState === 'moving' || !selectedInstrumentId || selectedInstrumentId === savedInstrumentId}
+                className={assignmentMode === 'existing' ? 'btn btn-primary' : 'btn btn-secondary'}
+                onClick={() => {
+                  setAssignmentMode('existing');
+                  setCreateState('idle');
+                  setCreateMessage('');
+                }}
               >
-                {moveState === 'moving' ? 'Moving…' : 'Move report'}
+                Choose existing
               </button>
-            </div>
-            <div style={{ marginTop: '0.75rem', color: moveState === 'error' ? '#ff9a9a' : '#d6d6d6' }}>
-              {moveMessage || (
-                hasOtherExistingInstruments
-                  ? 'Choose one of your existing instruments to reassign this already-saved certified report.'
-                  : 'This report is currently your only instrument entry. Create a new instrument below if you want to separate another D Kurd or similar instrument.'
-              )}
-            </div>
+            ) : null}
+            <button
+              type="button"
+              className={assignmentMode === 'new' ? 'btn btn-primary' : 'btn btn-secondary'}
+              onClick={() => {
+                setAssignmentMode('new');
+                setMoveState('idle');
+                setMoveMessage('');
+              }}
+            >
+              Create new instrument
+            </button>
           </div>
 
-          <div style={{ marginTop: '1.2rem' }}>
-            <div style={{ fontWeight: 700, marginBottom: '0.45rem' }}>Create a new instrument for this report</div>
-            <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-              }}
-            >
-              <input
-                type="text"
-                value={newInstrumentName}
-                onChange={(e) => {
-                  setNewInstrumentName(e.target.value);
-                  if (createState === 'created' || createState === 'error') {
-                    setCreateState('idle');
-                    setCreateMessage('');
-                  }
-                }}
-                placeholder={suggestedScaleLabel ? `e.g. ${suggestedScaleLabel} #2` : 'e.g. My second D Kurd'}
+          {assignmentMode === 'none' ? (
+            <div style={{ marginTop: '0.85rem', color: '#d6d6d6' }}>
+              {savedInstrumentWasAutoCreated
+                ? 'You can keep the suggested instrument name, move this report to another instrument, or create a more personal name.'
+                : 'Everything is already saved. You can still reassign this report if you want to organize it differently.'}
+            </div>
+          ) : null}
+
+          {assignmentMode === 'existing' ? (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ fontWeight: 700, marginBottom: '0.45rem' }}>Move to an existing instrument</div>
+              <div
                 style={{
-                  flex: '1 1 260px',
-                  minWidth: '220px',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid #2f2f2f',
-                  background: '#181818',
-                  color: '#fff',
-                  fontSize: '1rem',
-                  boxSizing: 'border-box',
+                  display: 'flex',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
                 }}
-              />
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleCreateInstrumentAndMoveReport}
-                disabled={createState === 'creating' || !newInstrumentName.trim()}
               >
-                {createState === 'creating' ? 'Creating…' : 'Create and move report'}
-              </button>
+                <select
+                  value={selectedInstrumentId}
+                  onChange={(e) => {
+                    setSelectedInstrumentId(e.target.value);
+                    if (moveState === 'moved' || moveState === 'error') {
+                      setMoveState('idle');
+                      setMoveMessage('');
+                    }
+                  }}
+                  style={{
+                    flex: '1 1 260px',
+                    minWidth: '220px',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #2f2f2f',
+                    background: '#181818',
+                    color: '#fff',
+                    fontSize: '1rem',
+                  }}
+                >
+                  {historyInstruments.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>
+                      {instrument.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleMoveReport}
+                  disabled={moveState === 'moving' || !selectedInstrumentId || selectedInstrumentId === savedInstrumentId}
+                >
+                  {moveState === 'moving' ? 'Moving…' : 'Move report'}
+                </button>
+              </div>
+              <div style={{ marginTop: '0.75rem', color: moveState === 'error' ? '#ff9a9a' : '#d6d6d6' }}>
+                {moveMessage || 'Choose one of your existing instruments to reassign this certified report.'}
+              </div>
             </div>
-            <div style={{ marginTop: '0.75rem', color: createState === 'error' ? '#ff9a9a' : '#d6d6d6' }}>
-              {createMessage || 'This is useful when two different handpans share the same detected scale and you want separate instrument groups.'}
+          ) : null}
+
+          {assignmentMode === 'new' ? (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ fontWeight: 700, marginBottom: '0.45rem' }}>Create a new instrument for this report</div>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                <input
+                  type="text"
+                  value={newInstrumentName}
+                  onChange={(e) => {
+                    setNewInstrumentName(e.target.value);
+                    if (createState === 'created' || createState === 'error') {
+                      setCreateState('idle');
+                      setCreateMessage('');
+                    }
+                  }}
+                  placeholder={suggestedScaleLabel ? `e.g. ${suggestedScaleLabel} #2` : 'e.g. My second D Kurd'}
+                  style={{
+                    flex: '1 1 260px',
+                    minWidth: '220px',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #2f2f2f',
+                    background: '#181818',
+                    color: '#fff',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCreateInstrumentAndMoveReport}
+                  disabled={createState === 'creating' || !newInstrumentName.trim()}
+                >
+                  {createState === 'creating' ? 'Creating…' : 'Create and move report'}
+                </button>
+              </div>
+              <div style={{ marginTop: '0.75rem', color: createState === 'error' ? '#ff9a9a' : '#d6d6d6' }}>
+                {createMessage || 'Use this when two different handpans share the same detected scale and you want a separate instrument name.'}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       ) : null}
 
