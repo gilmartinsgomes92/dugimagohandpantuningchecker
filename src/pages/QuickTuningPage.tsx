@@ -125,6 +125,16 @@ const QuickTuningPage: React.FC = () => {
 
   const registeredCount = state.tuningResults.filter((r) => r.status !== 'pending').length;
 
+  const handleSendFeedback = () => {
+    stopListening();
+    navigate('/contact', {
+      state: {
+        mode: 'feedback',
+        returnTo: '/quick-tuning',
+      },
+    });
+  };
+
   useEffect(() => {
     if (!state.notesCount) navigate('/notes-count-selection');
   }, [state.notesCount, navigate]);
@@ -594,6 +604,12 @@ if (result.compoundFifthFrequency !== null) {
             disabled={registeredCount === 0}
           >
             View Results →
+          </button>
+        </div>
+
+        <div className="feedback-link-row">
+          <button type="button" className="feedback-link-button" onClick={handleSendFeedback}>
+            Send feedback
           </button>
         </div>
       </div>
