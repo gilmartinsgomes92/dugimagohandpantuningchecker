@@ -14,10 +14,11 @@ type InstrumentWithReports = InstrumentHistory extends Array<infer T> ? T : neve
 
 const MyReportsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [checkingSession, setCheckingSession] = useState(true);
+  const hasSupabase = isSupabaseConfigured() && Boolean(supabase);
+  const [checkingSession, setCheckingSession] = useState(hasSupabase);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(hasSupabase);
+  const [error, setError] = useState<string>(hasSupabase ? '' : 'Supabase is not configured yet.');
   const [infoMessage, setInfoMessage] = useState<string>('');
   const [instruments, setInstruments] = useState<InstrumentHistory>([] as InstrumentHistory);
   const [editingInstrumentId, setEditingInstrumentId] = useState<string | null>(null);
@@ -30,16 +31,14 @@ const MyReportsPage: React.FC = () => {
   const [deletingInstrumentId, setDeletingInstrumentId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured() || !supabase) {
-      setCheckingSession(false);
-      setLoading(false);
-      setError('Supabase is not configured yet.');
+    if (!hasSupabase) {
       return;
     }
 
+    const supabaseClient = supabase!;
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabaseClient.auth.getUser().then(({ data }) => {
       if (!mounted) return;
       if (!data.user) {
         navigate('/login');
@@ -52,16 +51,21 @@ const MyReportsPage: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [navigate]);
+  }, [hasSupabase, navigate]);
 
   useEffect(() => {
     if (!user) return;
 
     let cancelled = false;
-    setLoading(true);
-    setError('');
 
-    listInstrumentHistory(user).then((result) => {
+    const loadHistory = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+
+      setLoading(true);
+      setError('');
+
+      const result = await listInstrumentHistory(user);
       if (cancelled) return;
 
       if (!result.ok) {
@@ -72,7 +76,9 @@ const MyReportsPage: React.FC = () => {
 
       setInstruments(result.instruments ?? ([] as InstrumentHistory));
       setLoading(false);
-    });
+    };
+
+    void loadHistory();
 
     return () => {
       cancelled = true;
