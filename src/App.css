@@ -1421,6 +1421,74 @@
   font-size: 0.85rem;
 }
 
+.registered-note-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #111;
+  border: 1px solid #1c1c1c;
+}
+
+.registered-note-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.registered-note-card .reg-note-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.registered-note-partials {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.registered-partial-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.84rem;
+}
+
+.registered-partial-label {
+  color: #9a9a9a;
+}
+
+.registered-partial-value {
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .registered-note-card-header,
+  .registered-partial-row {
+    gap: 8px;
+  }
+
+  .registered-note-card .reg-note-status {
+    font-size: 0.68rem;
+    padding: 4px 8px;
+  }
+
+  .registered-partial-label,
+  .registered-partial-value {
+    font-size: 0.8rem;
+  }
+}
+
 /* ============================================================
    Additional tuning status badges
    ============================================================ */
