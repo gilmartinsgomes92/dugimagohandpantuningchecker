@@ -1,10 +1,36 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  ensureUserProfile,
+  formatPlanName,
+  getAccountProfile,
+  getBillingAccessStatus,
+  updateMarketingPreference,
+  wixBillingLinks,
+  type AccountProfile,
+} from '../utils/accountProfile';
 
 type AuthMode = 'password-signin' | 'password-signup';
+
+const inputStyle: CSSProperties = {
+  padding: '12px 14px',
+  borderRadius: '10px',
+  border: '1px solid #d3d7de',
+};
+
+const primaryButtonStyle: CSSProperties = {
+  marginTop: '8px',
+  border: 'none',
+  borderRadius: '10px',
+  padding: '12px 16px',
+  fontWeight: 600,
+  color: '#ffffff',
+  background: '#2754ff',
+  cursor: 'pointer',
+};
 
 export default function LoginPage() {
   const authEnabled = isSupabaseConfigured() && !!supabase;
@@ -12,12 +38,51 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [marketingSignupOptIn, setMarketingSignupOptIn] = useState(false);
   const [mode, setMode] = useState<AuthMode>('password-signin');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [user, setUser] = useState<User | null>(null);
+  const [accountProfile, setAccountProfile] = useState<AccountProfile | null>(null);
   const [checkingSession, setCheckingSession] = useState(authEnabled);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [preferencesStatus, setPreferencesStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [preferencesMessage, setPreferencesMessage] = useState('');
+  const [marketingPreference, setMarketingPreference] = useState(false);
+
+  const billingStatus = getBillingAccessStatus(accountProfile);
+
+  const loadProfile = useCallback(async (nextUser: User | null, options?: { marketingOptIn?: boolean; marketingOptInSource?: string }) => {
+    if (!nextUser || !authEnabled) {
+      setAccountProfile(null);
+      setMarketingPreference(false);
+      setProfileLoading(false);
+      return;
+    }
+
+    setProfileLoading(true);
+
+    const ensured = await ensureUserProfile(nextUser, options);
+    if (!ensured.ok) {
+      setAccountProfile(null);
+      setMarketingPreference(false);
+      setProfileLoading(false);
+      return;
+    }
+
+    const profileResult = await getAccountProfile(nextUser);
+    if (!profileResult.ok) {
+      setAccountProfile(ensured.profile ?? null);
+      setMarketingPreference(Boolean(ensured.profile?.marketingOptIn));
+      setProfileLoading(false);
+      return;
+    }
+
+    setAccountProfile(profileResult.profile);
+    setMarketingPreference(Boolean(profileResult.profile.marketingOptIn));
+    setProfileLoading(false);
+  }, [authEnabled]);
 
   useEffect(() => {
     if (!authEnabled || !supabase) {
@@ -32,7 +97,11 @@ export default function LoginPage() {
       if (!isMounted) return;
 
       if (!error) {
-        setUser(data.user ?? null);
+        const nextUser = data.user ?? null;
+        setUser(nextUser);
+        if (nextUser) {
+          await loadProfile(nextUser);
+        }
       }
 
       setCheckingSession(false);
@@ -43,7 +112,15 @@ export default function LoginPage() {
     const {
       data: { subscription },
     } = authClient.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+
+      if (nextUser) {
+        void loadProfile(nextUser);
+      } else {
+        setAccountProfile(null);
+        setMarketingPreference(false);
+      }
 
       if (event === 'PASSWORD_RECOVERY') {
         setRecoveryMode(true);
@@ -56,7 +133,7 @@ export default function LoginPage() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [authEnabled]);
+  }, [authEnabled, loadProfile]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -100,11 +177,14 @@ export default function LoginPage() {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           emailRedirectTo: 'https://tuner.dugimago.com/login',
+          data: {
+            marketing_opt_in: marketingSignupOptIn,
+          },
         },
       });
 
@@ -114,8 +194,19 @@ export default function LoginPage() {
         return;
       }
 
+      if (data.user) {
+        await loadProfile(data.user, {
+          marketingOptIn: marketingSignupOptIn,
+          marketingOptInSource: 'app_signup',
+        });
+      }
+
       setStatus('success');
-      setMessage('Account created. Check your email to confirm your account.');
+      setMessage(
+        marketingSignupOptIn
+          ? 'Account created. Check your email to confirm your account. You are also marked to receive Dugimago updates and occasional offers.'
+          : 'Account created. Check your email to confirm your account.',
+      );
     } catch {
       setStatus('error');
       setMessage('Something went wrong.');
@@ -199,6 +290,35 @@ export default function LoginPage() {
     }
   };
 
+  const handleSavePreferences = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!user) {
+      setPreferencesStatus('error');
+      setPreferencesMessage('Sign in to update your email preferences.');
+      return;
+    }
+
+    setPreferencesStatus('loading');
+    setPreferencesMessage('Saving your email preferences…');
+
+    const profileResult = await updateMarketingPreference(user, marketingPreference);
+    if (!profileResult.ok) {
+      setPreferencesStatus('error');
+      setPreferencesMessage(profileResult.error ?? 'Could not update your email preferences.');
+      return;
+    }
+
+    setAccountProfile(profileResult.profile);
+    setMarketingPreference(profileResult.profile.marketingOptIn);
+    setPreferencesStatus('success');
+    setPreferencesMessage(
+      profileResult.profile.marketingOptIn
+        ? 'You are opted in to receive Dugimago updates and occasional offers.'
+        : 'You are opted out of marketing emails.',
+    );
+  };
+
   const handleSignOut = async () => {
     if (!supabase) return;
 
@@ -217,10 +337,14 @@ export default function LoginPage() {
       setStatus('idle');
       setMessage('Signed out successfully.');
       setUser(null);
+      setAccountProfile(null);
       setPassword('');
       setRecoveryMode(false);
       setNewPassword('');
       setConfirmNewPassword('');
+      setPreferencesStatus('idle');
+      setPreferencesMessage('');
+      setMarketingPreference(false);
     } catch {
       setStatus('error');
       setMessage('Something went wrong signing out.');
@@ -247,7 +371,7 @@ export default function LoginPage() {
       <div
         style={{
           width: '100%',
-          maxWidth: '440px',
+          maxWidth: '520px',
           background: '#ffffff',
           borderRadius: '16px',
           padding: '28px',
@@ -273,7 +397,7 @@ export default function LoginPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Minimum 6 characters"
-                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                  style={inputStyle}
                 />
               </label>
 
@@ -284,23 +408,14 @@ export default function LoginPage() {
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
                   placeholder="Repeat your password"
-                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                  style={inputStyle}
                 />
               </label>
 
               <button
                 type="submit"
                 disabled={status === 'loading'}
-                style={{
-                  marginTop: '8px',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  fontWeight: 600,
-                  color: '#ffffff',
-                  background: '#2754ff',
-                  cursor: 'pointer',
-                }}
+                style={primaryButtonStyle}
               >
                 {status === 'loading' ? 'Saving...' : 'Update password'}
               </button>
@@ -312,19 +427,113 @@ export default function LoginPage() {
               Signed in as <strong>{user.email}</strong>
             </p>
 
+            <div
+              style={{
+                borderRadius: '14px',
+                padding: '16px',
+                border: '1px solid #e4e7ec',
+                background: '#f8fbff',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937', marginBottom: '6px' }}>Billing status</div>
+              {profileLoading ? (
+                <div style={{ color: '#5b6470', lineHeight: 1.5 }}>Loading account profile…</div>
+              ) : (
+                <>
+                  <div style={{ color: '#1f2937', lineHeight: 1.6 }}>
+                    <strong>Plan:</strong> {formatPlanName(accountProfile?.planSlug)}
+                    <br />
+                    <strong>Report credits:</strong> {accountProfile?.reportCredits ?? 0}
+                    <br />
+                    <strong>Certified report access:</strong>{' '}
+                    {billingStatus.canCreateCertifiedReports ? 'Available' : 'Locked until a plan or credits are added'}
+                  </div>
+
+                  <div style={{ marginTop: '12px', color: '#5b6470', lineHeight: 1.5, fontSize: '14px' }}>
+                    {billingStatus.requiresEntitlement
+                      ? 'This account structure is ready for Wix-linked plans and credit packs. When billing is enabled, certified reports can be controlled here.'
+                      : 'Certified reports are still open during launch mode. Credits and recurring plans can be switched on later without changing the account structure.'}
+                  </div>
+
+                  {(wixBillingLinks.buyCredits || wixBillingLinks.playerPlan || wixBillingLinks.makerPlan) ? (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px' }}>
+                      {wixBillingLinks.buyCredits ? (
+                        <a href={wixBillingLinks.buyCredits} target="_blank" rel="noreferrer" style={{ ...primaryButtonStyle, marginTop: 0, textDecoration: 'none', display: 'inline-flex' }}>
+                          Buy report credits
+                        </a>
+                      ) : null}
+                      {wixBillingLinks.playerPlan ? (
+                        <a href={wixBillingLinks.playerPlan} target="_blank" rel="noreferrer" style={{ ...primaryButtonStyle, marginTop: 0, textDecoration: 'none', display: 'inline-flex', background: '#1f2937' }}>
+                          Player plan
+                        </a>
+                      ) : null}
+                      {wixBillingLinks.makerPlan ? (
+                        <a href={wixBillingLinks.makerPlan} target="_blank" rel="noreferrer" style={{ ...primaryButtonStyle, marginTop: 0, textDecoration: 'none', display: 'inline-flex', background: '#0f766e' }}>
+                          Maker plan
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '12px', color: '#5b6470', lineHeight: 1.5, fontSize: '14px' }}>
+                      Add `VITE_WIX_BUY_CREDITS_URL`, `VITE_WIX_PLAYER_PLAN_URL`, and `VITE_WIX_MAKER_PLAN_URL` to expose live purchase buttons here.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <form
+              onSubmit={handleSavePreferences}
+              style={{
+                display: 'grid',
+                gap: '12px',
+                borderRadius: '14px',
+                padding: '16px',
+                border: '1px solid #e4e7ec',
+                background: '#ffffff',
+              }}
+            >
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1f2937' }}>Email preferences</div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', color: '#1f2937', lineHeight: 1.5 }}>
+                <input
+                  type="checkbox"
+                  checked={marketingPreference}
+                  onChange={(e) => setMarketingPreference(e.target.checked)}
+                  style={{ marginTop: '3px' }}
+                />
+                <span>I want to receive Dugimago news, feature updates, and occasional offers by email.</span>
+              </label>
+              <div style={{ color: '#5b6470', fontSize: '14px', lineHeight: 1.5 }}>
+                This prepares the app for a Wix-connected updates list while keeping consent explicit and reversible.
+              </div>
+              <button type="submit" disabled={preferencesStatus === 'loading'} style={primaryButtonStyle}>
+                {preferencesStatus === 'loading' ? 'Saving preferences...' : 'Save email preferences'}
+              </button>
+              {preferencesMessage ? (
+                <div
+                  style={{
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    background: preferencesStatus === 'error' ? '#fff1f1' : '#eef4ff',
+                    color: preferencesStatus === 'error' ? '#9f1d1d' : '#1d3f91',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {preferencesMessage}
+                </div>
+              ) : null}
+            </form>
+
             <button
               type="button"
               onClick={handleSignOut}
               disabled={status === 'loading'}
               style={{
-                border: 'none',
-                borderRadius: '10px',
-                padding: '12px 16px',
-                fontWeight: 600,
-                color: '#ffffff',
-                background: '#1f2937',
-                cursor: 'pointer',
+                ...primaryButtonStyle,
                 width: '100%',
+                background: '#1f2937',
+                marginTop: '16px',
               }}
             >
               {status === 'loading' ? 'Signing out...' : 'Sign out'}
@@ -345,7 +554,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   autoComplete="email"
-                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                  style={inputStyle}
                 />
               </label>
 
@@ -357,23 +566,26 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimum 6 characters"
                   autoComplete={mode === 'password-signup' ? 'new-password' : 'current-password'}
-                  style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #d3d7de' }}
+                  style={inputStyle}
                 />
               </label>
+
+              {mode === 'password-signup' ? (
+                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', color: '#1f2937', lineHeight: 1.5 }}>
+                  <input
+                    type="checkbox"
+                    checked={marketingSignupOptIn}
+                    onChange={(e) => setMarketingSignupOptIn(e.target.checked)}
+                    style={{ marginTop: '3px' }}
+                  />
+                  <span>I want to receive Dugimago news, feature updates, and occasional offers by email.</span>
+                </label>
+              ) : null}
 
               <button
                 type="submit"
                 disabled={status === 'loading'}
-                style={{
-                  marginTop: '8px',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '12px 16px',
-                  fontWeight: 600,
-                  color: '#ffffff',
-                  background: '#2754ff',
-                  cursor: 'pointer',
-                }}
+                style={primaryButtonStyle}
               >
                 {status === 'loading'
                   ? mode === 'password-signup'
