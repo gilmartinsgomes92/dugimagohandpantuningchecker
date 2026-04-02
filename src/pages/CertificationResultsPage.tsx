@@ -17,6 +17,7 @@ import { exportShareCard } from '../utils/exportShareCard';
 import { createCertificationReportRecord, saveCertificationReport } from '../utils/reportRegistry';
 import { certificationAggregateSortKey } from '../utils/certificationOrder';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { consumeCertifiedReportCredit, getBillingAccessStatus } from '../utils/accountProfile';
 import {
   createInstrumentForUser,
   deleteInstrumentIfEmpty,
@@ -51,8 +52,11 @@ const CertificationResultsPage: React.FC = () => {
   const [createMessage, setCreateMessage] = useState<string>('');
   const [assignmentMode, setAssignmentMode] = useState<'none' | 'existing' | 'new'>('none');
   const [savedInstrumentWasAutoCreated, setSavedInstrumentWasAutoCreated] = useState(false);
+  const [billingState, setBillingState] = useState<'idle' | 'saving' | 'saved' | 'error'>(hasSupabase ? 'idle' : 'saved');
+  const [billingMessage, setBillingMessage] = useState(hasSupabase ? '' : 'Launch mode is active. Certified reports are not consuming credits in this environment.');
   const lastSavedSignatureRef = useRef<string | null>(null);
   const lastHistorySavedSignatureRef = useRef<string | null>(null);
+  const lastBillingHandledSignatureRef = useRef<string | null>(null);
 
   const aggregates = useMemo(
     () => [...allAggregates]
@@ -226,6 +230,65 @@ const CertificationResultsPage: React.FC = () => {
     };
   }, [aggregates, hasSupabase, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
 
+  useEffect(() => {
+    if (!reportSignature || lastBillingHandledSignatureRef.current === reportSignature) {
+      return;
+    }
+
+    if (!hasSupabase) {
+      return;
+    }
+
+    if (saveState !== 'saved' || !historyUser) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const applyBilling = async () => {
+      setBillingState('saving');
+      setBillingMessage('Checking whether this certified report should consume a credit…');
+
+      const result = await consumeCertifiedReportCredit(historyUser, verificationId);
+      if (cancelled) return;
+
+      if (!result.ok) {
+        setBillingState('error');
+        setBillingMessage(result.error ?? 'Could not apply billing for this certified report.');
+        return;
+      }
+
+      lastBillingHandledSignatureRef.current = reportSignature;
+      const billingStatus = getBillingAccessStatus(result.profile);
+
+      if (!billingStatus.requiresEntitlement) {
+        setBillingState('saved');
+        setBillingMessage('Launch mode is active. Certified reports are currently not consuming credits.');
+        return;
+      }
+
+      if (billingStatus.hasActivePlan) {
+        setBillingState('saved');
+        setBillingMessage('Your active plan covers this certified report.');
+        return;
+      }
+
+      if (result.consumed) {
+        setBillingState('saved');
+        setBillingMessage(`1 certified report credit used. ${result.profile.reportCredits} credit${result.profile.reportCredits === 1 ? '' : 's'} remaining.`);
+        return;
+      }
+
+      setBillingState('saved');
+      setBillingMessage(`This report did not consume an additional credit. ${result.profile.reportCredits} credit${result.profile.reportCredits === 1 ? '' : 's'} remaining.`);
+    };
+
+    void applyBilling();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSupabase, historyUser, reportSignature, saveState, verificationId]);
 
   const reloadInstrumentsForUser = async (user: User) => {
     const instrumentsResult = await listUserInstruments(user);
@@ -421,11 +484,20 @@ const CertificationResultsPage: React.FC = () => {
 
       <div
         className="cert-start-card cert-start-card-muted"
-        style={{ marginBottom: canShowAssignmentSection ? '1rem' : '1.5rem', borderColor: historySaveState === 'error' ? 'rgba(255,102,102,0.45)' : undefined }}
+        style={{ marginBottom: '1rem', borderColor: historySaveState === 'error' ? 'rgba(255,102,102,0.45)' : undefined }}
       >
         <strong>Account history:</strong> {historySaveState === 'saved' ? 'Saved' : historySaveState === 'saving' ? 'Saving…' : historySaveState === 'error' ? 'Save failed' : historySaveState === 'skipped' ? 'Sign in required' : 'Pending'}
         <br />
         {historySaveMessage || 'When you are signed in, this certified report is also saved automatically to your personal history.'}
+      </div>
+
+      <div
+        className="cert-start-card cert-start-card-muted"
+        style={{ marginBottom: canShowAssignmentSection ? '1rem' : '1.5rem', borderColor: billingState === 'error' ? 'rgba(255,102,102,0.45)' : undefined }}
+      >
+        <strong>Plan & credits:</strong> {billingState === 'saved' ? 'Handled' : billingState === 'saving' ? 'Checking…' : billingState === 'error' ? 'Issue' : 'Pending'}
+        <br />
+        {billingMessage || 'This report can later be connected to player plans, maker plans, or one-off report credits.'}
       </div>
 
       {canShowAssignmentSection ? (
