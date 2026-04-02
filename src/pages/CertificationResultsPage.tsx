@@ -32,10 +32,13 @@ const CertificationResultsPage: React.FC = () => {
   const { state, dispatch } = useCertificationContext();
   const { dispatch: appDispatch } = useAppContext();
   const allAggregates = useCertificationAggregates();
+  const hasSupabase = isSupabaseConfigured() && Boolean(supabase);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string>('');
-  const [historySaveState, setHistorySaveState] = useState<'idle' | 'saving' | 'saved' | 'error' | 'skipped'>('idle');
-  const [historySaveMessage, setHistorySaveMessage] = useState<string>('');
+  const [historySaveState, setHistorySaveState] = useState<'idle' | 'saving' | 'saved' | 'error' | 'skipped'>(hasSupabase ? 'idle' : 'skipped');
+  const [historySaveMessage, setHistorySaveMessage] = useState<string>(
+    hasSupabase ? '' : 'Sign in and connect Supabase to save certified report history to your account.',
+  );
   const [historyUser, setHistoryUser] = useState<User | null>(null);
   const [historyInstruments, setHistoryInstruments] = useState<InstrumentRecord[]>([]);
   const [savedInstrumentId, setSavedInstrumentId] = useState<string | null>(null);
@@ -109,10 +112,14 @@ const CertificationResultsPage: React.FC = () => {
 
     let cancelled = false;
 
-    setSaveState('saving');
-    setSaveMessage('Saving original report to the verification registry…');
+    const saveReport = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
 
-    saveCertificationReport(reportRecord).then((result) => {
+      setSaveState('saving');
+      setSaveMessage('Saving original report to the verification registry…');
+
+      const result = await saveCertificationReport(reportRecord);
       if (cancelled) return;
 
       if (result.ok) {
@@ -123,7 +130,9 @@ const CertificationResultsPage: React.FC = () => {
         setSaveState('error');
         setSaveMessage(result.error ?? 'Could not save this report to the verification registry.');
       }
-    });
+    };
+
+    void saveReport();
 
     return () => {
       cancelled = true;
@@ -135,21 +144,14 @@ const CertificationResultsPage: React.FC = () => {
       return;
     }
 
-    if (!isSupabaseConfigured() || !supabase) {
-      setHistorySaveState('skipped');
-      setHistorySaveMessage('Sign in and connect Supabase to save certified report history to your account.');
-      setHistoryUser(null);
-      setHistoryInstruments([]);
-      setSavedInstrumentId(null);
-      setSavedInstrumentName('');
-      setSelectedInstrumentId('');
-      setNewInstrumentName('');
+    if (!hasSupabase) {
       return;
     }
 
+    const supabaseClient = supabase!;
     let cancelled = false;
 
-    supabase.auth.getUser().then(async ({ data, error }) => {
+    supabaseClient.auth.getUser().then(async ({ data, error }) => {
       if (cancelled) return;
 
       if (error || !data.user) {
@@ -222,7 +224,7 @@ const CertificationResultsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [aggregates, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
+  }, [aggregates, hasSupabase, reportRecord, reportSignature, state.finalizedAt, stats, verificationId, verdict]);
 
 
   const reloadInstrumentsForUser = async (user: User) => {
