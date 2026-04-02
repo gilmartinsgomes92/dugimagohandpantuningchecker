@@ -85,4 +85,4 @@ Before public launch, confirm all of these in production:
 ## Notes
 
 - Large audio-analysis code paths are intentionally kept in the client for responsiveness
-- Route-level lazy loading is enabled to reduce the initial bundle for first-time visitors
+- The current production build ships a single main client bundle; route-level lazy loading is a good next performance pass after launch
