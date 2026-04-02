@@ -10,7 +10,6 @@ Browser-based handpan tuning analysis app built with React, Vite, and TypeScript
 - Shareable result cards and certified report exports
 - Verification flow for report IDs
 - Optional account login and personal report history with Supabase
-- Marketing-consent capture and subscription / report-credit account scaffolding
 
 ## Tech stack
 
@@ -60,28 +59,9 @@ Create a `.env` file based on `env.example`:
 ```env
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-supabase-publishable-anon-key
-VITE_CERTIFIED_REPORTS_REQUIRE_ENTITLEMENT=false
-VITE_WIX_BUY_CREDITS_URL=
-VITE_WIX_PLAYER_PLAN_URL=
-VITE_WIX_MAKER_PLAN_URL=
 ```
 
-If the Supabase values are not set, the tuner still works, but login, account history, and monetization prep are skipped.
-
-Leave `VITE_CERTIFIED_REPORTS_REQUIRE_ENTITLEMENT=false` during launch mode. Flip it to `true` only after your Wix checkout links, entitlement syncing, and credit logic are ready in production.
-
-## Supabase schema
-
-Run these SQL files in order against the same Supabase project used by `VITE_SUPABASE_URL`:
-
-- `db/002_create_supabase_history_tables.sql`
-- `db/003_prepare_marketing_and_billing.sql`
-
-The second file adds:
-
-- marketing consent fields on `profiles`
-- report credits and plan status fields on `profiles`
-- a `billing_events` audit table for credit usage and future Wix sync events
+If these values are not set, the tuner still works, but login and personal history features are skipped.
 
 ## Verification registry
 
