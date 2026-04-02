@@ -570,20 +570,64 @@ if (result.compoundFifthFrequency !== null) {
           <div className="registered-notes-list">
             <h4 className="registered-notes-title">Registered Notes</h4>
             {state.tuningResults.slice(0, registeredCount).map((r, i) => {
-              const color = r.cents !== null ? centsToColor(r.cents) : '#555';
+              const parsedRegisteredNote = parseFullNoteName(r.noteName);
+              const isRegisteredHighNoteDefaultOctaveOnly =
+                parsedRegisteredNote !== null &&
+                parsedRegisteredNote.midiNote >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
+
+              const fundamentalColor = r.cents !== null ? centsToColor(r.cents) : '#555';
+              const octaveColor =
+                r.octaveCents !== null && r.octaveCents !== undefined
+                  ? centsToColor(r.octaveCents)
+                  : '#555';
+              const compoundFifthColor =
+                r.compoundFifthCents !== null && r.compoundFifthCents !== undefined
+                  ? centsToColor(r.compoundFifthCents)
+                  : '#555';
+
               return (
-                <div key={i} className="registered-note-row">
-                  <span className="reg-note-name">{r.noteName}</span>
-                  <span className="reg-note-cents" style={{ color }}>
-                    {r.cents !== null ? formatCents(r.cents) : '—'}
-                  </span>
-                  <span
-                    className={`reg-note-status ${getTuningClassName(
-                      r.status as TuningResult['status']
-                    )}`}
-                  >
-                    {r.status === 'in-tune' ? '✅' : r.status === 'slightly-out-of-tune' ? '⚠️' : '❌'}
-                  </span>
+                <div key={i} className="registered-note-row registered-note-card">
+                  <div className="registered-note-card-header">
+                    <span className="reg-note-name">{r.noteName}</span>
+                    <span
+                      className={`reg-note-status ${getTuningClassName(
+                        r.status as TuningResult['status']
+                      )}`}
+                    >
+                      {r.status === 'in-tune'
+                        ? '✅ In Tune'
+                        : r.status === 'slightly-out-of-tune'
+                          ? '⚠️ Slightly Out'
+                          : '❌ Out of Tune'}
+                    </span>
+                  </div>
+
+                  <div className="registered-note-partials">
+                    <div className="registered-partial-row">
+                      <span className="registered-partial-label">Fundamental</span>
+                      <span className="registered-partial-value" style={{ color: fundamentalColor }}>
+                        {r.cents !== null ? formatCents(r.cents) : '—'}
+                      </span>
+                    </div>
+                    <div className="registered-partial-row">
+                      <span className="registered-partial-label">Octave</span>
+                      <span className="registered-partial-value" style={{ color: octaveColor }}>
+                        {r.octaveCents !== null && r.octaveCents !== undefined
+                          ? formatCents(r.octaveCents)
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="registered-partial-row">
+                      <span className="registered-partial-label">Compound 5th</span>
+                      <span className="registered-partial-value" style={{ color: compoundFifthColor }}>
+                        {isRegisteredHighNoteDefaultOctaveOnly
+                          ? 'N/A'
+                          : r.compoundFifthCents !== null && r.compoundFifthCents !== undefined
+                            ? formatCents(r.compoundFifthCents)
+                            : '—'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               );
             })}
