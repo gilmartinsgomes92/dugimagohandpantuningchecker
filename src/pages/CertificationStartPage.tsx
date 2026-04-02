@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCertificationContext } from '../contexts/CertificationContext';
 
-const NOTE_COUNTS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+const NOTE_COUNTS = Array.from({ length: 24 }, (_, index) => index + 7);
 
 
 const CertificationStartPage: React.FC = () => {
