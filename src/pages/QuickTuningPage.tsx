@@ -25,6 +25,7 @@ const SAME_NOTE_GRACE_MS = 240;
 const MIN_CAPTURE_BEFORE_REGISTER_MS = 950;
 const PREFERRED_CAPTURE_TARGET_MS = 1700;
 const MAX_CAPTURE_BEFORE_FORCE_REGISTER_MS = 2800;
+const FINALIZE_ON_SILENCE_MIN_CAPTURE_MS = 900;
 const HIGH_NOTE_OCTAVE_ONLY_MIDI = 76; // E5 and above default to octave-only in Quick Check
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
@@ -174,6 +175,7 @@ useEffect(() => {
     }
   }, [isListening, result.frequency, result.noteName]);
 
+
   // Navigate to results when all notes are registered
 useEffect(() => {
   if (notesCount > 0 && registeredCount >= notesCount) {
@@ -186,11 +188,11 @@ useEffect(() => {
   }
 }, [registeredCount, notesCount, stopListening, navigate]);
 
-  const registerNote = useCallback(() => {
+  const registerNote = useCallback((options?: { forceNoteName?: string; forceFrequency?: number | null }) => {
     if (justRegistered.current) return;
 
-    const detectedFreq = trimmedMean(stableFrequencies.current) ?? result.frequency;
-    const detectedNoteName = result.noteName;
+    const detectedFreq = options?.forceFrequency ?? trimmedMean(stableFrequencies.current) ?? result.frequency;
+    const detectedNoteName = options?.forceNoteName ?? collectingNoteName.current ?? result.noteName;
     if (detectedFreq === null || detectedNoteName === null) return;
 
     const parsedDetectedNote = parseFullNoteName(detectedNoteName);
@@ -281,6 +283,43 @@ useEffect(() => {
     }, REGISTRATION_COOLDOWN_MS);
   }, [result, noteIndex, dispatch, resetStabilityState]);
 
+  const tryFinalizeCapturedNote = useCallback((mode: 'release' | 'force' = 'release') => {
+    if (justRegistered.current) return false;
+    const capturedNoteName = collectingNoteName.current;
+    if (!capturedNoteName) return false;
+
+    const capturedFreq = trimmedMean(stableFrequencies.current);
+    if (capturedFreq === null) return false;
+
+    const now = performance.now();
+    const captureAgeMs = noteCaptureStartedAt.current > 0 ? now - noteCaptureStartedAt.current : 0;
+    const enoughPartials = hasEnoughPartialEvidence(
+      stableOctaveFreqs.current,
+      stableCFifthFreqs.current,
+    );
+
+    if (mode !== 'force') {
+      if (captureAgeMs < FINALIZE_ON_SILENCE_MIN_CAPTURE_MS) return false;
+      if (!enoughPartials && captureAgeMs < Math.min(PARTIAL_MAX_WAIT_MS, MAX_CAPTURE_BEFORE_FORCE_REGISTER_MS)) {
+        return false;
+      }
+    }
+
+    registerNote({ forceNoteName: capturedNoteName, forceFrequency: capturedFreq });
+    return true;
+  }, [registerNote]);
+
+  useEffect(() => {
+    if (!isListening) return;
+
+    if (result.frequency !== null && result.noteName !== null) return;
+
+    const finalized = tryFinalizeCapturedNote('release');
+    if (finalized) {
+      updateInstructionText('Saved from the settled sustain');
+    }
+  }, [isListening, result.frequency, result.noteName, tryFinalizeCapturedNote, updateInstructionText]);
+
     // Stability ring shows the audio lock quality (0–100%)
   const lockQuality = result.lockQuality ?? 0;
   const stabilityPct = Math.round(Math.min(1, lockQuality / LOCK_THRESHOLD_DISPLAY) * 100);
@@ -310,6 +349,7 @@ useEffect(() => {
         collectingNoteName.current !== null &&
         collectingNoteName.current !== result.noteName
       ) {
+        tryFinalizeCapturedNote('force');
         stableFrequencies.current = [];
         stableOctaveFreqs.current = [];
         stableCFifthFreqs.current = [];
@@ -450,7 +490,7 @@ if (result.compoundFifthFrequency !== null) {
         registerNote();
       });
     }
-  }, [dispatch, isListening, registerNote, resetStabilityRefs, result, shouldRegister, updateInstructionText]);
+  }, [dispatch, isListening, registerNote, resetStabilityRefs, result, shouldRegister, tryFinalizeCapturedNote, updateInstructionText]);
 
   const progressPct = notesCount > 0 ? (registeredCount / notesCount) * 100 : 0;
   const statusColor = result.cents !== null ? centsToColor(result.cents) : '#555';
