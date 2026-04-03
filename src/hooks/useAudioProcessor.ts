@@ -101,7 +101,7 @@ const CENTS_SMOOTH_ALPHA = 0.18;
 /** Strike-window parameters for “one hit lock” (GuitarApp-like behaviour). */
 const IGNORE_AFTER_STRIKE_MS = 110; // skip attack transient
 const MEASURE_WINDOW_MS = 220; // short sustain sampling for initial lock
-const FUNDAMENTAL_TRACK_WINDOW_MS = 2600;
+const FUNDAMENTAL_TRACK_WINDOW_MS = 5200;
 const FUNDAMENTAL_STABLE_WINDOW_MS = 900;
 const FUNDAMENTAL_MIN_STABLE_FRAMES = 5;
 const FUNDAMENTAL_MAX_MAD_CENTS = 8;
@@ -111,14 +111,14 @@ const MAX_WINDOW_FRAMES = 16;
 /** Partial-only lock/refinement windows (do not affect fundamental behaviour). */
 const PARTIAL_IGNORE_AFTER_STRIKE_MS = 130;
 const PARTIAL_DISPLAY_DELAY_MS = 220;
-const PARTIAL_TRACK_WINDOW_MS = 4200;
+const PARTIAL_TRACK_WINDOW_MS = 5200;
 const PARTIAL_STABLE_WINDOW_MS = 1600;
-const PARTIAL_HOLD_MS = 3200;
+const PARTIAL_HOLD_MS = 5000;
 
 const MIN_OCTAVE_FRAMES = 3;
-const MAX_OCTAVE_FRAMES = 56;
+const MAX_OCTAVE_FRAMES = 84;
 const MIN_CFIFTH_FRAMES = 3;
-const MAX_CFIFTH_FRAMES = 56;
+const MAX_CFIFTH_FRAMES = 84;
 
 const OCTAVE_MAX_MAD_CENTS = 22;
 const CFIFTH_MAX_MAD_CENTS = 26;
