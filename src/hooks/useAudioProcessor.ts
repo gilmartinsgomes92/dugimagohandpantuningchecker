@@ -100,7 +100,11 @@ const CENTS_SMOOTH_ALPHA = 0.18;
 
 /** Strike-window parameters for “one hit lock” (GuitarApp-like behaviour). */
 const IGNORE_AFTER_STRIKE_MS = 110; // skip attack transient
-const MEASURE_WINDOW_MS = 220; // short sustain sampling
+const MEASURE_WINDOW_MS = 220; // short sustain sampling for initial lock
+const FUNDAMENTAL_TRACK_WINDOW_MS = 2600;
+const FUNDAMENTAL_STABLE_WINDOW_MS = 900;
+const FUNDAMENTAL_MIN_STABLE_FRAMES = 5;
+const FUNDAMENTAL_MAX_MAD_CENTS = 8;
 const MIN_WINDOW_FRAMES = 6;
 const MAX_WINDOW_FRAMES = 16;
 
@@ -576,30 +580,35 @@ if (rms >= dynamicGate) {
             // Detect note change (new strike window)
             if (noteOnsetMsRef.current === 0) noteOnsetMsRef.current = nowMs;
 
-            // Collect post-attack frames in a short window
+            // Collect post-attack frames for the initial lock window first, then keep
+            // tracking same-note sustain so the live fundamental can continue settling.
             const dt = nowMs - strikeAtMsRef.current;
             if (
               dt >= IGNORE_AFTER_STRIKE_MS &&
-              dt <= IGNORE_AFTER_STRIKE_MS + MEASURE_WINDOW_MS &&
+              dt <= FUNDAMENTAL_TRACK_WINDOW_MS &&
               freq !== null
             ) {
               const cents = clamp(centsFromNominal(freq, nominalFreq), -60, 60);
-              windowFramesRef.current.push({ freq, cents, quality: score, ts: nowMs });
-              if (windowFramesRef.current.length > MAX_WINDOW_FRAMES) {
-                windowFramesRef.current.shift();
-              }
+              pushFrame(
+                windowFramesRef.current,
+                { freq, cents, quality: score, ts: nowMs },
+                MAX_WINDOW_FRAMES * 8,
+              );
             }
 
-            // If we have enough samples, lock using median + stability
+            // Initial lock still comes from the short early window to preserve the current
+            // detector feel, but once locked we let the live fundamental follow the later
+            // stable sustain instead of staying frozen on the attack-biased median.
             let lockedFreq: number | null = null;
 
-            if (windowFramesRef.current.length >= MIN_WINDOW_FRAMES) {
-              const frames = windowFramesRef.current;
-              const freqs = frames.map(f => f.freq);
-              const centsArr = frames.map(f => f.cents);
-              const quals = frames.map(f => f.quality);
+            const initialLockFrames = windowFramesRef.current.filter(
+              (frame) => frame.ts - strikeAtMsRef.current >= IGNORE_AFTER_STRIKE_MS &&
+                frame.ts - strikeAtMsRef.current <= IGNORE_AFTER_STRIKE_MS + MEASURE_WINDOW_MS,
+            );
 
-              const freqMed = median(freqs);
+            if (initialLockFrames.length >= MIN_WINDOW_FRAMES) {
+              const centsArr = initialLockFrames.map((f) => f.cents);
+              const quals = initialLockFrames.map((f) => f.quality);
               const centsMed = median(centsArr);
               const qMed = median(quals);
 
@@ -609,9 +618,25 @@ if (rms >= dynamicGate) {
 
               lastLockQualityRef.current = lockQuality;
 
-              // Only emit a reading once we have a reasonable lock
               if (lockQuality >= 0.55) {
-                lockedFreq = freqMed;
+                const sustainStable = finalizeStableFrequency(
+                  windowFramesRef.current,
+                  FUNDAMENTAL_MIN_STABLE_FRAMES,
+                  FUNDAMENTAL_MAX_MAD_CENTS,
+                  nowMs,
+                  FUNDAMENTAL_STABLE_WINDOW_MS,
+                );
+                const sustainProvisional = finalizeProvisionalFrequency(
+                  windowFramesRef.current,
+                  FUNDAMENTAL_MIN_STABLE_FRAMES,
+                  FUNDAMENTAL_MAX_MAD_CENTS,
+                  nowMs,
+                  FUNDAMENTAL_STABLE_WINDOW_MS,
+                  0.46,
+                  0.55,
+                );
+
+                lockedFreq = sustainStable ?? sustainProvisional ?? freq;
               }
             } else {
               lastLockQualityRef.current = Math.max(0, lastLockQualityRef.current - 0.04);
