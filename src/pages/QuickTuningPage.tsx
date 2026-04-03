@@ -22,6 +22,9 @@ const PARTIAL_MIN_SAMPLES = 4;
 const PARTIAL_EXTRA_HOLD_MS = 900;
 const PARTIAL_MAX_WAIT_MS = 1800;
 const SAME_NOTE_GRACE_MS = 240;
+const MIN_CAPTURE_BEFORE_REGISTER_MS = 950;
+const PREFERRED_CAPTURE_TARGET_MS = 1700;
+const MAX_CAPTURE_BEFORE_FORCE_REGISTER_MS = 2800;
 const HIGH_NOTE_OCTAVE_ONLY_MIDI = 76; // E5 and above default to octave-only in Quick Check
 
 function getTuningStatus(absCents: number): TuningResult['status'] {
@@ -414,8 +417,20 @@ if (result.compoundFifthFrequency !== null) {
         stableOctaveFreqs.current,
         stableCFifthFreqs.current,
       );
+      const shouldDelayForSustain =
+        captureAgeMs < MIN_CAPTURE_BEFORE_REGISTER_MS ||
+        (captureAgeMs < PREFERRED_CAPTURE_TARGET_MS && sameNoteAgeMs >= SAME_NOTE_GRACE_MS);
 
-      if (!enoughPartials && captureAgeMs < PARTIAL_MAX_WAIT_MS && sameNoteAgeMs >= SAME_NOTE_GRACE_MS) {
+      if (shouldDelayForSustain) {
+        updateInstructionText('Hold the note ringing a little longer — saving from the settled sustain');
+        return;
+      }
+
+      if (
+        !enoughPartials &&
+        captureAgeMs < Math.min(PARTIAL_MAX_WAIT_MS, MAX_CAPTURE_BEFORE_FORCE_REGISTER_MS) &&
+        sameNoteAgeMs >= SAME_NOTE_GRACE_MS
+      ) {
         noteWaitingForPartials.current = result.noteName;
         updateInstructionText(
           captureAgeMs >= PARTIAL_EXTRA_HOLD_MS
@@ -425,8 +440,12 @@ if (result.compoundFifthFrequency !== null) {
         return;
       }
 
+      if (captureAgeMs > MAX_CAPTURE_BEFORE_FORCE_REGISTER_MS) {
+        updateInstructionText('Saving the best settled reading available');
+      } else {
+        updateInstructionText('Hold the note ringing — it will be auto-registered');
+      }
       noteWaitingForPartials.current = null;
-      updateInstructionText('Hold the note ringing — it will be auto-registered');
       queueMicrotask(() => {
         registerNote();
       });
