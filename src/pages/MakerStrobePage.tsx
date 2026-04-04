@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MakerStrobeBands from '../components/MakerStrobeBands';
-import { useAudioProcessor } from '../hooks/useAudioProcessor';
-import { centsDeviation, centsToColor, formatCents, midiToFrequency } from '../utils/musicUtils';
+import { useContinuousTargetStrobe } from '../hooks/useContinuousTargetStrobe';
+import { centsToColor, formatCents, midiToFrequency } from '../utils/musicUtils';
 
 type PitchClassOption = { value: string; label: string; semitone: number };
 type LiveSample = {
@@ -28,40 +28,30 @@ const NOTE_OPTIONS: PitchClassOption[] = [
 ];
 
 const OCTAVE_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
-const ACTIVATE_GATE_CENTS = 70;
-const STRONG_LOCK_GATE_CENTS = 28;
+const STRONG_LOCK_GATE_CENTS = 4;
+const TRACKING_GATE_CENTS = 18;
 const FEED_MAX_ENTRIES = 12;
 const HIGH_NOTE_OCTAVE_ONLY_MIDI = 76;
+const LIVE_FEED_MIN_INTERVAL_MS = 90;
 
 function midiFromSelection(semitone: number, octave: number): number {
   return (octave + 1) * 12 + semitone;
 }
 
-function deviationOrNull(detected: number | null, target: number): number | null {
-  if (detected === null || detected <= 0 || target <= 0) return null;
-  return centsDeviation(detected, target);
-}
-
-function statusText(active: boolean, strongLock: boolean, targetLabel: string): string {
+function statusText(active: boolean, tracking: boolean, strongLock: boolean, targetLabel: string): string {
   if (strongLock) return `Locked to ${targetLabel}`;
-  if (active) return `Tracking around ${targetLabel}`;
-  return `Waiting for ${targetLabel}`;
+  if (tracking) return `Tracking around ${targetLabel}`;
+  if (active) return `Listening for ${targetLabel}`;
+  return `Idle strobe — play ${targetLabel}`;
 }
 
 const MakerStrobePage: React.FC = () => {
   const [pitchClass, setPitchClass] = useState<string>('D');
   const [octave, setOctave] = useState<number>(3);
   const [showCompoundFifth, setShowCompoundFifth] = useState(true);
-  const { isListening, result, error, startListening, stopListening } = useAudioProcessor();
   const feedIdRef = useRef(0);
+  const lastFeedPushMsRef = useRef(0);
   const [liveFeed, setLiveFeed] = useState<LiveSample[]>([]);
-
-  useEffect(() => {
-    void startListening();
-    return () => {
-      stopListening();
-    };
-  }, [startListening, stopListening]);
 
   const selectedPitchClass = useMemo(
     () => NOTE_OPTIONS.find((option) => option.value === pitchClass) ?? NOTE_OPTIONS[2],
@@ -80,27 +70,25 @@ const MakerStrobePage: React.FC = () => {
   const isOctaveOnlyDefault = selectedMidi >= HIGH_NOTE_OCTAVE_ONLY_MIDI;
   const compoundFifthEnabled = showCompoundFifth && !isOctaveOnlyDefault;
 
-  const fundamentalCents = useMemo(
-    () => deviationOrNull(result.frequency, targetFundamental),
-    [result.frequency, targetFundamental],
-  );
-  const octaveCents = useMemo(
-    () => deviationOrNull(result.octaveFrequency, targetOctave),
-    [result.octaveFrequency, targetOctave],
-  );
-  const compoundFifthCents = useMemo(
-    () => deviationOrNull(result.compoundFifthFrequency, targetCompoundFifth),
-    [result.compoundFifthFrequency, targetCompoundFifth],
+  const strobe = useContinuousTargetStrobe(
+    targetFundamental,
+    targetOctave,
+    targetCompoundFifth,
   );
 
-  const withinGate = fundamentalCents !== null && Math.abs(fundamentalCents) <= ACTIVATE_GATE_CENTS;
-  const strongLock = fundamentalCents !== null && Math.abs(fundamentalCents) <= STRONG_LOCK_GATE_CENTS;
-  const displayedFundamentalCents = withinGate ? fundamentalCents : null;
-  const displayedOctaveCents = withinGate ? octaveCents : null;
-  const displayedCompoundFifthCents = withinGate && compoundFifthEnabled ? compoundFifthCents : null;
+  const displayedFundamentalCents = strobe.fundamental.cents;
+  const displayedOctaveCents = strobe.octave.cents;
+  const displayedCompoundFifthCents = compoundFifthEnabled ? strobe.compoundFifth.cents : null;
+
+  const hasSignal = strobe.fundamental.active || strobe.octave.active || (compoundFifthEnabled && strobe.compoundFifth.active);
+  const tracking = displayedFundamentalCents !== null && Math.abs(displayedFundamentalCents) <= TRACKING_GATE_CENTS;
+  const strongLock = displayedFundamentalCents !== null && Math.abs(displayedFundamentalCents) <= STRONG_LOCK_GATE_CENTS;
 
   useEffect(() => {
-    if (!withinGate) return;
+    const now = performance.now();
+    if (!hasSignal || now - lastFeedPushMsRef.current < LIVE_FEED_MIN_INTERVAL_MS) return;
+
+    lastFeedPushMsRef.current = now;
     setLiveFeed((current) => {
       const nextEntry: LiveSample = {
         id: ++feedIdRef.current,
@@ -110,10 +98,11 @@ const MakerStrobePage: React.FC = () => {
       };
       return [nextEntry, ...current].slice(0, FEED_MAX_ENTRIES);
     });
-  }, [withinGate, displayedFundamentalCents, displayedOctaveCents, displayedCompoundFifthCents]);
+  }, [hasSignal, displayedFundamentalCents, displayedOctaveCents, displayedCompoundFifthCents]);
 
   useEffect(() => {
     setLiveFeed([]);
+    lastFeedPushMsRef.current = 0;
   }, [pitchClass, octave, compoundFifthEnabled]);
 
   return (
@@ -124,7 +113,7 @@ const MakerStrobePage: React.FC = () => {
             <p className="maker-strobe-eyebrow">Maker mode</p>
             <h1 className="maker-strobe-title">Target-locked strobe tuner</h1>
             <p className="maker-strobe-subtitle">
-              Choose the note first, then play that tonefield. The three vertical bands respond live only when the detected pitch is close to the selected target.
+              Choose the note first, then play that tonefield. The three vertical bands now run continuously and react directly to the live target-locked cents stream instead of waiting for full note registration.
             </p>
           </div>
           <Link className="maker-strobe-back" to="/">
@@ -176,19 +165,19 @@ const MakerStrobePage: React.FC = () => {
             <div>8ve {targetOctave.toFixed(2)} Hz</div>
             <div>{compoundFifthEnabled ? `12th ${targetCompoundFifth.toFixed(2)} Hz` : '12th hidden'}</div>
           </div>
-          <div className={`maker-strobe-status ${strongLock ? 'strong' : withinGate ? 'tracking' : ''}`}>
-            {statusText(withinGate, strongLock, targetLabel)}
+          <div className={`maker-strobe-status ${strongLock ? 'strong' : tracking ? 'tracking' : ''}`}>
+            {statusText(hasSignal, tracking, strongLock, targetLabel)}
           </div>
         </div>
 
         <div className="maker-strobe-layout">
           <div className="maker-strobe-visualizer">
-            <MakerStrobeBands label="Fundamental" cents={displayedFundamentalCents} active={withinGate} />
-            <MakerStrobeBands label="Octave" cents={displayedOctaveCents} active={withinGate && displayedOctaveCents !== null} />
+            <MakerStrobeBands label="Fundamental" cents={displayedFundamentalCents} active={strobe.fundamental.active} />
+            <MakerStrobeBands label="Octave" cents={displayedOctaveCents} active={strobe.octave.active} />
             <MakerStrobeBands
               label="Compound fifth"
               cents={displayedCompoundFifthCents}
-              active={withinGate && compoundFifthEnabled && displayedCompoundFifthCents !== null}
+              active={compoundFifthEnabled && strobe.compoundFifth.active}
             />
           </div>
 
@@ -218,7 +207,7 @@ const MakerStrobePage: React.FC = () => {
                 </strong>
               </div>
               <div className="maker-strobe-hint">
-                The strobe wakes up when the detected pitch is within about ±{ACTIVATE_GATE_CENTS}¢ of {targetLabel}.
+                Bands stay alive even when no pitch is detected. When a pitch enters the target window, motion direction follows the sign of the cents error and speed slows as it approaches 0¢.
               </div>
             </div>
 
@@ -242,10 +231,10 @@ const MakerStrobePage: React.FC = () => {
         </div>
 
         <div className="maker-strobe-footer-note">
-          {error
-            ? `Microphone error: ${error}`
-            : isListening
-              ? 'Mic is live. Strike and hold the selected note so the bands can settle.'
+          {strobe.error
+            ? `Microphone error: ${strobe.error}`
+            : strobe.isListening
+              ? 'Mic is live. The strobe now listens continuously; strike and hold the selected note to see the motion lock in.'
               : 'Starting microphone…'}
         </div>
       </div>
