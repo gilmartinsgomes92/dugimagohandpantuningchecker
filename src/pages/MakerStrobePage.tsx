@@ -57,13 +57,11 @@ const MakerStrobePage: React.FC = () => {
   const [liveFeed, setLiveFeed] = useState<LiveSample[]>([]);
 
   useEffect(() => {
-    if (!isListening) {
-      void startListening();
-    }
+    void startListening();
     return () => {
       stopListening();
     };
-  }, [isListening, startListening, stopListening]);
+  }, [startListening, stopListening]);
 
   const selectedPitchClass = useMemo(
     () => NOTE_OPTIONS.find((option) => option.value === pitchClass) ?? NOTE_OPTIONS[2],
