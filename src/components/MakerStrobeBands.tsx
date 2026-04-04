@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { centsToColor } from '../utils/musicUtils';
+import { centsToColor, formatCents } from '../utils/musicUtils';
 
 interface MakerStrobeBandsProps {
   cents: number | null;
@@ -9,22 +9,18 @@ interface MakerStrobeBandsProps {
 }
 
 const DEFAULT_MAX_DISPLAY_CENTS = 25;
-const IDLE_SPEED = 64;
-const MIN_TRACK_SPEED = 8;
-const MAX_TRACK_SPEED = 260;
-const PERFECT_GLIDE_SPEED = 1.25;
-const STRIPE_HEIGHT = 30;
-const STRIPE_GAP = 18;
-const STRIPE_SPACING = STRIPE_HEIGHT + STRIPE_GAP;
-const STRIPE_SHEAR = 18;
-const TRACK_INSET = 10;
-const CORNER_RADIUS = 18;
+const IDLE_SPEED = 92;
+const MIN_ACTIVE_SPEED = 6;
+const MAX_ACTIVE_SPEED = 360;
+const CENTER_GLIDE_SPEED = 0.8;
+const LAYER_HEIGHT_PERCENT = 220;
+const RESET_DISTANCE = 140;
 
-type RuntimeState = {
-  lastTs: number;
+type MotionState = {
   phase: number;
   velocity: number;
   targetVelocity: number;
+  lastTs: number;
   directionMemory: 1 | -1;
 };
 
@@ -32,27 +28,28 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function velocityFromCents(
+function centsToVelocity(
   cents: number | null,
   active: boolean,
   maxDisplayCents: number,
-  rememberedDirection: 1 | -1,
+  fallbackDirection: 1 | -1,
 ): number {
   if (!active || cents === null || !Number.isFinite(cents)) {
-    return rememberedDirection * IDLE_SPEED;
+    return IDLE_SPEED * fallbackDirection;
   }
 
   const clamped = clamp(cents, -maxDisplayCents, maxDisplayCents);
-  const magnitude = Math.abs(clamped);
+  const absCents = Math.abs(clamped);
 
-  if (magnitude < 0.12) {
-    return rememberedDirection * PERFECT_GLIDE_SPEED;
+  if (absCents < 0.1) {
+    return fallbackDirection * CENTER_GLIDE_SPEED;
   }
 
+  const normalized = clamp(absCents / maxDisplayCents, 0, 1);
+  const curved = Math.pow(normalized, 0.8);
+  const speed = MIN_ACTIVE_SPEED + curved * (MAX_ACTIVE_SPEED - MIN_ACTIVE_SPEED);
   const direction = clamped > 0 ? -1 : 1;
-  const normalized = clamp(magnitude / maxDisplayCents, 0, 1);
-  const curved = Math.pow(normalized, 0.72);
-  return direction * (MIN_TRACK_SPEED + curved * (MAX_TRACK_SPEED - MIN_TRACK_SPEED));
+  return direction * speed;
 }
 
 export default function MakerStrobeBands({
@@ -61,219 +58,173 @@ export default function MakerStrobeBands({
   active,
   maxDisplayCents = DEFAULT_MAX_DISPLAY_CENTS,
 }: MakerStrobeBandsProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const runtimeRef = useRef<RuntimeState>({
-    lastTs: 0,
+  const layerRef = useRef<HTMLDivElement | null>(null);
+  const glowRef = useRef<HTMLDivElement | null>(null);
+  const chipRef = useRef<HTMLDivElement | null>(null);
+  const motionRef = useRef<MotionState>({
     phase: 0,
     velocity: IDLE_SPEED,
     targetVelocity: IDLE_SPEED,
+    lastTs: 0,
     directionMemory: 1,
   });
 
-  const liveRef = useRef({ cents, active, maxDisplayCents });
-  useEffect(() => {
-    liveRef.current = { cents, active, maxDisplayCents };
-    const state = runtimeRef.current;
-    state.targetVelocity = velocityFromCents(cents, active, maxDisplayCents, state.directionMemory);
-    if (active && cents !== null && Number.isFinite(cents) && Math.abs(cents) >= 0.12) {
-      state.directionMemory = cents > 0 ? -1 : 1;
-    }
-  }, [active, cents, maxDisplayCents]);
-
   const palette = useMemo(() => {
-    const accent = cents !== null ? centsToColor(cents) : '#5d86c5';
+    const accent = cents !== null ? centsToColor(cents) : '#6e86a6';
     return {
       accent,
-      accentStrong: `${accent}ee`,
-      accentSoft: `${accent}99`,
-      accentDim: `${accent}33`,
-      trackTop: '#0a1626',
-      trackMid: '#0d1b2d',
-      trackBottom: '#07121f',
-      stripeBright: '#dbe8ff',
-      stripeIdle: '#86a7d2',
-      stripeDark: '#18324e',
-      center: '#f3f8ff',
-      border: 'rgba(155, 188, 238, 0.2)',
+      accentSoft: `${accent}66`,
+      accentDim: `${accent}22`,
+      idleText: '#9cb1ca',
+      text: '#e7f0fb',
+      guide: 'rgba(230, 240, 252, 0.9)',
+      laneBg: 'linear-gradient(180deg, rgba(6,13,22,0.98) 0%, rgba(10,18,31,0.98) 100%)',
     };
   }, [cents]);
 
   useEffect(() => {
+    const motion = motionRef.current;
+    motion.targetVelocity = centsToVelocity(cents, active, maxDisplayCents, motion.directionMemory);
+    if (active && cents !== null && Math.abs(cents) >= 0.1) {
+      motion.directionMemory = cents > 0 ? -1 : 1;
+    }
+
+    if (glowRef.current) {
+      glowRef.current.style.opacity = active ? '1' : '0.42';
+      glowRef.current.style.background = `radial-gradient(circle at 50% 50%, ${palette.accentDim} 0%, rgba(0,0,0,0) 72%)`;
+    }
+
+    if (chipRef.current) {
+      chipRef.current.style.color = active ? palette.text : palette.idleText;
+      chipRef.current.style.borderColor = active ? `${palette.accent}55` : 'rgba(122, 146, 178, 0.16)';
+      chipRef.current.style.boxShadow = active ? `0 0 0 1px ${palette.accent}14 inset` : 'none';
+    }
+  }, [active, cents, maxDisplayCents, palette]);
+
+  useEffect(() => {
     let raf = 0;
 
-    const draw = (ts: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        raf = requestAnimationFrame(draw);
+    const animate = (timestamp: number) => {
+      const layer = layerRef.current;
+      if (!layer) {
+        raf = requestAnimationFrame(animate);
         return;
       }
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        raf = requestAnimationFrame(draw);
-        return;
-      }
+      const motion = motionRef.current;
+      const lastTs = motion.lastTs || timestamp;
+      const dt = Math.min(0.05, Math.max(0.001, (timestamp - lastTs) / 1000));
+      motion.lastTs = timestamp;
 
-      const dpr = window.devicePixelRatio || 1;
-      const width = Math.max(1, canvas.clientWidth || 128);
-      const height = Math.max(1, canvas.clientHeight || 360);
-      const pixelWidth = Math.round(width * dpr);
-      const pixelHeight = Math.round(height * dpr);
-      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-        canvas.width = pixelWidth;
-        canvas.height = pixelHeight;
-      }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const response = active ? 0.24 : 0.08;
+      motion.velocity += (motion.targetVelocity - motion.velocity) * response;
+      motion.phase += motion.velocity * dt;
 
-      const state = runtimeRef.current;
-      const { cents: liveCents, active: liveActive, maxDisplayCents: liveMax } = liveRef.current;
-      const lastTs = state.lastTs || ts;
-      const dt = Math.min(0.05, Math.max(0.001, (ts - lastTs) / 1000));
-      state.lastTs = ts;
+      if (motion.phase > RESET_DISTANCE) motion.phase -= RESET_DISTANCE;
+      if (motion.phase < -RESET_DISTANCE) motion.phase += RESET_DISTANCE;
 
-      const smoothing = liveActive ? 0.16 : 0.06;
-      state.targetVelocity = velocityFromCents(liveCents, liveActive, liveMax, state.directionMemory);
-      state.velocity += (state.targetVelocity - state.velocity) * smoothing;
-      state.phase += state.velocity * dt;
-      if (Math.abs(state.phase) > STRIPE_SPACING * 1000) {
-        state.phase %= STRIPE_SPACING;
-      }
-
-      const clampedCents = liveCents === null ? null : clamp(liveCents, -liveMax, liveMax);
-      const absCents = clampedCents === null ? null : Math.abs(clampedCents);
-      const normalized = absCents === null ? 0 : clamp(absCents / liveMax, 0, 1);
-      const isPerfectish = liveActive && absCents !== null && absCents <= 1.5;
-      const brightness = liveActive ? 0.8 + normalized * 0.2 : 0.5;
-      const stripeAlphaA = liveActive ? 0.72 + normalized * 0.18 : 0.42;
-      const stripeAlphaB = liveActive ? 0.26 + normalized * 0.1 : 0.22;
-
-      ctx.clearRect(0, 0, width, height);
-
-      const outer = ctx.createLinearGradient(0, 0, 0, height);
-      outer.addColorStop(0, palette.trackTop);
-      outer.addColorStop(0.5, palette.trackMid);
-      outer.addColorStop(1, palette.trackBottom);
-      ctx.fillStyle = outer;
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(0.5, 0.5, width - 1, height - 1, CORNER_RADIUS);
-      ctx.clip();
-
-      const laneGlow = ctx.createRadialGradient(width / 2, height / 2, 16, width / 2, height / 2, width * 0.75);
-      laneGlow.addColorStop(0, liveActive ? palette.accentDim : 'rgba(107, 142, 190, 0.16)');
-      laneGlow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = laneGlow;
-      ctx.fillRect(0, 0, width, height);
-
-      const stripeWidth = width - TRACK_INSET * 2;
-      const offset = ((state.phase % STRIPE_SPACING) + STRIPE_SPACING) % STRIPE_SPACING;
-      const startY = -STRIPE_SPACING * 3 + offset;
-      const stripeCount = Math.ceil(height / STRIPE_SPACING) + 7;
-
-      ctx.shadowBlur = liveActive ? 18 : 8;
-      ctx.shadowColor = liveActive ? palette.accentSoft : 'rgba(111, 146, 196, 0.18)';
-
-      for (let i = 0; i < stripeCount; i += 1) {
-        const y = startY + i * STRIPE_SPACING;
-        const even = i % 2 === 0;
-        const topLeftX = TRACK_INSET;
-        const topRightX = TRACK_INSET + stripeWidth;
-        const bottomRightX = TRACK_INSET + stripeWidth - STRIPE_SHEAR;
-        const bottomLeftX = TRACK_INSET - STRIPE_SHEAR;
-
-        ctx.beginPath();
-        ctx.moveTo(topLeftX, y);
-        ctx.lineTo(topRightX, y);
-        ctx.lineTo(bottomRightX, y + STRIPE_HEIGHT);
-        ctx.lineTo(bottomLeftX, y + STRIPE_HEIGHT);
-        ctx.closePath();
-
-        if (liveActive) {
-          ctx.fillStyle = even
-            ? `rgba(219, 232, 255, ${stripeAlphaA})`
-            : `rgba(24, 50, 78, ${stripeAlphaB})`;
-        } else {
-          ctx.fillStyle = even
-            ? 'rgba(134, 167, 210, 0.34)'
-            : 'rgba(24, 50, 78, 0.28)';
-        }
-        ctx.fill();
-
-        if (liveActive && even) {
-          ctx.strokeStyle = palette.accentStrong;
-          ctx.lineWidth = 1.2;
-          ctx.stroke();
-        }
-      }
-
-      ctx.shadowBlur = 0;
-
-      const guideW = 8;
-      const guideX = width / 2 - guideW / 2;
-      const guideGradient = ctx.createLinearGradient(guideX, 0, guideX + guideW, 0);
-      guideGradient.addColorStop(0, 'rgba(255,255,255,0)');
-      guideGradient.addColorStop(0.5, liveActive ? 'rgba(243, 248, 255, 0.96)' : 'rgba(187, 206, 232, 0.7)');
-      guideGradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = guideGradient;
-      ctx.fillRect(guideX, 0, guideW, height);
-
-      if (liveActive) {
-        const bloom = ctx.createRadialGradient(width / 2, height / 2, 6, width / 2, height / 2, width * 0.42);
-        bloom.addColorStop(0, `rgba(255,255,255, ${0.14 + brightness * 0.1})`);
-        bloom.addColorStop(0.35, palette.accentSoft);
-        bloom.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = bloom;
-        ctx.fillRect(0, 0, width, height);
-      }
-
-      const sideFade = ctx.createLinearGradient(0, 0, width, 0);
-      sideFade.addColorStop(0, 'rgba(6, 13, 24, 0.9)');
-      sideFade.addColorStop(0.16, 'rgba(6, 13, 24, 0.12)');
-      sideFade.addColorStop(0.84, 'rgba(6, 13, 24, 0.12)');
-      sideFade.addColorStop(1, 'rgba(6, 13, 24, 0.9)');
-      ctx.fillStyle = sideFade;
-      ctx.fillRect(0, 0, width, height);
-
-      const topBottomFade = ctx.createLinearGradient(0, 0, 0, height);
-      topBottomFade.addColorStop(0, 'rgba(6, 13, 24, 0.96)');
-      topBottomFade.addColorStop(0.12, 'rgba(6, 13, 24, 0.08)');
-      topBottomFade.addColorStop(0.88, 'rgba(6, 13, 24, 0.08)');
-      topBottomFade.addColorStop(1, 'rgba(6, 13, 24, 0.96)');
-      ctx.fillStyle = topBottomFade;
-      ctx.fillRect(0, 0, width, height);
-
-      if (isPerfectish) {
-        ctx.fillStyle = 'rgba(255,255,255,0.18)';
-        ctx.fillRect(0, height * 0.49, width, height * 0.02);
-      }
-
-      ctx.restore();
-
-      ctx.strokeStyle = palette.border;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(0.5, 0.5, width - 1, height - 1, CORNER_RADIUS);
-      ctx.stroke();
-
-      raf = requestAnimationFrame(draw);
+      layer.style.transform = `translate3d(0, ${motion.phase}px, 0)`;
+      raf = requestAnimationFrame(animate);
     };
 
-    raf = requestAnimationFrame(draw);
+    raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, [palette]);
+  }, [active]);
+
+  const absCents = cents === null ? null : Math.abs(cents);
+  const lockStrength = absCents === null ? 0 : clamp(1 - absCents / maxDisplayCents, 0, 1);
+  const centerOpacity = active ? 0.24 + lockStrength * 0.56 : 0.18;
+  const stripeOpacity = active ? 0.92 : 0.5;
 
   return (
     <div className={`maker-strobe-band ${active ? 'is-active' : ''}`}>
       <div className="maker-strobe-band__label">{label}</div>
-      <canvas
-        ref={canvasRef}
-        className="maker-strobe-band__canvas"
-        width={128}
-        height={360}
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '128px',
+          height: '360px',
+          overflow: 'hidden',
+          borderRadius: '18px',
+          border: '1px solid rgba(109, 140, 184, 0.18)',
+          background: palette.laneBg,
+          boxShadow: active ? `0 0 0 1px ${palette.accent}14 inset` : 'inset 0 0 0 1px rgba(255,255,255,0.03)',
+        }}
         aria-label={`${label} strobe band`}
-      />
+      >
+        <div
+          ref={layerRef}
+          style={{
+            position: 'absolute',
+            inset: `-${(LAYER_HEIGHT_PERCENT - 100) / 2}% 0`,
+            backgroundImage: `
+              repeating-linear-gradient(
+                135deg,
+                rgba(255,255,255,0) 0px,
+                rgba(255,255,255,0) 12px,
+                ${active ? palette.accent : 'rgba(74, 103, 138, 0.88)'} 12px,
+                ${active ? palette.accent : 'rgba(74, 103, 138, 0.88)'} 24px,
+                rgba(10,18,31,0.12) 24px,
+                rgba(10,18,31,0.12) 36px
+              )`,
+            backgroundSize: '100% 72px',
+            opacity: stripeOpacity,
+            willChange: 'transform',
+            filter: active ? 'saturate(1.18)' : 'saturate(0.88)',
+          }}
+        />
+
+        <div
+          ref={glowRef}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+          }}
+        />
+
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: '50%',
+            width: '2px',
+            transform: 'translateX(-50%)',
+            background: `linear-gradient(180deg, rgba(255,255,255,0) 0%, ${palette.guide} 18%, ${palette.guide} 82%, rgba(255,255,255,0) 100%)`,
+            opacity: centerOpacity,
+            boxShadow: `0 0 14px ${palette.accentSoft}`,
+          }}
+        />
+
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(180deg, rgba(5,11,20,0.98) 0%, rgba(5,11,20,0.16) 14%, rgba(5,11,20,0.08) 50%, rgba(5,11,20,0.16) 86%, rgba(5,11,20,0.98) 100%)',
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
+
+      <div
+        ref={chipRef}
+        style={{
+          marginTop: '8px',
+          minWidth: '88px',
+          padding: '6px 10px',
+          borderRadius: '999px',
+          border: '1px solid rgba(122, 146, 178, 0.16)',
+          background: 'rgba(11, 19, 33, 0.86)',
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+          fontSize: '0.92rem',
+          fontWeight: 600,
+        }}
+      >
+        {cents !== null ? formatCents(cents) : 'listening'}
+      </div>
     </div>
   );
 }
