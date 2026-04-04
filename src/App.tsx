@@ -25,6 +25,7 @@ import DisclaimerPage from './pages/DisclaimerPage';
 import FaqPage from './pages/FaqPage';
 import LoginPage from './pages/LoginPage';
 import MyReportsPage from './pages/MyReportsPage';
+import MakerStrobePage from './pages/MakerStrobePage';
 import './App.css';
 
 function App() {
@@ -60,6 +61,7 @@ function App() {
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/my-reports" element={<MyReportsPage />} />
+            <Route path="/maker-strobe" element={<MakerStrobePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
