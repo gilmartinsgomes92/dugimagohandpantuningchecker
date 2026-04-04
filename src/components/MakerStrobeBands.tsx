@@ -9,14 +9,16 @@ interface MakerStrobeBandsProps {
 }
 
 const DEFAULT_MAX_DISPLAY_CENTS = 25;
-const IDLE_SPEED = 220; // px/s
-const MAX_ACTIVE_SPEED = 220; // px/s
-const MIN_ACTIVE_SPEED = 4; // px/s
-const CENTER_GLIDE_SPEED = 1.5; // px/s when almost perfectly in tune
-const STRIPE_HEIGHT = 20;
-const STRIPE_GAP = 10;
+const IDLE_SPEED = 86; // px/s
+const MAX_ACTIVE_SPEED = 300; // px/s
+const MIN_ACTIVE_SPEED = 5; // px/s
+const CENTER_GLIDE_SPEED = 1.4; // px/s when nearly locked
+const STRIPE_HEIGHT = 16;
+const STRIPE_GAP = 8;
 const STRIPE_PITCH = STRIPE_HEIGHT + STRIPE_GAP;
-const DRAW_OVERSCAN = 3;
+const DRAW_OVERSCAN = 5;
+const BAND_INSET = 10;
+const EDGE_RADIUS = 16;
 
 type AnimState = {
   phase: number;
@@ -30,21 +32,26 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 function centsToVelocity(cents: number | null, active: boolean, maxDisplayCents: number, fallbackDirection: 1 | -1): number {
   if (!active || cents === null || !Number.isFinite(cents)) {
-    return IDLE_SPEED;
+    return fallbackDirection * IDLE_SPEED;
   }
 
   const clamped = clamp(cents, -maxDisplayCents, maxDisplayCents);
   const absCents = Math.abs(clamped);
 
-  if (absCents < 0.18) {
+  if (absCents < 0.12) {
     return fallbackDirection * CENTER_GLIDE_SPEED;
   }
 
   const direction = clamped > 0 ? -1 : 1; // positive cents should visually move up
   const normalized = clamp(absCents / maxDisplayCents, 0, 1);
-  const curved = Math.pow(normalized, 0.78);
+  const curved = Math.pow(normalized, 0.72);
   const speed = MIN_ACTIVE_SPEED + curved * (MAX_ACTIVE_SPEED - MIN_ACTIVE_SPEED);
   return direction * speed;
+}
+
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
 }
 
 export default function MakerStrobeBands({
@@ -63,25 +70,29 @@ export default function MakerStrobeBands({
   });
 
   const palette = useMemo(() => {
-    const accent = cents !== null ? centsToColor(cents) : '#5f7290';
+    const accent = cents !== null ? centsToColor(cents) : '#6a7f9d';
     return {
       accent,
-      accentSoft: `${accent}55`,
-      accentDim: `${accent}22`,
-      glow: `${accent}88`,
-      dark: '#08111d',
-      track: '#0a1422',
-      stripeBase: '#18304b',
-      stripeDim: '#0f1d30',
-      idleStripe: '#25415f',
-      guide: '#d6e4f6',
+      accentGlow: `${accent}aa`,
+      accentSoft: `${accent}44`,
+      accentFaint: `${accent}1f`,
+      guide: '#ecf4ff',
+      guideDim: '#6f85a2',
+      bgTop: '#08111b',
+      bgMid: '#0a1422',
+      bgBottom: '#08111b',
+      stripeBright: '#edf5ff',
+      stripeMid: '#8fb0d3',
+      stripeDim: '#304a68',
+      idleBright: '#7f97b4',
+      idleDim: '#22344d',
     };
   }, [cents]);
 
   useEffect(() => {
     const state = animRef.current;
     state.targetVelocity = centsToVelocity(cents, active, maxDisplayCents, state.directionMemory);
-    if (active && cents !== null && Math.abs(cents) >= 0.18) {
+    if (active && cents !== null && Number.isFinite(cents) && Math.abs(cents) >= 0.12) {
       state.directionMemory = cents > 0 ? -1 : 1;
     }
   }, [active, cents, maxDisplayCents]);
@@ -95,6 +106,7 @@ export default function MakerStrobeBands({
         raf = requestAnimationFrame(draw);
         return;
       }
+
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         raf = requestAnimationFrame(draw);
@@ -115,15 +127,13 @@ export default function MakerStrobeBands({
       const width = displayWidth;
       const height = displayHeight;
       const state = animRef.current;
-      const now = timestamp;
-      const lastTs = state.lastTs || now;
-      const dt = Math.min(0.05, Math.max(0.001, (now - lastTs) / 1000));
-      state.lastTs = now;
+      const lastTs = state.lastTs || timestamp;
+      const dt = Math.min(0.05, Math.max(0.001, (timestamp - lastTs) / 1000));
+      state.lastTs = timestamp;
 
-      const response = active ? 0.15 : 0.06;
+      const response = active ? 0.22 : 0.08;
       state.velocity += (state.targetVelocity - state.velocity) * response;
       state.phase += state.velocity * dt;
-
       if (Math.abs(state.phase) > STRIPE_PITCH * 1000) {
         state.phase %= STRIPE_PITCH;
       }
@@ -132,80 +142,107 @@ export default function MakerStrobeBands({
       const absCents = Math.abs(clamp(currentCents, -maxDisplayCents, maxDisplayCents));
       const normalized = clamp(absCents / maxDisplayCents, 0, 1);
       const strongLock = active && absCents <= 8;
+      const flowDirection = state.velocity >= 0 ? 1 : -1;
+      const motionStrength = active ? normalized : 0.35;
+      const slope = (14 + motionStrength * 10) * flowDirection;
+      const centerWindowWidth = Math.max(28, width * 0.25);
+      const centerWindowLeft = width / 2 - centerWindowWidth / 2;
+      const centerWindowRight = width / 2 + centerWindowWidth / 2;
 
       ctx.clearRect(0, 0, width, height);
 
       const bg = ctx.createLinearGradient(0, 0, 0, height);
-      bg.addColorStop(0, '#07101a');
-      bg.addColorStop(0.5, palette.track);
-      bg.addColorStop(1, '#07101a');
+      bg.addColorStop(0, palette.bgTop);
+      bg.addColorStop(0.5, palette.bgMid);
+      bg.addColorStop(1, palette.bgBottom);
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
 
-      const laneGlow = ctx.createRadialGradient(width / 2, height / 2, 18, width / 2, height / 2, width * 0.45);
-      laneGlow.addColorStop(0, active ? palette.accentDim : '#15263b');
-      laneGlow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = laneGlow;
-      ctx.fillRect(0, 0, width, height);
-
-      const stripeInsetBase = 12;
-      const stripeInsetDynamic = active ? 10 + (1 - normalized) * 8 : 6;
-      const stripeInset = stripeInsetBase + stripeInsetDynamic;
-      const stripeWidth = Math.max(16, width - stripeInset * 2);
-      const corner = 7;
-
+      drawRoundedRect(ctx, 4, 4, width - 8, height - 8, EDGE_RADIUS);
       ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(6, 6, width - 12, height - 12, 16);
       ctx.clip();
+
+      const edgeGlow = ctx.createLinearGradient(0, 0, width, 0);
+      edgeGlow.addColorStop(0, active ? palette.accentFaint : 'rgba(66, 91, 123, 0.12)');
+      edgeGlow.addColorStop(0.5, 'rgba(0,0,0,0)');
+      edgeGlow.addColorStop(1, active ? palette.accentFaint : 'rgba(66, 91, 123, 0.12)');
+      ctx.fillStyle = edgeGlow;
+      ctx.fillRect(0, 0, width, height);
 
       const startY = -STRIPE_PITCH * DRAW_OVERSCAN + (((state.phase % STRIPE_PITCH) + STRIPE_PITCH) % STRIPE_PITCH);
       const stripeCount = Math.ceil(height / STRIPE_PITCH) + DRAW_OVERSCAN * 2;
 
-      ctx.shadowBlur = active ? 16 : 0;
-      ctx.shadowColor = active ? palette.glow : 'transparent';
-
       for (let i = 0; i < stripeCount; i += 1) {
         const y = startY + i * STRIPE_PITCH;
-        const useAccent = active ? i % 2 === 0 : i % 3 === 0;
+        const isAccentStripe = i % 3 === 0;
+        const isBrightStripe = i % 2 === 0;
+
         ctx.fillStyle = active
-          ? useAccent
+          ? isAccentStripe
             ? palette.accent
             : strongLock
-              ? '#d9e8f7'
-              : palette.stripeBase
-          : useAccent
-            ? palette.idleStripe
-            : palette.stripeDim;
+              ? palette.stripeBright
+              : isBrightStripe
+                ? palette.stripeMid
+                : palette.stripeDim
+          : isBrightStripe
+            ? palette.idleBright
+            : palette.idleDim;
+
         ctx.beginPath();
-        ctx.roundRect(stripeInset, y, stripeWidth, STRIPE_HEIGHT, corner);
+        ctx.moveTo(BAND_INSET + slope, y);
+        ctx.lineTo(width - BAND_INSET + slope, y);
+        ctx.lineTo(width - BAND_INSET - slope, y + STRIPE_HEIGHT);
+        ctx.lineTo(BAND_INSET - slope, y + STRIPE_HEIGHT);
+        ctx.closePath();
         ctx.fill();
       }
-      ctx.shadowBlur = 0;
 
-      const centerX = width / 2;
-      const guideGradient = ctx.createLinearGradient(centerX - 5, 0, centerX + 5, 0);
-      guideGradient.addColorStop(0, 'rgba(214, 228, 246, 0)');
-      guideGradient.addColorStop(0.5, active ? palette.guide : '#5b6d84');
-      guideGradient.addColorStop(1, 'rgba(214, 228, 246, 0)');
+      const centerWindow = ctx.createLinearGradient(centerWindowLeft, 0, centerWindowRight, 0);
+      centerWindow.addColorStop(0, 'rgba(7, 17, 29, 0.9)');
+      centerWindow.addColorStop(0.18, active ? palette.accentSoft : 'rgba(127, 151, 180, 0.12)');
+      centerWindow.addColorStop(0.5, 'rgba(255,255,255,0.025)');
+      centerWindow.addColorStop(0.82, active ? palette.accentSoft : 'rgba(127, 151, 180, 0.12)');
+      centerWindow.addColorStop(1, 'rgba(7, 17, 29, 0.9)');
+      ctx.fillStyle = centerWindow;
+      ctx.fillRect(centerWindowLeft, 0, centerWindowWidth, height);
+
+      const guideGradient = ctx.createLinearGradient(width / 2 - 1.5, 0, width / 2 + 1.5, 0);
+      guideGradient.addColorStop(0, 'rgba(236, 244, 255, 0)');
+      guideGradient.addColorStop(0.5, active ? palette.guide : palette.guideDim);
+      guideGradient.addColorStop(1, 'rgba(236, 244, 255, 0)');
       ctx.fillStyle = guideGradient;
-      ctx.fillRect(centerX - 5, 0, 10, height);
+      ctx.fillRect(width / 2 - 1.5, 0, 3, height);
 
-      const centerGlow = ctx.createRadialGradient(centerX, height / 2, 8, centerX, height / 2, 90);
-      centerGlow.addColorStop(0, active ? palette.accentSoft : 'rgba(91, 109, 132, 0.3)');
-      centerGlow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = centerGlow;
-      ctx.fillRect(0, 0, width, height);
+      if (active) {
+        ctx.strokeStyle = palette.accentGlow;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(width / 2 + flowDirection * 18, 18);
+        ctx.lineTo(width / 2 + flowDirection * 4, 32);
+        ctx.lineTo(width / 2 - flowDirection * 10, 46);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(width / 2 + flowDirection * 10, height - 46);
+        ctx.lineTo(width / 2 - flowDirection * 4, height - 32);
+        ctx.lineTo(width / 2 - flowDirection * 18, height - 18);
+        ctx.stroke();
+      }
 
       ctx.restore();
 
-      const fade = ctx.createLinearGradient(0, 0, 0, height);
-      fade.addColorStop(0, 'rgba(7, 16, 29, 0.98)');
-      fade.addColorStop(0.14, 'rgba(7, 16, 29, 0.16)');
-      fade.addColorStop(0.86, 'rgba(7, 16, 29, 0.16)');
-      fade.addColorStop(1, 'rgba(7, 16, 29, 0.98)');
-      ctx.fillStyle = fade;
-      ctx.fillRect(0, 0, width, height);
+      const topFade = ctx.createLinearGradient(0, 0, 0, height * 0.16);
+      topFade.addColorStop(0, 'rgba(7, 17, 29, 0.98)');
+      topFade.addColorStop(1, 'rgba(7, 17, 29, 0)');
+      ctx.fillStyle = topFade;
+      ctx.fillRect(0, 0, width, height * 0.16);
+
+      const bottomFade = ctx.createLinearGradient(0, height, 0, height * 0.84);
+      bottomFade.addColorStop(0, 'rgba(7, 17, 29, 0.98)');
+      bottomFade.addColorStop(1, 'rgba(7, 17, 29, 0)');
+      ctx.fillStyle = bottomFade;
+      ctx.fillRect(0, height * 0.84, width, height * 0.16);
 
       raf = requestAnimationFrame(draw);
     };
