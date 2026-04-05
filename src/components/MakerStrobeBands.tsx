@@ -9,12 +9,11 @@ interface MakerStrobeBandsProps {
 }
 
 const DEFAULT_MAX_DISPLAY_CENTS = 25;
-const IDLE_SPEED = 92;
-const MIN_ACTIVE_SPEED = 6;
-const MAX_ACTIVE_SPEED = 360;
-const CENTER_GLIDE_SPEED = 0.8;
-const LAYER_HEIGHT_PERCENT = 220;
-const RESET_DISTANCE = 140;
+const IDLE_SPEED = 18;
+const MIN_ACTIVE_SPEED = 8;
+const MAX_ACTIVE_SPEED = 230;
+const CENTER_GLIDE_SPEED = 0.4;
+const PATTERN_WRAP = 96;
 
 type MotionState = {
   phase: number;
@@ -46,9 +45,9 @@ function centsToVelocity(
   }
 
   const normalized = clamp(absCents / maxDisplayCents, 0, 1);
-  const curved = Math.pow(normalized, 0.8);
+  const curved = Math.pow(normalized, 0.82);
   const speed = MIN_ACTIVE_SPEED + curved * (MAX_ACTIVE_SPEED - MIN_ACTIVE_SPEED);
-  const direction = clamped > 0 ? -1 : 1;
+  const direction = clamped > 0 ? 1 : -1;
   return direction * speed;
 }
 
@@ -59,8 +58,7 @@ export default function MakerStrobeBands({
   maxDisplayCents = DEFAULT_MAX_DISPLAY_CENTS,
 }: MakerStrobeBandsProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
-  const glowRef = useRef<HTMLDivElement | null>(null);
-  const chipRef = useRef<HTMLDivElement | null>(null);
+  const layerSecondaryRef = useRef<HTMLDivElement | null>(null);
   const motionRef = useRef<MotionState>({
     phase: 0,
     velocity: IDLE_SPEED,
@@ -70,161 +68,137 @@ export default function MakerStrobeBands({
   });
 
   const palette = useMemo(() => {
-    const accent = cents !== null ? centsToColor(cents) : '#6e86a6';
+    const accent = cents !== null ? centsToColor(cents) : '#6f88ab';
     return {
       accent,
       accentSoft: `${accent}66`,
       accentDim: `${accent}22`,
-      idleText: '#9cb1ca',
-      text: '#e7f0fb',
-      guide: 'rgba(230, 240, 252, 0.9)',
-      laneBg: 'linear-gradient(180deg, rgba(6,13,22,0.98) 0%, rgba(10,18,31,0.98) 100%)',
+      text: '#edf4ff',
+      idleText: '#9db0c8',
+      laneBorder: active ? `${accent}44` : 'rgba(126, 151, 188, 0.18)',
+      laneBg: 'linear-gradient(180deg, rgba(8, 15, 27, 0.98) 0%, rgba(6, 12, 22, 0.98) 100%)',
     };
-  }, [cents]);
+  }, [active, cents]);
 
   useEffect(() => {
     const motion = motionRef.current;
     motion.targetVelocity = centsToVelocity(cents, active, maxDisplayCents, motion.directionMemory);
     if (active && cents !== null && Math.abs(cents) >= 0.1) {
-      motion.directionMemory = cents > 0 ? -1 : 1;
+      motion.directionMemory = cents > 0 ? 1 : -1;
     }
-
-    if (glowRef.current) {
-      glowRef.current.style.opacity = active ? '1' : '0.42';
-      glowRef.current.style.background = `radial-gradient(circle at 50% 50%, ${palette.accentDim} 0%, rgba(0,0,0,0) 72%)`;
-    }
-
-    if (chipRef.current) {
-      chipRef.current.style.color = active ? palette.text : palette.idleText;
-      chipRef.current.style.borderColor = active ? `${palette.accent}55` : 'rgba(122, 146, 178, 0.16)';
-      chipRef.current.style.boxShadow = active ? `0 0 0 1px ${palette.accent}14 inset` : 'none';
-    }
-  }, [active, cents, maxDisplayCents, palette]);
+  }, [active, cents, maxDisplayCents]);
 
   useEffect(() => {
     let raf = 0;
 
     const animate = (timestamp: number) => {
-      const layer = layerRef.current;
-      if (!layer) {
-        raf = requestAnimationFrame(animate);
-        return;
-      }
-
       const motion = motionRef.current;
+      const layer = layerRef.current;
+      const layerSecondary = layerSecondaryRef.current;
+
       const lastTs = motion.lastTs || timestamp;
       const dt = Math.min(0.05, Math.max(0.001, (timestamp - lastTs) / 1000));
       motion.lastTs = timestamp;
 
-      const response = active ? 0.24 : 0.08;
-      motion.velocity += (motion.targetVelocity - motion.velocity) * response;
+      motion.velocity += (motion.targetVelocity - motion.velocity) * 0.18;
       motion.phase += motion.velocity * dt;
 
-      if (motion.phase > RESET_DISTANCE) motion.phase -= RESET_DISTANCE;
-      if (motion.phase < -RESET_DISTANCE) motion.phase += RESET_DISTANCE;
+      if (motion.phase > PATTERN_WRAP) motion.phase -= PATTERN_WRAP;
+      if (motion.phase < -PATTERN_WRAP) motion.phase += PATTERN_WRAP;
 
-      layer.style.transform = `translate3d(0, ${motion.phase}px, 0)`;
+      const translate = `${motion.phase}px`;
+      if (layer) layer.style.transform = `translate3d(${translate}, 0, 0)`;
+      if (layerSecondary) layerSecondary.style.transform = `translate3d(calc(${translate} - ${PATTERN_WRAP}px), 0, 0)`;
+
       raf = requestAnimationFrame(animate);
     };
 
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, [active]);
+  }, []);
 
   const absCents = cents === null ? null : Math.abs(cents);
   const lockStrength = absCents === null ? 0 : clamp(1 - absCents / maxDisplayCents, 0, 1);
-  const centerOpacity = active ? 0.24 + lockStrength * 0.56 : 0.18;
-  const stripeOpacity = active ? 0.92 : 0.5;
+  const stripeOpacity = active ? 0.95 : 0.54;
+  const centerGlowOpacity = active ? 0.16 + lockStrength * 0.34 : 0.12;
+  const valueText = cents !== null ? formatCents(cents) : active ? 'Listening' : 'Idle';
+  const directionText = cents === null ? '—' : cents > 0 ? 'Sharp' : cents < 0 ? 'Flat' : 'In tune';
 
   return (
-    <div className={`maker-strobe-band ${active ? 'is-active' : ''}`}>
-      <div className="maker-strobe-band__label">{label}</div>
+    <section className="maker-lane-band" aria-label={`${label} strobe band`}>
+      <div className="maker-lane-band__header">
+        <div>
+          <div className="maker-lane-band__label">{label}</div>
+          <div className="maker-lane-band__sub">{directionText}</div>
+        </div>
+
+        <div
+          className="maker-lane-band__value"
+          style={{
+            color: active ? palette.text : palette.idleText,
+            borderColor: active ? `${palette.accent}55` : 'rgba(126, 151, 188, 0.16)',
+            boxShadow: active ? `0 0 0 1px ${palette.accent}12 inset` : 'none',
+          }}
+        >
+          {valueText}
+        </div>
+      </div>
+
       <div
+        className="maker-lane-band__lane"
         style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: '128px',
-          height: '360px',
-          overflow: 'hidden',
-          borderRadius: '18px',
-          border: '1px solid rgba(109, 140, 184, 0.18)',
+          borderColor: palette.laneBorder,
           background: palette.laneBg,
-          boxShadow: active ? `0 0 0 1px ${palette.accent}14 inset` : 'inset 0 0 0 1px rgba(255,255,255,0.03)',
+          boxShadow: active
+            ? `0 0 0 1px ${palette.accent}12 inset, 0 18px 34px rgba(0,0,0,0.2)`
+            : 'inset 0 0 0 1px rgba(255,255,255,0.03), 0 18px 34px rgba(0,0,0,0.18)',
         }}
-        aria-label={`${label} strobe band`}
       >
-        <div
-          ref={layerRef}
-          style={{
-            position: 'absolute',
-            inset: `-${(LAYER_HEIGHT_PERCENT - 100) / 2}% 0`,
-            backgroundImage: `
-              repeating-linear-gradient(
-                135deg,
+        <div className="maker-lane-band__film-frame">
+          <div
+            ref={layerRef}
+            className="maker-lane-band__film"
+            style={{
+              opacity: stripeOpacity,
+              backgroundImage: `repeating-linear-gradient(
+                118deg,
                 rgba(255,255,255,0) 0px,
-                rgba(255,255,255,0) 12px,
-                ${active ? palette.accent : 'rgba(74, 103, 138, 0.88)'} 12px,
-                ${active ? palette.accent : 'rgba(74, 103, 138, 0.88)'} 24px,
-                rgba(10,18,31,0.12) 24px,
-                rgba(10,18,31,0.12) 36px
+                rgba(255,255,255,0) 14px,
+                ${active ? palette.accent : 'rgba(88, 112, 146, 0.84)'} 14px,
+                ${active ? palette.accent : 'rgba(88, 112, 146, 0.84)'} 26px,
+                rgba(10, 18, 31, 0.12) 26px,
+                rgba(10, 18, 31, 0.12) 38px
               )`,
-            backgroundSize: '100% 72px',
-            opacity: stripeOpacity,
-            willChange: 'transform',
-            filter: active ? 'saturate(1.18)' : 'saturate(0.88)',
-          }}
-        />
+            }}
+          />
+          <div
+            ref={layerSecondaryRef}
+            className="maker-lane-band__film"
+            style={{
+              opacity: stripeOpacity,
+              backgroundImage: `repeating-linear-gradient(
+                118deg,
+                rgba(255,255,255,0) 0px,
+                rgba(255,255,255,0) 14px,
+                ${active ? palette.accent : 'rgba(88, 112, 146, 0.84)'} 14px,
+                ${active ? palette.accent : 'rgba(88, 112, 146, 0.84)'} 26px,
+                rgba(10, 18, 31, 0.12) 26px,
+                rgba(10, 18, 31, 0.12) 38px
+              )`,
+            }}
+          />
+        </div>
 
+        <div className="maker-lane-band__guide" />
         <div
-          ref={glowRef}
+          className="maker-lane-band__glow"
           style={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
+            opacity: centerGlowOpacity,
+            background: `radial-gradient(circle at 50% 50%, ${palette.accentSoft} 0%, ${palette.accentDim} 34%, rgba(0,0,0,0) 74%)`,
           }}
         />
-
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            left: '50%',
-            width: '2px',
-            transform: 'translateX(-50%)',
-            background: `linear-gradient(180deg, rgba(255,255,255,0) 0%, ${palette.guide} 18%, ${palette.guide} 82%, rgba(255,255,255,0) 100%)`,
-            opacity: centerOpacity,
-            boxShadow: `0 0 14px ${palette.accentSoft}`,
-          }}
-        />
-
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(180deg, rgba(5,11,20,0.98) 0%, rgba(5,11,20,0.16) 14%, rgba(5,11,20,0.08) 50%, rgba(5,11,20,0.16) 86%, rgba(5,11,20,0.98) 100%)',
-            pointerEvents: 'none',
-          }}
-        />
+        <div className="maker-lane-band__shade" />
       </div>
-
-      <div
-        ref={chipRef}
-        style={{
-          marginTop: '8px',
-          minWidth: '88px',
-          padding: '6px 10px',
-          borderRadius: '999px',
-          border: '1px solid rgba(122, 146, 178, 0.16)',
-          background: 'rgba(11, 19, 33, 0.86)',
-          textAlign: 'center',
-          fontVariantNumeric: 'tabular-nums',
-          fontSize: '0.92rem',
-          fontWeight: 600,
-        }}
-      >
-        {cents !== null ? formatCents(cents) : 'listening'}
-      </div>
-    </div>
+    </section>
   );
 }
