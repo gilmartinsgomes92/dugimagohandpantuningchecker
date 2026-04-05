@@ -6,6 +6,7 @@ interface MakerStrobeBandsProps {
   label: string;
   active: boolean;
   maxDisplayCents?: number;
+  subLabel?: string;
 }
 
 const DEFAULT_MAX_DISPLAY_CENTS = 25;
@@ -56,6 +57,7 @@ export default function MakerStrobeBands({
   label,
   active,
   maxDisplayCents = DEFAULT_MAX_DISPLAY_CENTS,
+  subLabel,
 }: MakerStrobeBandsProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   const layerSecondaryRef = useRef<HTMLDivElement | null>(null);
@@ -119,21 +121,21 @@ export default function MakerStrobeBands({
 
   const absCents = cents === null ? null : Math.abs(cents);
   const lockStrength = absCents === null ? 0 : clamp(1 - absCents / maxDisplayCents, 0, 1);
-  const stripeOpacity = active ? 0.95 : 0.54;
+  const stripeOpacity = active ? 0.96 : 0.56;
   const centerGlowOpacity = active ? 0.16 + lockStrength * 0.34 : 0.12;
   const valueText = cents !== null ? formatCents(cents) : active ? 'Listening' : 'Idle';
-  const directionText = cents === null ? '—' : cents > 0 ? 'Sharp' : cents < 0 ? 'Flat' : 'In tune';
+  const directionText = cents === null ? '—' : cents > 0 ? 'Sharp' : cents < 0 ? 'Flat' : 'Centered';
 
   return (
-    <section className="maker-lane-band" aria-label={`${label} strobe band`}>
-      <div className="maker-lane-band__header">
-        <div>
-          <div className="maker-lane-band__label">{label}</div>
-          <div className="maker-lane-band__sub">{directionText}</div>
+    <section className="maker-cockpit-band" aria-label={`${label} strobe band`}>
+      <div className="maker-cockpit-band__header">
+        <div className="maker-cockpit-band__copy">
+          <div className="maker-cockpit-band__label">{label}</div>
+          <div className="maker-cockpit-band__sub">{subLabel ?? directionText}</div>
         </div>
 
         <div
-          className="maker-lane-band__value"
+          className="maker-cockpit-band__value"
           style={{
             color: active ? palette.text : palette.idleText,
             borderColor: active ? `${palette.accent}55` : 'rgba(126, 151, 188, 0.16)',
@@ -145,7 +147,7 @@ export default function MakerStrobeBands({
       </div>
 
       <div
-        className="maker-lane-band__lane"
+        className="maker-cockpit-band__lane"
         style={{
           borderColor: palette.laneBorder,
           background: palette.laneBg,
@@ -154,10 +156,10 @@ export default function MakerStrobeBands({
             : 'inset 0 0 0 1px rgba(255,255,255,0.03), 0 18px 34px rgba(0,0,0,0.18)',
         }}
       >
-        <div className="maker-lane-band__film-frame">
+        <div className="maker-cockpit-band__film-frame">
           <div
             ref={layerRef}
-            className="maker-lane-band__film"
+            className="maker-cockpit-band__film"
             style={{
               opacity: stripeOpacity,
               backgroundImage: `repeating-linear-gradient(
@@ -173,7 +175,7 @@ export default function MakerStrobeBands({
           />
           <div
             ref={layerSecondaryRef}
-            className="maker-lane-band__film"
+            className="maker-cockpit-band__film"
             style={{
               opacity: stripeOpacity,
               backgroundImage: `repeating-linear-gradient(
@@ -189,15 +191,15 @@ export default function MakerStrobeBands({
           />
         </div>
 
-        <div className="maker-lane-band__guide" />
+        <div className="maker-cockpit-band__guide" />
         <div
-          className="maker-lane-band__glow"
+          className="maker-cockpit-band__glow"
           style={{
             opacity: centerGlowOpacity,
             background: `radial-gradient(circle at 50% 50%, ${palette.accentSoft} 0%, ${palette.accentDim} 34%, rgba(0,0,0,0) 74%)`,
           }}
         />
-        <div className="maker-lane-band__shade" />
+        <div className="maker-cockpit-band__shade" />
       </div>
     </section>
   );
