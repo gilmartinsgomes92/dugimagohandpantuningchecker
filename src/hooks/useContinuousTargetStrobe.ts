@@ -17,15 +17,20 @@ export interface ContinuousTargetStrobeState {
   };
 }
 
-const FFT_SIZE = 16384;
+const FFT_SIZE = 8192;
 const FUNDAMENTAL_WINDOW_CENTS = 140;
 const OCTAVE_WINDOW_CENTS = 260;
 const COMPOUND_FIFTH_WINDOW_CENTS = 300;
-const SIGNAL_RMS_THRESHOLD = 0.0045;
-const SILENCE_HOLD_MS = 130;
-const FUNDAMENTAL_ALPHA = 0.72;
-const PARTIAL_ALPHA = 0.58;
-const CONFIDENCE_ON_CENTS = 45;
+const MIN_SIGNAL_RMS = 0.008;
+const MIN_SIGNAL_PEAK = 0.025;
+const NOISE_MULTIPLIER = 3.4;
+const SILENCE_HOLD_MS = 110;
+const FUNDAMENTAL_ALPHA = 0.84;
+const PARTIAL_ALPHA = 0.72;
+const CONFIDENCE_ON_CENTS = 32;
+const MIN_CONFIDENCE_FOR_OUTPUT = 0.12;
+const REQUIRED_HIT_STREAK = 2;
+const MAX_HIT_DELTA_CENTS = 45;
 
 function centsDeviation(detectedFreq: number, targetFreq: number): number {
   return 1200 * Math.log2(detectedFreq / targetFreq);
@@ -51,6 +56,22 @@ function smoothFrequency(previous: number | null, next: number | null, alpha: nu
   if (next === null) return previous;
   if (previous === null) return next;
   return previous + (next - previous) * alpha;
+}
+
+function centerSignal(input: Float32Array, output: Float32Array): { rms: number; peak: number; mean: number } {
+  let mean = 0;
+  for (let i = 0; i < input.length; i += 1) mean += input[i];
+  mean /= input.length;
+
+  let peak = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    const sample = input[i] - mean;
+    output[i] = sample;
+    const abs = Math.abs(sample);
+    if (abs > peak) peak = abs;
+  }
+
+  return { rms: computeRMS(output), peak, mean };
 }
 
 export function useContinuousTargetStrobe(
@@ -79,7 +100,8 @@ export function useContinuousTargetStrobe(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const isStartedRef = useRef(false);
-  const bufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(FFT_SIZE * 4)));
+  const rawBufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(FFT_SIZE * Float32Array.BYTES_PER_ELEMENT)));
+  const workBufferRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(new ArrayBuffer(FFT_SIZE * Float32Array.BYTES_PER_ELEMENT)));
 
   const prevPhaseFundRef = useRef<Float64Array | null>(null);
   const prevPhaseOctRef = useRef<Float64Array | null>(null);
@@ -89,6 +111,9 @@ export function useContinuousTargetStrobe(
   const currPhaseCFifthRef = useRef<Float64Array>(new Float64Array(FFT_SIZE / 2));
   const prevAudioTimeRef = useRef<number | null>(null);
   const lastSignalAtRef = useRef<number>(0);
+  const noiseFloorRef = useRef<number>(MIN_SIGNAL_RMS * 0.65);
+  const hitStreakRef = useRef(0);
+  const lastAcceptedFundCentsRef = useRef<number | null>(null);
 
   const smoothedFundRef = useRef<number | null>(null);
   const smoothedOctRef = useRef<number | null>(null);
@@ -111,6 +136,8 @@ export function useContinuousTargetStrobe(
     prevPhaseOctRef.current = null;
     prevPhaseCFifthRef.current = null;
     prevAudioTimeRef.current = null;
+    hitStreakRef.current = 0;
+    lastAcceptedFundCentsRef.current = null;
     setState((current) => ({
       ...current,
       frequency: null,
@@ -146,6 +173,8 @@ export function useContinuousTargetStrobe(
     smoothedFundRef.current = null;
     smoothedOctRef.current = null;
     smoothedCFifthRef.current = null;
+    hitStreakRef.current = 0;
+    lastAcceptedFundCentsRef.current = null;
 
     setState((current) => ({
       ...current,
@@ -175,7 +204,9 @@ export function useContinuousTargetStrobe(
 
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = FFT_SIZE;
-      analyser.smoothingTimeConstant = 0.15;
+      analyser.smoothingTimeConstant = 0.05;
+      analyser.minDecibels = -100;
+      analyser.maxDecibels = -10;
       analyserRef.current = analyser;
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -203,10 +234,10 @@ export function useContinuousTargetStrobe(
         const audioCtxNode = audioCtxRef.current;
         if (!analyserNode || !audioCtxNode) return;
 
-        analyserNode.getFloatTimeDomainData(bufferRef.current);
-        const buffer = bufferRef.current;
+        analyserNode.getFloatTimeDomainData(rawBufferRef.current);
+        const { rms, peak } = centerSignal(rawBufferRef.current, workBufferRef.current);
+        const buffer = workBufferRef.current;
         const sampleRate = audioCtxNode.sampleRate;
-        const amplitude = computeRMS(buffer);
         const nowMs = performance.now();
 
         const hopSize = prevAudioTimeRef.current === null
@@ -214,13 +245,18 @@ export function useContinuousTargetStrobe(
           : Math.max(0, Math.round((audioCtxNode.currentTime - prevAudioTimeRef.current) * sampleRate));
         prevAudioTimeRef.current = audioCtxNode.currentTime;
 
+        const adaptiveFloor = Math.max(MIN_SIGNAL_RMS, noiseFloorRef.current * NOISE_MULTIPLIER);
+        const enoughSignal = rms >= adaptiveFloor && peak >= MIN_SIGNAL_PEAK;
+
+        if (!enoughSignal) {
+          noiseFloorRef.current = noiseFloorRef.current * 0.985 + rms * 0.015;
+        }
+
         let detectedFund: number | null = null;
         let detectedOct: number | null = null;
         let detectedCFifth: number | null = null;
 
-        if (amplitude >= SIGNAL_RMS_THRESHOLD) {
-          lastSignalAtRef.current = nowMs;
-
+        if (enoughSignal) {
           const targetFund = targetFundRef.current;
           const targetOct = targetOctRef.current;
           const targetCFifth = targetCFifthRef.current;
@@ -235,27 +271,50 @@ export function useContinuousTargetStrobe(
             hopSize,
           );
 
-          detectedOct = detectPitchInWindowPhaseDiff(
-            buffer,
-            sampleRate,
-            windowLo(targetOct, OCTAVE_WINDOW_CENTS),
-            windowHi(targetOct, OCTAVE_WINDOW_CENTS),
-            prevPhaseOctRef.current,
-            currPhaseOctRef.current,
-            hopSize,
-          );
+          const fundCents = detectedFund !== null ? centsDeviation(detectedFund, targetFund) : null;
+          const closeToPrevious = fundCents !== null && lastAcceptedFundCentsRef.current !== null
+            ? Math.abs(fundCents - lastAcceptedFundCentsRef.current) <= MAX_HIT_DELTA_CENTS
+            : true;
 
-          if (compoundFifthEnabledRef.current) {
-            detectedCFifth = detectPitchInWindowPhaseDiff(
+          if (fundCents !== null && closeToPrevious) {
+            hitStreakRef.current = Math.min(REQUIRED_HIT_STREAK + 2, hitStreakRef.current + 1);
+          } else if (fundCents !== null) {
+            hitStreakRef.current = 1;
+          } else {
+            hitStreakRef.current = 0;
+          }
+
+          const allowOutput = hitStreakRef.current >= REQUIRED_HIT_STREAK;
+          if (allowOutput && fundCents !== null) {
+            lastAcceptedFundCentsRef.current = fundCents;
+            lastSignalAtRef.current = nowMs;
+
+            detectedOct = detectPitchInWindowPhaseDiff(
               buffer,
               sampleRate,
-              windowLo(targetCFifth, COMPOUND_FIFTH_WINDOW_CENTS),
-              windowHi(targetCFifth, COMPOUND_FIFTH_WINDOW_CENTS),
-              prevPhaseCFifthRef.current,
-              currPhaseCFifthRef.current,
+              windowLo(targetOct, OCTAVE_WINDOW_CENTS),
+              windowHi(targetOct, OCTAVE_WINDOW_CENTS),
+              prevPhaseOctRef.current,
+              currPhaseOctRef.current,
               hopSize,
             );
+
+            if (compoundFifthEnabledRef.current) {
+              detectedCFifth = detectPitchInWindowPhaseDiff(
+                buffer,
+                sampleRate,
+                windowLo(targetCFifth, COMPOUND_FIFTH_WINDOW_CENTS),
+                windowHi(targetCFifth, COMPOUND_FIFTH_WINDOW_CENTS),
+                prevPhaseCFifthRef.current,
+                currPhaseCFifthRef.current,
+                hopSize,
+              );
+            }
+          } else {
+            detectedFund = null;
           }
+        } else {
+          hitStreakRef.current = 0;
         }
 
         if (detectedFund !== null) {
@@ -301,21 +360,27 @@ export function useContinuousTargetStrobe(
           ? centsDeviation(smoothedCFifthRef.current, targetCFifthRef.current)
           : null;
 
-        const confidence = fundCents === null || amplitude < SIGNAL_RMS_THRESHOLD
+        const pitchConfidence = fundCents === null
           ? 0
           : clamp(1 - Math.abs(fundCents) / CONFIDENCE_ON_CENTS, 0, 1);
+        const amplitudeConfidence = enoughSignal
+          ? clamp((rms - adaptiveFloor) / Math.max(0.01, adaptiveFloor * 1.6), 0, 1)
+          : 0;
+        const confidence = pitchConfidence * 0.78 + amplitudeConfidence * 0.22;
+
+        const shouldShowOutput = keepAlive && confidence >= MIN_CONFIDENCE_FOR_OUTPUT;
 
         setState((current) => ({
           ...current,
-          amplitude,
-          confidence,
-          frequency: smoothedFundRef.current,
-          octaveFrequency: smoothedOctRef.current,
-          compoundFifthFrequency: compoundFifthEnabledRef.current ? smoothedCFifthRef.current : null,
+          amplitude: rms,
+          confidence: shouldShowOutput ? confidence : 0,
+          frequency: shouldShowOutput ? smoothedFundRef.current : null,
+          octaveFrequency: shouldShowOutput ? smoothedOctRef.current : null,
+          compoundFifthFrequency: shouldShowOutput && compoundFifthEnabledRef.current ? smoothedCFifthRef.current : null,
           cents: {
-            fundamental: fundCents,
-            octave: octaveCents,
-            compoundFifth: compoundFifthEnabledRef.current ? compoundFifthCents : null,
+            fundamental: shouldShowOutput ? fundCents : null,
+            octave: shouldShowOutput ? octaveCents : null,
+            compoundFifth: shouldShowOutput && compoundFifthEnabledRef.current ? compoundFifthCents : null,
           },
         }));
 
