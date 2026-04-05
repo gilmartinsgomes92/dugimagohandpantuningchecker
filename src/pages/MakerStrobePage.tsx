@@ -28,10 +28,10 @@ const NOTE_OPTIONS: PitchClassOption[] = [
 ];
 
 const OCTAVE_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
-const FEED_MAX_ENTRIES = 10;
+const FEED_MAX_ENTRIES = 12;
 const HIGH_NOTE_OCTAVE_ONLY_MIDI = 76;
+const ACTIVE_GATE_CENTS = 85;
 const STRONG_LOCK_CENTS = 10;
-const LIVE_CONFIDENCE_THRESHOLD = 0.14;
 
 function midiFromSelection(semitone: number, octave: number): number {
   return (octave + 1) * 12 + semitone;
@@ -53,19 +53,7 @@ const MakerStrobePage: React.FC = () => {
   const [octave, setOctave] = useState<number>(3);
   const [showCompoundFifth, setShowCompoundFifth] = useState(true);
   const [liveFeed, setLiveFeed] = useState<LiveSample[]>([]);
-  const [compactBands, setCompactBands] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= 820;
-  });
   const feedIdRef = useRef(0);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const handleResize = () => setCompactBands(window.innerWidth <= 820);
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const selectedPitchClass = useMemo(
     () => NOTE_OPTIONS.find((option) => option.value === pitchClass) ?? NOTE_OPTIONS[2],
@@ -91,32 +79,30 @@ const MakerStrobePage: React.FC = () => {
     compoundFifthEnabled,
   );
 
-  const hasSignal = confidence >= LIVE_CONFIDENCE_THRESHOLD && hasLiveValue(cents.fundamental);
+  const hasSignal = hasLiveValue(cents.fundamental);
+  const withinGate = hasSignal && Math.abs(cents.fundamental as number) <= ACTIVE_GATE_CENTS;
   const strongLock = hasSignal && Math.abs(cents.fundamental as number) <= STRONG_LOCK_CENTS;
-  const visibleFundamental = hasSignal ? cents.fundamental : null;
-  const visibleOctave = hasSignal ? cents.octave : null;
-  const visibleCompoundFifth = hasSignal && compoundFifthEnabled ? cents.compoundFifth : null;
-  const bandCount = compoundFifthEnabled ? 3 : 2;
+  const bandsActive = isListening;
 
   useEffect(() => {
     if (!hasSignal) return;
 
     const nextEntry: LiveSample = {
       id: ++feedIdRef.current,
-      fundamental: visibleFundamental,
-      octave: visibleOctave,
-      compoundFifth: visibleCompoundFifth,
+      fundamental: cents.fundamental,
+      octave: cents.octave,
+      compoundFifth: compoundFifthEnabled ? cents.compoundFifth : null,
     };
 
     setLiveFeed((current) => {
       const previous = current[0];
       const isTooClose = previous && previous.fundamental !== null && nextEntry.fundamental !== null
-        ? Math.abs(previous.fundamental - nextEntry.fundamental) < 0.18
+        ? Math.abs(previous.fundamental - nextEntry.fundamental) < 0.15
         : false;
       if (isTooClose) return current;
       return [nextEntry, ...current].slice(0, FEED_MAX_ENTRIES);
     });
-  }, [hasSignal, visibleFundamental, visibleOctave, visibleCompoundFifth]);
+  }, [cents.fundamental, cents.octave, cents.compoundFifth, hasSignal, compoundFifthEnabled]);
 
   useEffect(() => {
     setLiveFeed([]);
@@ -130,7 +116,7 @@ const MakerStrobePage: React.FC = () => {
             <p className="maker-strobe-eyebrow">Maker mode</p>
             <h1 className="maker-strobe-title">Target-locked strobe tuner</h1>
             <p className="maker-strobe-subtitle">
-              This version keeps the strobes alive while the mic is on, suppresses idle false readings more aggressively, and uses a mobile-friendly horizontal layout when space is tight.
+              The bands now run from a dedicated continuous stream. They stay alive while the mic is on, and react directly to live cents instead of the slower strike-lock logic.
             </p>
           </div>
           <Link className="maker-strobe-back" to="/">
@@ -182,100 +168,70 @@ const MakerStrobePage: React.FC = () => {
             <div>8ve {targetOctave.toFixed(2)} Hz</div>
             <div>{compoundFifthEnabled ? `12th ${targetCompoundFifth.toFixed(2)} Hz` : '12th hidden'}</div>
           </div>
-          <div className={`maker-strobe-status ${strongLock ? 'strong' : hasSignal ? 'tracking' : ''}`}>
+          <div className={`maker-strobe-status ${strongLock ? 'strong' : withinGate ? 'tracking' : ''}`}>
             {statusText(isListening, hasSignal, strongLock, targetLabel)}
           </div>
         </div>
 
-        <div
-          className="maker-strobe-visualizer"
-          style={{
-            marginTop: '22px',
-            gridTemplateColumns: compactBands
-              ? '1fr'
-              : `repeat(${bandCount}, minmax(160px, 1fr))`,
-            alignItems: 'stretch',
-          }}
-        >
-          <MakerStrobeBands
-            label="Fundamental"
-            cents={visibleFundamental}
-            active={isListening}
-            orientation={compactBands ? 'horizontal' : 'vertical'}
-          />
-          <MakerStrobeBands
-            label="Octave"
-            cents={visibleOctave}
-            active={isListening}
-            orientation={compactBands ? 'horizontal' : 'vertical'}
-          />
-          {compoundFifthEnabled ? (
-            <MakerStrobeBands
-              label="Compound fifth"
-              cents={visibleCompoundFifth}
-              active={isListening}
-              orientation={compactBands ? 'horizontal' : 'vertical'}
-            />
-          ) : null}
-        </div>
-
-        <div
-          className="maker-strobe-layout"
-          style={{
-            marginTop: '22px',
-            gridTemplateColumns: compactBands ? '1fr' : 'repeat(2, minmax(0, 1fr))',
-          }}
-        >
-          <div className="maker-strobe-live-card">
-            <h2>Live cents</h2>
-            <div className="maker-live-row">
-              <span>Fundamental</span>
-              <strong style={{ color: visibleFundamental !== null ? centsToColor(visibleFundamental) : '#93a4bb' }}>
-                {visibleFundamental !== null ? formatCents(visibleFundamental) : '—'}
-              </strong>
-            </div>
-            <div className="maker-live-row">
-              <span>Octave</span>
-              <strong style={{ color: visibleOctave !== null ? centsToColor(visibleOctave) : '#93a4bb' }}>
-                {visibleOctave !== null ? formatCents(visibleOctave) : '—'}
-              </strong>
-            </div>
-            <div className="maker-live-row">
-              <span>Compound fifth</span>
-              <strong style={{ color: visibleCompoundFifth !== null ? centsToColor(visibleCompoundFifth) : '#93a4bb' }}>
-                {compoundFifthEnabled
-                  ? visibleCompoundFifth !== null
-                    ? formatCents(visibleCompoundFifth)
-                    : '—'
-                  : 'N/A'}
-              </strong>
-            </div>
-            <div className="maker-strobe-hint">
-              Confidence {(confidence * 100).toFixed(0)}% · RMS {amplitude.toFixed(4)}
-            </div>
-            {error ? <div className="maker-strobe-hint" style={{ color: '#ffb1b1', marginTop: 10 }}>{error}</div> : null}
+        <div className="maker-strobe-layout">
+          <div className="maker-strobe-visualizer">
+            <MakerStrobeBands label="Fundamental" cents={cents.fundamental} active={bandsActive} />
+            <MakerStrobeBands label="Octave" cents={cents.octave} active={bandsActive} />
+            <MakerStrobeBands label="Compound fifth" cents={compoundFifthEnabled ? cents.compoundFifth : null} active={bandsActive} />
           </div>
 
-          <div className="maker-strobe-live-card maker-strobe-feed-card">
-            <h2>Live deviation feed</h2>
-            <div className="maker-strobe-feed-list">
-              {liveFeed.length === 0 ? (
-                <p className="maker-strobe-feed-empty">Play {targetLabel} to start the live cents feed.</p>
-              ) : (
-                liveFeed.map((sample) => (
-                  <div key={sample.id} className="maker-strobe-feed-row">
-                    <span>{sample.fundamental !== null ? formatCents(sample.fundamental) : '—'}</span>
-                    <span>{sample.octave !== null ? formatCents(sample.octave) : '—'}</span>
-                    <span>{compoundFifthEnabled ? (sample.compoundFifth !== null ? formatCents(sample.compoundFifth) : '—') : 'N/A'}</span>
-                  </div>
-                ))
-              )}
+          <div className="maker-strobe-sidebar">
+            <div className="maker-strobe-live-card">
+              <h2>Live cents</h2>
+              <div className="maker-live-row">
+                <span>Fundamental</span>
+                <strong style={{ color: cents.fundamental !== null ? centsToColor(cents.fundamental) : '#93a4bb' }}>
+                  {cents.fundamental !== null ? formatCents(cents.fundamental) : '—'}
+                </strong>
+              </div>
+              <div className="maker-live-row">
+                <span>Octave</span>
+                <strong style={{ color: cents.octave !== null ? centsToColor(cents.octave) : '#93a4bb' }}>
+                  {cents.octave !== null ? formatCents(cents.octave) : '—'}
+                </strong>
+              </div>
+              <div className="maker-live-row">
+                <span>Compound fifth</span>
+                <strong style={{ color: cents.compoundFifth !== null ? centsToColor(cents.compoundFifth) : '#93a4bb' }}>
+                  {compoundFifthEnabled
+                    ? cents.compoundFifth !== null
+                      ? formatCents(cents.compoundFifth)
+                      : '—'
+                    : 'N/A'}
+                </strong>
+              </div>
+              <div className="maker-strobe-hint">
+                Confidence {(confidence * 100).toFixed(0)}% · RMS {amplitude.toFixed(4)}
+              </div>
+              {error ? <div className="maker-strobe-hint" style={{ color: '#ffb1b1', marginTop: 10 }}>{error}</div> : null}
+            </div>
+
+            <div className="maker-strobe-live-card maker-strobe-feed-card">
+              <h2>Live deviation feed</h2>
+              <div className="maker-strobe-feed-list">
+                {liveFeed.length === 0 ? (
+                  <p className="maker-strobe-feed-empty">Play {targetLabel} to start the live cents feed.</p>
+                ) : (
+                  liveFeed.map((sample) => (
+                    <div key={sample.id} className="maker-strobe-feed-row">
+                      <span>{sample.fundamental !== null ? formatCents(sample.fundamental) : '—'}</span>
+                      <span>{sample.octave !== null ? formatCents(sample.octave) : '—'}</span>
+                      <span>{compoundFifthEnabled ? (sample.compoundFifth !== null ? formatCents(sample.compoundFifth) : '—') : 'N/A'}</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         <p className="maker-strobe-footer-note">
-          This mode remains separate from the certified strike detector. It is tuned for continuous live response, but now rejects idle noise more aggressively so the page does not sit on fake D3 readings when nothing is being played.
+          This mode is now intentionally separate from the certified strike detector. It favors continuous response and visual immediacy over the slower lock-and-aggregate behaviour used elsewhere in the app.
         </p>
       </div>
     </div>
