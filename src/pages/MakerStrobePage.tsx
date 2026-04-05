@@ -34,251 +34,289 @@ const ACTIVE_GATE_CENTS = 85;
 const STRONG_LOCK_CENTS = 10;
 
 const makerStrobeStyles = `
-.maker-strobe-v3 {
+.page.maker-cockpit-page {
+  display: block;
+  width: 100%;
+  max-width: none;
   min-height: 100vh;
-  padding: 88px 18px 36px;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  color: #dce7f6;
   background:
     radial-gradient(circle at top, rgba(66, 117, 198, 0.24), transparent 34%),
-    radial-gradient(circle at bottom left, rgba(0, 214, 255, 0.14), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(0, 214, 255, 0.12), transparent 28%),
     linear-gradient(180deg, #07111f 0%, #050b15 100%);
 }
 
-.maker-strobe-v3__shell {
-  width: min(1220px, 100%);
+.maker-cockpit {
+  width: min(1380px, calc(100vw - 28px));
   margin: 0 auto;
-  padding: 24px;
-  border-radius: 28px;
-  border: 1px solid rgba(140, 177, 228, 0.18);
-  background: rgba(9, 17, 31, 0.9);
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.32);
+  padding: 82px 0 34px;
 }
 
-.maker-strobe-v3__header {
+.maker-cockpit__shell {
+  border-radius: 28px;
+  border: 1px solid rgba(140, 177, 228, 0.16);
+  background: rgba(8, 16, 29, 0.92);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+  overflow: hidden;
+}
+
+.maker-cockpit__header {
   display: flex;
   justify-content: space-between;
   gap: 18px;
   align-items: flex-start;
-  margin-bottom: 20px;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid rgba(140, 177, 228, 0.1);
 }
 
-.maker-strobe-v3__eyebrow {
-  margin: 0 0 6px;
-  color: #67c7ff;
-  font-size: 0.84rem;
-  text-transform: uppercase;
+.maker-cockpit__eyebrow {
+  margin: 0 0 8px;
+  color: #6bc9ff;
+  font-size: 0.8rem;
   letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
-.maker-strobe-v3__title {
+.maker-cockpit__title {
   margin: 0;
-  font-size: clamp(1.85rem, 4vw, 2.7rem);
+  font-size: clamp(1.7rem, 3.6vw, 2.5rem);
   line-height: 1.06;
 }
 
-.maker-strobe-v3__subtitle {
-  max-width: 760px;
+.maker-cockpit__subtitle {
+  max-width: 820px;
   margin: 10px 0 0;
-  color: #a7b8cf;
+  color: #9fb1ca;
   line-height: 1.55;
 }
 
-.maker-strobe-v3__back {
-  color: #c9d6ea;
+.maker-cockpit__back {
+  color: #d7e2f0;
   text-decoration: none;
+  border: 1px solid rgba(140, 177, 228, 0.18);
+  background: rgba(14, 23, 39, 0.9);
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(140, 177, 228, 0.22);
-  background: rgba(17, 29, 48, 0.78);
   white-space: nowrap;
 }
 
-.maker-strobe-v3__controls {
-  display: flex;
-  flex-wrap: wrap;
+.maker-cockpit__toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto)) minmax(0, 1fr);
   gap: 12px;
-  margin-bottom: 18px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(140, 177, 228, 0.08);
+  background: rgba(9, 17, 31, 0.7);
 }
 
-.maker-strobe-v3__control,
-.maker-strobe-v3__toggle {
+.maker-cockpit__control,
+.maker-cockpit__toggle,
+.maker-cockpit__badge {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(140, 177, 228, 0.18);
-  background: rgba(13, 24, 41, 0.92);
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(140, 177, 228, 0.14);
+  background: rgba(12, 22, 38, 0.92);
 }
 
-.maker-strobe-v3__control span,
-.maker-strobe-v3__toggle span {
-  color: #c9d6ea;
-  font-size: 0.95rem;
+.maker-cockpit__control span,
+.maker-cockpit__toggle span,
+.maker-cockpit__badge-label {
+  color: #c9d7ea;
+  font-size: 0.92rem;
 }
 
-.maker-strobe-v3__control select {
-  min-width: 126px;
-  border: 1px solid rgba(140, 177, 228, 0.22);
-  background: #08111e;
-  color: #f5f8ff;
+.maker-cockpit__control select {
+  min-width: 118px;
   border-radius: 12px;
+  border: 1px solid rgba(140, 177, 228, 0.16);
+  background: #07111f;
+  color: #f5f8ff;
   padding: 10px 12px;
 }
 
-.maker-strobe-v3__toggle input {
+.maker-cockpit__toggle input {
   accent-color: #49b6ff;
 }
 
-.maker-strobe-v3__target {
+.maker-cockpit__badge {
+  justify-content: space-between;
+}
+
+.maker-cockpit__badge-value {
+  color: #f2f7ff;
+  font-weight: 600;
+}
+
+.maker-cockpit__stage {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.9fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 18px 20px;
-  border-radius: 24px;
-  border: 1px solid rgba(140, 177, 228, 0.18);
-  background: linear-gradient(180deg, rgba(15, 28, 47, 0.96) 0%, rgba(10, 18, 31, 0.96) 100%);
-}
-
-.maker-strobe-v3__target-label {
-  color: #8ca0bc;
-  font-size: 0.88rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.maker-strobe-v3__target-note {
-  margin-top: 6px;
-  font-size: clamp(2.1rem, 6vw, 3.8rem);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.maker-strobe-v3__meta {
-  display: grid;
-  gap: 6px;
-  color: #d6e4f6;
-  font-size: 0.98rem;
-}
-
-.maker-strobe-v3__status {
-  min-width: 180px;
-  text-align: center;
-  padding: 12px 16px;
-  border-radius: 999px;
-  color: #cad7eb;
-  background: rgba(18, 31, 52, 0.9);
-  border: 1px solid rgba(140, 177, 228, 0.16);
-}
-
-.maker-strobe-v3__status.is-tracking { color: #ffe39a; }
-.maker-strobe-v3__status.is-locked { color: #9df4c6; }
-
-.maker-strobe-v3__content {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.92fr);
-  gap: 22px;
-  margin-top: 22px;
-  align-items: start;
-}
-
-.maker-strobe-v3__visual-card,
-.maker-strobe-v3__card {
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.95fr);
+  gap: 18px;
   padding: 18px;
-  border-radius: 24px;
-  border: 1px solid rgba(140, 177, 228, 0.16);
-  background: linear-gradient(180deg, rgba(11, 22, 38, 0.96) 0%, rgba(8, 15, 27, 0.96) 100%);
 }
 
-.maker-strobe-v3__visual-card {
+.maker-cockpit__panel {
+  border: 1px solid rgba(140, 177, 228, 0.14);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(10, 20, 35, 0.98) 0%, rgba(6, 13, 24, 0.98) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.maker-cockpit__panel--strobes {
+  padding: 16px;
+}
+
+.maker-cockpit__panel--telemetry {
+  padding: 16px;
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 14px;
 }
 
-.maker-strobe-v3__visual-head {
+.maker-cockpit__panel-head {
   display: flex;
   justify-content: space-between;
   gap: 14px;
   align-items: center;
+  margin-bottom: 12px;
 }
 
-.maker-strobe-v3__visual-title,
-.maker-strobe-v3__card h2 {
+.maker-cockpit__panel-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.04rem;
 }
 
-.maker-strobe-v3__visual-hint,
-.maker-strobe-v3__hint,
-.maker-strobe-v3__footer,
-.maker-strobe-v3__feed-empty {
-  color: #8fa5c2;
-  line-height: 1.55;
+.maker-cockpit__panel-hint,
+.maker-cockpit__footer,
+.maker-cockpit__feed-empty,
+.maker-cockpit__meta-small {
+  color: #8ea3c0;
+  line-height: 1.5;
 }
 
-.maker-strobe-v3__band-stack {
+.maker-cockpit__target-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) repeat(3, minmax(120px, 0.65fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.maker-cockpit__target-card,
+.maker-cockpit__mini-card {
+  border-radius: 18px;
+  border: 1px solid rgba(140, 177, 228, 0.14);
+  background: rgba(12, 22, 38, 0.9);
+}
+
+.maker-cockpit__target-card {
+  padding: 16px 18px;
+}
+
+.maker-cockpit__target-label,
+.maker-cockpit__mini-label,
+.maker-cockpit__feed-head {
+  color: #8da3bf;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.76rem;
+}
+
+.maker-cockpit__target-note {
+  margin-top: 6px;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.maker-cockpit__target-meta {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  color: #d8e4f4;
+  font-size: 0.96rem;
+}
+
+.maker-cockpit__mini-card {
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.maker-cockpit__mini-value {
+  font-size: 1.28rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.maker-cockpit__band-stack {
   display: grid;
   gap: 12px;
 }
 
-.maker-lane-band {
+.maker-cockpit-band {
   display: grid;
   gap: 10px;
   padding: 14px;
   border-radius: 20px;
-  border: 1px solid rgba(140, 177, 228, 0.14);
-  background: linear-gradient(180deg, rgba(10, 19, 33, 0.96) 0%, rgba(7, 14, 24, 0.96) 100%);
+  border: 1px solid rgba(140, 177, 228, 0.12);
+  background: linear-gradient(180deg, rgba(9, 18, 32, 0.96) 0%, rgba(6, 13, 24, 0.96) 100%);
 }
 
-.maker-lane-band__header {
+.maker-cockpit-band__header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
 }
 
-.maker-lane-band__label {
-  color: #e7f0fb;
-  font-weight: 600;
+.maker-cockpit-band__label {
+  color: #ebf3ff;
   font-size: 0.98rem;
+  font-weight: 600;
 }
 
-.maker-lane-band__sub {
+.maker-cockpit-band__sub {
   margin-top: 4px;
-  color: #8fa5c2;
-  font-size: 0.82rem;
+  color: #8da3bf;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.maker-lane-band__value {
-  padding: 7px 12px;
-  min-width: 96px;
+.maker-cockpit-band__value {
+  min-width: 94px;
   text-align: center;
+  padding: 7px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(122, 146, 178, 0.16);
-  background: rgba(11, 19, 33, 0.88);
+  border: 1px solid rgba(126, 151, 188, 0.16);
+  background: rgba(10, 18, 31, 0.88);
   font-variant-numeric: tabular-nums;
   font-size: 0.94rem;
   font-weight: 600;
 }
 
-.maker-lane-band__lane {
+.maker-cockpit-band__lane {
   position: relative;
-  width: 100%;
-  height: clamp(84px, 12vw, 108px);
+  height: clamp(74px, 9vw, 98px);
   overflow: hidden;
   border-radius: 18px;
   border: 1px solid rgba(109, 140, 184, 0.18);
 }
 
-.maker-lane-band__film-frame {
+.maker-cockpit-band__film-frame {
   position: absolute;
   inset: 0;
   overflow: hidden;
 }
 
-.maker-lane-band__film {
+.maker-cockpit-band__film {
   position: absolute;
   top: -30%;
   left: 0;
@@ -286,146 +324,179 @@ const makerStrobeStyles = `
   height: 160%;
   background-size: 96px 100%;
   will-change: transform;
-  filter: saturate(1.08);
 }
 
-.maker-lane-band__guide {
+.maker-cockpit-band__guide {
   position: absolute;
   top: 10%;
   bottom: 10%;
   left: 50%;
   width: 2px;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(232, 240, 250, 0.95) 18%, rgba(232, 240, 250, 0.95) 82%, rgba(255,255,255,0) 100%);
-  opacity: 0.72;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(235, 242, 251, 0.96) 18%, rgba(235, 242, 251, 0.96) 82%, rgba(255,255,255,0) 100%);
+  opacity: 0.74;
 }
 
-.maker-lane-band__glow,
-.maker-lane-band__shade {
+.maker-cockpit-band__glow,
+.maker-cockpit-band__shade {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.maker-lane-band__shade {
+.maker-cockpit-band__shade {
   background:
     linear-gradient(90deg, rgba(5,11,20,0.96) 0%, rgba(5,11,20,0.12) 18%, rgba(5,11,20,0.04) 50%, rgba(5,11,20,0.12) 82%, rgba(5,11,20,0.96) 100%),
     linear-gradient(180deg, rgba(5,11,20,0.66) 0%, rgba(5,11,20,0.08) 24%, rgba(5,11,20,0.08) 76%, rgba(5,11,20,0.66) 100%);
 }
 
-.maker-strobe-v3__sidebar {
+.maker-cockpit__telemetry-grid {
   display: grid;
-  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.maker-strobe-v3__rows {
+.maker-cockpit__metric-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(140, 177, 228, 0.12);
+  background: rgba(11, 20, 34, 0.9);
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
-.maker-strobe-v3__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(140, 177, 228, 0.1);
+.maker-cockpit__metric-label {
+  color: #8ea3c0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
-.maker-strobe-v3__row:last-of-type { border-bottom: 0; }
-.maker-strobe-v3__row span { color: #a6b7cf; }
-.maker-strobe-v3__row strong { font-size: 1.15rem; }
+.maker-cockpit__metric-value {
+  font-size: 1.32rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 
-.maker-strobe-v3__feed-head,
-.maker-strobe-v3__feed-row {
+.maker-cockpit__metric-sub {
+  color: #8ea3c0;
+  font-size: 0.84rem;
+}
+
+.maker-cockpit__feed-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(140, 177, 228, 0.12);
+  background: rgba(11, 20, 34, 0.9);
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.maker-cockpit__feed-head,
+.maker-cockpit__feed-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   align-items: center;
 }
 
-.maker-strobe-v3__feed-head {
-  color: #8fa5c2;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0 2px 10px;
-}
-
-.maker-strobe-v3__feed-list {
+.maker-cockpit__feed-list {
   display: grid;
-  gap: 10px;
-  max-height: 320px;
+  gap: 8px;
+  max-height: 260px;
   overflow: auto;
   padding-right: 2px;
 }
 
-.maker-strobe-v3__feed-row {
+.maker-cockpit__feed-row {
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(14, 23, 39, 0.9);
+  background: rgba(15, 25, 42, 0.9);
   color: #dce8f8;
   font-variant-numeric: tabular-nums;
 }
 
-.maker-strobe-v3__footer {
-  margin-top: 18px;
+.maker-cockpit__footer {
+  padding: 0 24px 22px;
 }
 
-@media (max-width: 980px) {
-  .maker-strobe-v3__header,
-  .maker-strobe-v3__target,
-  .maker-strobe-v3__content {
-    grid-template-columns: 1fr;
-    display: grid;
+@media (max-width: 1120px) {
+  .maker-cockpit__toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .maker-strobe-v3__header {
-    gap: 14px;
+  .maker-cockpit__stage,
+  .maker-cockpit__target-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .maker-cockpit__telemetry-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 720px) {
-  .maker-strobe-v3 {
-    padding-inline: 12px;
+@media (max-width: 820px) {
+  .maker-cockpit {
+    width: min(100vw - 14px, 100%);
+    padding-top: 72px;
   }
 
-  .maker-strobe-v3__shell {
-    padding: 18px;
-    border-radius: 22px;
+  .maker-cockpit__header {
+    display: grid;
   }
 
-  .maker-strobe-v3__controls {
+  .maker-cockpit__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .maker-cockpit__telemetry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .maker-cockpit__feed-head,
+  .maker-cockpit__feed-row {
+    grid-template-columns: repeat(3, minmax(68px, 1fr));
+    font-size: 0.92rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .maker-cockpit__header,
+  .maker-cockpit__toolbar,
+  .maker-cockpit__stage,
+  .maker-cockpit__footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .maker-cockpit__header {
+    padding-top: 18px;
+  }
+
+  .maker-cockpit__stage {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .maker-cockpit__target-card,
+  .maker-cockpit__mini-card,
+  .maker-cockpit__panel--strobes,
+  .maker-cockpit__panel--telemetry {
+    padding: 14px;
+  }
+
+  .maker-cockpit-band__header {
     display: grid;
     grid-template-columns: 1fr;
   }
 
-  .maker-strobe-v3__control,
-  .maker-strobe-v3__toggle {
-    justify-content: space-between;
-  }
-
-  .maker-strobe-v3__control select {
-    min-width: 110px;
-  }
-
-  .maker-strobe-v3__visual-head,
-  .maker-lane-band__header {
-    grid-template-columns: 1fr;
-    display: grid;
-  }
-
-  .maker-lane-band__value {
+  .maker-cockpit-band__value {
     justify-self: start;
   }
 
-  .maker-lane-band__lane {
-    height: 88px;
-  }
-
-  .maker-strobe-v3__feed-head,
-  .maker-strobe-v3__feed-row {
-    grid-template-columns: repeat(3, minmax(68px, 1fr));
-    font-size: 0.92rem;
+  .maker-cockpit-band__lane {
+    height: 78px;
   }
 }
 `;
@@ -443,6 +514,10 @@ function statusText(isListening: boolean, hasSignal: boolean, strongLock: boolea
   if (strongLock) return `${targetLabel} nearly centered`;
   if (hasSignal) return `Tracking ${targetLabel}`;
   return `Listening for ${targetLabel}`;
+}
+
+function formatOrDash(value: number | null): string {
+  return value !== null ? formatCents(value) : '—';
 }
 
 const MakerStrobePage: React.FC = () => {
@@ -479,7 +554,7 @@ const MakerStrobePage: React.FC = () => {
   const hasSignal = hasLiveValue(cents.fundamental);
   const withinGate = hasSignal && Math.abs(cents.fundamental as number) <= ACTIVE_GATE_CENTS;
   const strongLock = hasSignal && Math.abs(cents.fundamental as number) <= STRONG_LOCK_CENTS;
-  const statusClass = strongLock ? 'is-locked' : withinGate ? 'is-tracking' : '';
+  const status = statusText(isListening, hasSignal, strongLock, targetLabel);
 
   useEffect(() => {
     if (!hasSignal) return;
@@ -506,159 +581,183 @@ const MakerStrobePage: React.FC = () => {
   }, [pitchClass, octave, compoundFifthEnabled]);
 
   return (
-    <div className="page maker-strobe-v3">
+    <div className="page maker-cockpit-page">
       <style>{makerStrobeStyles}</style>
 
-      <div className="maker-strobe-v3__shell">
-        <div className="maker-strobe-v3__header">
-          <div>
-            <p className="maker-strobe-v3__eyebrow">Maker mode</p>
-            <h1 className="maker-strobe-v3__title">Target-locked strobe tuner</h1>
-            <p className="maker-strobe-v3__subtitle">
-              The listening path stays untouched. This version only reworks the strobe display and page layout so the bands fit phone and desktop screens more naturally.
-            </p>
-          </div>
-
-          <Link className="maker-strobe-v3__back" to="/">
-            ← Back to home
-          </Link>
-        </div>
-
-        <div className="maker-strobe-v3__controls">
-          <label className="maker-strobe-v3__control">
-            <span>Pitch class</span>
-            <select value={pitchClass} onChange={(event) => setPitchClass(event.target.value)}>
-              {NOTE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="maker-strobe-v3__control">
-            <span>Octave</span>
-            <select value={octave} onChange={(event) => setOctave(Number(event.target.value))}>
-              {OCTAVE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="maker-strobe-v3__toggle">
-            <input
-              type="checkbox"
-              checked={compoundFifthEnabled}
-              onChange={(event) => setShowCompoundFifth(event.target.checked)}
-              disabled={isOctaveOnlyDefault}
-            />
-            <span>Show compound fifth band</span>
-          </label>
-        </div>
-
-        <section className="maker-strobe-v3__target">
-          <div>
-            <div className="maker-strobe-v3__target-label">Selected target</div>
-            <div className="maker-strobe-v3__target-note">{targetLabel}</div>
-          </div>
-
-          <div className="maker-strobe-v3__meta">
-            <div>F0 {targetFundamental.toFixed(2)} Hz</div>
-            <div>8ve {targetOctave.toFixed(2)} Hz</div>
-            <div>{compoundFifthEnabled ? `12th ${targetCompoundFifth.toFixed(2)} Hz` : '12th hidden'}</div>
-          </div>
-
-          <div className={`maker-strobe-v3__status ${statusClass}`}>
-            {statusText(isListening, hasSignal, strongLock, targetLabel)}
-          </div>
-        </section>
-
-        <div className="maker-strobe-v3__content">
-          <section className="maker-strobe-v3__visual-card">
-            <div className="maker-strobe-v3__visual-head">
-              <h2 className="maker-strobe-v3__visual-title">Live strobes</h2>
-              <div className="maker-strobe-v3__visual-hint">
-                Horizontal lanes keep all three partials visible on phone and desktop.
-              </div>
+      <div className="maker-cockpit">
+        <div className="maker-cockpit__shell">
+          <header className="maker-cockpit__header">
+            <div>
+              <p className="maker-cockpit__eyebrow">Maker mode</p>
+              <h1 className="maker-cockpit__title">Tuning cockpit</h1>
+              <p className="maker-cockpit__subtitle">
+                Compact target-locked layout with the strobes, live cents, and rolling deviation feed inside one cockpit.
+                This patch only changes the visual layout and does not touch the current listening path.
+              </p>
             </div>
 
-            <div className="maker-strobe-v3__band-stack">
-              <MakerStrobeBands label="Fundamental" cents={cents.fundamental} active={isListening} />
-              <MakerStrobeBands label="Octave" cents={cents.octave} active={isListening} />
-              <MakerStrobeBands
-                label="Compound fifth"
-                cents={compoundFifthEnabled ? cents.compoundFifth : null}
-                active={isListening}
+            <Link className="maker-cockpit__back" to="/">
+              ← Back to home
+            </Link>
+          </header>
+
+          <section className="maker-cockpit__toolbar">
+            <label className="maker-cockpit__control">
+              <span>Pitch class</span>
+              <select value={pitchClass} onChange={(event) => setPitchClass(event.target.value)}>
+                {NOTE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="maker-cockpit__control">
+              <span>Octave</span>
+              <select value={octave} onChange={(event) => setOctave(Number(event.target.value))}>
+                {OCTAVE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="maker-cockpit__toggle">
+              <input
+                type="checkbox"
+                checked={compoundFifthEnabled}
+                onChange={(event) => setShowCompoundFifth(event.target.checked)}
+                disabled={isOctaveOnlyDefault}
               />
+              <span>Show compound fifth</span>
+            </label>
+
+            <div className="maker-cockpit__badge">
+              <span className="maker-cockpit__badge-label">Status</span>
+              <span className="maker-cockpit__badge-value">{status}</span>
             </div>
           </section>
 
-          <div className="maker-strobe-v3__sidebar">
-            <section className="maker-strobe-v3__card">
-              <h2>Live cents</h2>
-              <div className="maker-strobe-v3__rows">
-                <div className="maker-strobe-v3__row">
-                  <span>Fundamental</span>
-                  <strong style={{ color: cents.fundamental !== null ? centsToColor(cents.fundamental) : '#93a4bb' }}>
-                    {cents.fundamental !== null ? formatCents(cents.fundamental) : '—'}
-                  </strong>
+          <section className="maker-cockpit__stage">
+            <div className="maker-cockpit__panel maker-cockpit__panel--strobes">
+              <div className="maker-cockpit__target-strip">
+                <div className="maker-cockpit__target-card">
+                  <div className="maker-cockpit__target-label">Selected target</div>
+                  <div className="maker-cockpit__target-note">{targetLabel}</div>
+                  <div className="maker-cockpit__target-meta">
+                    <div>F0 {targetFundamental.toFixed(2)} Hz</div>
+                    <div>8ve {targetOctave.toFixed(2)} Hz</div>
+                    <div>{compoundFifthEnabled ? `12th ${targetCompoundFifth.toFixed(2)} Hz` : '12th hidden'}</div>
+                  </div>
                 </div>
 
-                <div className="maker-strobe-v3__row">
-                  <span>Octave</span>
-                  <strong style={{ color: cents.octave !== null ? centsToColor(cents.octave) : '#93a4bb' }}>
-                    {cents.octave !== null ? formatCents(cents.octave) : '—'}
-                  </strong>
+                <div className="maker-cockpit__mini-card">
+                  <div className="maker-cockpit__mini-label">Confidence</div>
+                  <div className="maker-cockpit__mini-value">{(confidence * 100).toFixed(0)}%</div>
+                  <div className="maker-cockpit__meta-small">Signal confidence</div>
                 </div>
 
-                <div className="maker-strobe-v3__row">
-                  <span>Compound fifth</span>
-                  <strong style={{ color: cents.compoundFifth !== null ? centsToColor(cents.compoundFifth) : '#93a4bb' }}>
-                    {compoundFifthEnabled
-                      ? cents.compoundFifth !== null
-                        ? formatCents(cents.compoundFifth)
-                        : '—'
-                      : 'N/A'}
-                  </strong>
+                <div className="maker-cockpit__mini-card">
+                  <div className="maker-cockpit__mini-label">RMS</div>
+                  <div className="maker-cockpit__mini-value">{amplitude.toFixed(4)}</div>
+                  <div className="maker-cockpit__meta-small">Input level</div>
+                </div>
+
+                <div className="maker-cockpit__mini-card">
+                  <div className="maker-cockpit__mini-label">Lock</div>
+                  <div className="maker-cockpit__mini-value">{strongLock ? 'Strong' : withinGate ? 'Tracking' : 'Wide'}</div>
+                  <div className="maker-cockpit__meta-small">Fundamental gate</div>
                 </div>
               </div>
 
-              <div className="maker-strobe-v3__hint">
-                Confidence {(confidence * 100).toFixed(0)}% · RMS {amplitude.toFixed(4)}
-              </div>
-              {error ? <div className="maker-strobe-v3__hint" style={{ color: '#ffb1b1', marginTop: 10 }}>{error}</div> : null}
-            </section>
-
-            <section className="maker-strobe-v3__card">
-              <h2>Live deviation feed</h2>
-              <div className="maker-strobe-v3__feed-head">
-                <span>F0</span>
-                <span>8ve</span>
-                <span>12th</span>
+              <div className="maker-cockpit__panel-head">
+                <h2 className="maker-cockpit__panel-title">Live strobes</h2>
+                <div className="maker-cockpit__panel-hint">Three compact lanes for phone and desktop.</div>
               </div>
 
-              <div className="maker-strobe-v3__feed-list">
-                {liveFeed.length === 0 ? (
-                  <p className="maker-strobe-v3__feed-empty">Play {targetLabel} to start the live cents feed.</p>
-                ) : (
-                  liveFeed.map((sample) => (
-                    <div key={sample.id} className="maker-strobe-v3__feed-row">
-                      <span>{sample.fundamental !== null ? formatCents(sample.fundamental) : '—'}</span>
-                      <span>{sample.octave !== null ? formatCents(sample.octave) : '—'}</span>
-                      <span>{compoundFifthEnabled ? (sample.compoundFifth !== null ? formatCents(sample.compoundFifth) : '—') : 'N/A'}</span>
+              <div className="maker-cockpit__band-stack">
+                <MakerStrobeBands label="Fundamental" cents={cents.fundamental} active={isListening} />
+                <MakerStrobeBands label="Octave" cents={cents.octave} active={isListening} />
+                <MakerStrobeBands
+                  label="Compound fifth"
+                  cents={compoundFifthEnabled ? cents.compoundFifth : null}
+                  active={compoundFifthEnabled ? isListening : false}
+                  subLabel={compoundFifthEnabled ? undefined : 'Hidden'}
+                />
+              </div>
+            </div>
+
+            <div className="maker-cockpit__panel maker-cockpit__panel--telemetry">
+              <div>
+                <div className="maker-cockpit__panel-head">
+                  <h2 className="maker-cockpit__panel-title">Live cents</h2>
+                  <div className="maker-cockpit__panel-hint">Fast readout beside the strobes.</div>
+                </div>
+
+                <div className="maker-cockpit__telemetry-grid">
+                  <div className="maker-cockpit__metric-card">
+                    <div className="maker-cockpit__metric-label">Fundamental</div>
+                    <div className="maker-cockpit__metric-value" style={{ color: cents.fundamental !== null ? centsToColor(cents.fundamental) : '#93a4bb' }}>
+                      {formatOrDash(cents.fundamental)}
                     </div>
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
-        </div>
+                    <div className="maker-cockpit__metric-sub">Primary target</div>
+                  </div>
 
-        <p className="maker-strobe-v3__footer">
-          This page keeps the current live listening behavior and only changes the visual interpretation of that stream.
-        </p>
+                  <div className="maker-cockpit__metric-card">
+                    <div className="maker-cockpit__metric-label">Octave</div>
+                    <div className="maker-cockpit__metric-value" style={{ color: cents.octave !== null ? centsToColor(cents.octave) : '#93a4bb' }}>
+                      {formatOrDash(cents.octave)}
+                    </div>
+                    <div className="maker-cockpit__metric-sub">2× partial</div>
+                  </div>
+
+                  <div className="maker-cockpit__metric-card">
+                    <div className="maker-cockpit__metric-label">Compound fifth</div>
+                    <div className="maker-cockpit__metric-value" style={{ color: cents.compoundFifth !== null ? centsToColor(cents.compoundFifth) : '#93a4bb' }}>
+                      {compoundFifthEnabled ? formatOrDash(cents.compoundFifth) : 'N/A'}
+                    </div>
+                    <div className="maker-cockpit__metric-sub">3× partial</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="maker-cockpit__feed-card">
+                <div className="maker-cockpit__panel-head" style={{ marginBottom: 0 }}>
+                  <h2 className="maker-cockpit__panel-title">Deviation feed</h2>
+                  <div className="maker-cockpit__panel-hint">Latest valid live samples.</div>
+                </div>
+
+                <div className="maker-cockpit__feed-head">
+                  <span>F0</span>
+                  <span>8ve</span>
+                  <span>12th</span>
+                </div>
+
+                <div className="maker-cockpit__feed-list">
+                  {liveFeed.length === 0 ? (
+                    <p className="maker-cockpit__feed-empty">Play {targetLabel} to start the live cents feed.</p>
+                  ) : (
+                    liveFeed.map((sample) => (
+                      <div key={sample.id} className="maker-cockpit__feed-row">
+                        <span>{sample.fundamental !== null ? formatCents(sample.fundamental) : '—'}</span>
+                        <span>{sample.octave !== null ? formatCents(sample.octave) : '—'}</span>
+                        <span>{compoundFifthEnabled ? (sample.compoundFifth !== null ? formatCents(sample.compoundFifth) : '—') : 'N/A'}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {error ? <div className="maker-cockpit__meta-small" style={{ color: '#ffb1b1' }}>{error}</div> : null}
+            </div>
+          </section>
+
+          <p className="maker-cockpit__footer">
+            This cockpit keeps the current listening behavior. The Mac idle flicker is a separate detector-side issue, so this patch only fixes the layout and visual organization.
+          </p>
+        </div>
       </div>
     </div>
   );
