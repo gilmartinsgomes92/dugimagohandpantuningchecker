@@ -164,16 +164,6 @@ const WelcomePage: React.FC = () => {
             <p className="welcome-helper">Check whether a certified report is authentic</p>
           </div>
 
-          <div className="welcome-cta-item">
-            <button
-              className="btn btn-secondary btn-large"
-              onClick={() => navigate('/maker-strobe')}
-            >
-              Maker Strobe (Beta)
-            </button>
-            <p className="welcome-helper">Target-locked maker view with live strobe bands and cents feed</p>
-          </div>
-
           <p className="welcome-privacy">
             Mic permission required. Audio stays on your device.
           </p>
