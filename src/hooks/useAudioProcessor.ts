@@ -89,10 +89,11 @@ const DEBUG_ENABLED =
 const IS_IOS =
   typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-const SILENCE_GRACE_FRAMES = 120;
+const SILENCE_GRACE_FRAMES = 200;
 
 // Main audio gate (keeps CPU down)
 const SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.003 : 0.005;
+const SUSTAIN_SIGNAL_RMS_THRESHOLD = IS_IOS ? 0.0022 : 0.0034;
 
 // UI / cents behavior
 const EMIT_INTERVAL_MS = 70; // ~14 Hz
@@ -487,10 +488,16 @@ setIsListening(true);
         rejectReasonRef.current = '';
 
         // Main gate
-const dynamicGate = Math.max(
-  SIGNAL_RMS_THRESHOLD,
-  noiseFloorRef.current * 6 + 0.0005,
-);
+        const hasLockedSustain = smoothedFreqRef.current !== null || lastLockQualityRef.current >= 0.55;
+        const dynamicGate = hasLockedSustain
+          ? Math.max(
+              SUSTAIN_SIGNAL_RMS_THRESHOLD,
+              noiseFloorRef.current * 4.2 + 0.0003,
+            )
+          : Math.max(
+              SIGNAL_RMS_THRESHOLD,
+              noiseFloorRef.current * 6 + 0.0005,
+            );
 
 if (rms >= dynamicGate) {
           const match = matchNote(
