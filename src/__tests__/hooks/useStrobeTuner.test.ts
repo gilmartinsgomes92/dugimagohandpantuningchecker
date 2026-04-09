@@ -154,11 +154,17 @@ describe('allPartialsStable – stability check', () => {
     expect(allPartialsStable(0, 0, COMP_FIFTH_TOLERANCE_CENTS + eps)).toBe(false);
   });
 
-  it('returns false when any partial is null', () => {
+  it('returns false when fundamental is null', () => {
     expect(allPartialsStable(null, 0, 0)).toBe(false);
-    expect(allPartialsStable(0, null, 0)).toBe(false);
-    expect(allPartialsStable(0, 0, null)).toBe(false);
     expect(allPartialsStable(null, null, null)).toBe(false);
+  });
+
+  it('returns true when octave is null (optional partial)', () => {
+    expect(allPartialsStable(0, null, 0)).toBe(true);
+  });
+
+  it('returns true when compound-fifth is null (optional partial)', () => {
+    expect(allPartialsStable(0, 0, null)).toBe(true);
   });
 
   it('returns false when only two of three partials are within tolerance', () => {
@@ -202,7 +208,7 @@ describe('Stability frame counting logic (simulated loop)', () => {
       if (allPartialsStable(fundCents, octCents, cfCents)) {
         frames += 1;
       } else {
-        frames = 0;
+        frames = Math.max(0, frames - 2);
       }
     }
     return { stabilityFrames: frames, isStable: frames >= STABLE_FRAME_THRESHOLD };
@@ -214,23 +220,23 @@ describe('Stability frame counting logic (simulated loop)', () => {
     expect(stabilityFrames).toBe(10);
   });
 
-  it('resets stabilityFrames to 0 when any partial goes out of tolerance', () => {
+  it('decrements stabilityFrames by 2 (soft reset) when any partial goes out of tolerance', () => {
     const readings = [
       ...Array.from({ length: 5 }, () => ({ fundCents: 0, octCents: 0, cfCents: 0 })),
       { fundCents: 10, octCents: 0, cfCents: 0 }, // out-of-tolerance frame
     ];
     const { stabilityFrames } = simulateFrames(readings);
-    expect(stabilityFrames).toBe(0);
+    expect(stabilityFrames).toBe(3); // 5 - 2 = 3
   });
 
-  it('resets and then resumes counting after a transient instability', () => {
+  it('resumes counting after a transient instability (soft reset preserves partial progress)', () => {
     const readings = [
       ...Array.from({ length: 5 }, () => ({ fundCents: 0, octCents: 0, cfCents: 0 })),
-      { fundCents: 10, octCents: 0, cfCents: 0 }, // reset
+      { fundCents: 10, octCents: 0, cfCents: 0 }, // soft-reset: 5 → 3
       ...Array.from({ length: 3 }, () => ({ fundCents: 1, octCents: 1, cfCents: 2 })), // stable again
     ];
     const { stabilityFrames } = simulateFrames(readings);
-    expect(stabilityFrames).toBe(3);
+    expect(stabilityFrames).toBe(6); // 3 + 3
   });
 
   it('isStable becomes true after STABLE_FRAME_THRESHOLD consecutive stable frames', () => {
@@ -249,12 +255,13 @@ describe('Stability frame counting logic (simulated loop)', () => {
     expect(isStable).toBe(false);
   });
 
-  it('isStable resets to false after an out-of-tolerance frame following stability', () => {
+  it('isStable resets to false after enough out-of-tolerance frames following stability', () => {
+    // Start exactly at threshold (30), then 1 unstable frame → 28 < 30 → false.
     const readings = [
-      ...Array.from({ length: STABLE_FRAME_THRESHOLD + 5 }, () => ({
+      ...Array.from({ length: STABLE_FRAME_THRESHOLD }, () => ({
         fundCents: 0, octCents: 0, cfCents: 0,
       })),
-      { fundCents: 50, octCents: 0, cfCents: 0 }, // instability resets counter
+      { fundCents: 50, octCents: 0, cfCents: 0 }, // soft-reset: 30 → 28
     ];
     const { isStable } = simulateFrames(readings);
     expect(isStable).toBe(false);
